@@ -1,0 +1,769 @@
+Higgsfield Clone
+# Build prompt: a Higgsfield-style AI image, video and audio studio
+
+
+> Fill in the `{{PLACEHOLDERS}}` below, then paste this whole document into Claude Code (or another coding agent) from an empty folder.
+
+
+```
+
+BRAND_NAME        = {{BRAND_NAME}}          # e.g. "Lumen" — NOT "Higgsfield"
+
+APP_SLUG          = {{APP_SLUG}}            # e.g. "lumen-studio"
+
+PRODUCTION_URL    = {{PRODUCTION_URL}}      # e.g. https://lumen.studio
+
+EMAIL_FROM        = {{EMAIL_FROM}}          # e.g. "Lumen <login@lumen.studio>" (domain verified in Resend)
+
+SUPPORT_EMAIL     = {{SUPPORT_EMAIL}}
+
+CREDIT_MARKUP     = {{CREDIT_MARKUP}}       # e.g. 2.0 = sell at 2x the Higgsfield API cost
+
+```
+
+
+---
+
+
+## 0. Your role and the mission
+
+
+You are a senior full-stack engineer. Build **{{BRAND_NAME}}**, a production-grade clone of **higgsfield.ai**: a web app where signed-in users generate AI images, videos and audio with every model the Higgsfield API offers, pay for credits with Stripe, and keep their generations in a personal library.
+
+
+It must look and feel like higgsfield.ai (layout, navigation, generator panel, feed, dark UI with a lime accent), run on the stack below, and call the **Higgsfield API** for every generation. It must not be an unfinished demo. Every visible control works from start to finish.
+
+
+### Stack (locked, do not substitute)
+
+
+| Concern | Choice |
+
+|---|---|
+
+| Framework | **Next.js** (App Router, the version pinned by the Higgsfield template, currently 16.x), React 19, TypeScript strict |
+
+| Styling/UI | Tailwind v4 + shadcn (Base UI primitives), `lucide-react` icons, zustand, `@tanstack/react-virtual`. All of these come from the Higgsfield template |
+
+| Auth | **NextAuth / Auth.js v5** (`next-auth`) with **magic links only** |
+
+| Email | **Resend** (magic-link emails, receipts), templates in React Email |
+
+| Database | **MongoDB** (Atlas) through the official `mongodb` driver, shared by the Auth.js adapter and the app |
+
+| Payments | **Stripe** (Checkout, Billing/Subscriptions, Customer Portal, webhooks) |
+
+| Generation | **Higgsfield API** (one server-side key covers all models) |
+
+| Media storage | **Cloudflare R2** (S3-compatible). This is a required addition: Higgsfield only keeps outputs "for at least seven days", so every finished output must be copied to our own storage |
+
+
+### How to work
+
+
+1. Work in the **phases** in §12. At the end of each phase, stop and give me a short report: what works, what you verified and how, and what's next. Continue only after I reply, unless I've told you to run straight through.
+
+2. **Never invent a Higgsfield endpoint path, parameter name or enum value.** Every model you wire up must come from the Higgsfield docs, the console model list or the Higgsfield template's model files, and its file must include a comment with that source URL. If you can't verify a model, list it in `docs/model-catalog.md` under "Unverified" and leave it out of the picker.
+
+3. When the Higgsfield docs and the template disagree, the **live docs win** for API behavior and the **template wins** for UI and component patterns. Write down each disagreement in `docs/decisions.md`.
+
+4. Ask me only about things you can't decide from this document: brand assets, final prices, or legal copy. For everything else, pick the sensible default, record it in `docs/decisions.md`, and keep going.
+
+5. Strict TypeScript. `any`, `@ts-ignore` and `@ts-expect-error` are not fixes. `pnpm typecheck`, `pnpm lint` and `pnpm build` must pass at the end of every phase.
+
+
+---
+
+
+## 1. Ground-truth sources (read these before writing code)
+
+
+Higgsfield has published the code for its own studio UI and API client. Use it as your main reference and starting point.
+
+
+### 1a. GitHub: `github.com/higgsfield-ai` (clone these into `./_reference/`, and add that folder to .gitignore)
+
+
+| Repo | What it is | What you take from it |
+
+|---|---|---|
+
+| **`higgsfield-ai/app-templates`** ★ | Higgsfield's own **Studio template**: Next.js 16 + Tailwind v4 + shadcn, their **Quanta design tokens**, the prompt dock, model picker, settings dialog, asset library, justified virtualized gallery, lightbox, projects sidebar, and a typed **model catalog with one file per model** that maps UI settings to API request bodies. It ships as a shadcn registry. | **This is your scaffold.** You get the UI components, design tokens (`styles/quanta/*`), `generation/platform.ts` (API client), `generation/poll.ts` (batched polling), `generation/upload*.ts` + `app/api/upload/route.ts` (signed uploads), `generation/catalog/**` (the model catalog), and `lib/studio/use-runs.ts`. Read `AGENTS.md`, `layouts/AGENTS.md` and `components/studio/AGENTS.md` in full. They describe the component contracts. |
+
+| `higgsfield-ai/higgsfield-js` (MIT) | Official Node/TS SDK (`@higgsfield/client`, use the **v2** client) | Auth header format, the status lifecycle, the `hf_webhook` webhook parameter, retry behavior. You may use the SDK on the server or keep the template's thin `fetch` client. Pick one and record the choice. |
+
+| `higgsfield-ai/higgsfield-client` (Apache-2.0) | Python SDK | Cross-check request, upload and retry semantics only |
+
+| `higgsfield-ai/cli` (MIT), file **`MODELS.md`** | The full model list with every parameter, default, enum and constraint (image, video, audio, 3D) | A reference for **which models exist and their parameter ranges.** ⚠ CLI model names (`nano_banana_2`, `seedance_2_0`) are *job-set types* from a different API. They are **not** REST paths. Get REST paths from the docs and console. |
+
+| `higgsfield-ai/skills` (MIT), `higgsfield-generate/references/model-catalog.md`, `prompt-engineering.md`, `media-inputs.md` | Which model is best for what, and prompt guidance | Model-picker descriptions and badges ("Best for UGC", "Fastest"), preset prompts, "How it works" copy |
+
+| `higgsfield-ai/higgsfield` | GPU training framework | **Ignore.** It isn't related to the product |
+
+
+Scaffold command (run it in the project folder):
+
+
+```bash
+
+pnpm dlx shadcn@latest init -t next -n {{APP_SLUG}} --no-monorepo -y higgsfield-ai/app-templates/studio
+
+```
+
+
+Then `git clone https://github.com/higgsfield-ai/app-templates _reference/app-templates` so you have the source to read, including `scripts/sync-models.mjs` and `registry.json`.
+
+
+> License note: as of 2026-09-26, `app-templates` has **no LICENSE file**. Higgsfield publishes it as a public shadcn registry meant for scaffolding apps on its API, which is what we are doing. Keep the template's attribution comments, check again for a LICENSE before launch, and note this in `docs/decisions.md`.
+
+
+### 1b. Higgsfield API docs: `https://docs.higgsfield.ai`
+
+
+Fetch and read all of these. Start with **`https://docs.higgsfield.ai/docs/llms.txt`** because it indexes every page.
+
+
+- `/docs/quickstart.md`, `/docs/authentication.md`, `/docs/how-to/introduction.md`
+
+- `/docs/concepts/requests.md`, `/docs/concepts/polling.md`, `/docs/how-to/webhooks.md`
+
+- `/docs/concepts/file-uploads.md`, `/docs/concepts/errors.md`, `/docs/concepts/rate-limits.md`, `/docs/concepts/billing-and-retention.md`
+
+- `/docs/api-reference/overview.md`, `/docs/api-reference/requests/get-request-status.md`, `/docs/api-reference/requests/cancel-a-queued-request.md`
+
+- `/docs/models.md` and **every model page in the sidebar**. Each page has the request schema, required fields, allowed values and examples.
+
+- `/docs/openapi.json` (partial, but useful for types)
+
+- **`https://console.higgsfield.ai`** is the source of truth for model discovery and the **per-model USD price list**. Log in with my account to read it. If you can't reach it, ask me for a copy.
+
+
+### 1c. The live site: `https://higgsfield.ai` (the UI to copy)
+
+
+Open these pages in a browser, take screenshots at 1440px and 390px wide, and write down layout, spacing, typography, states and interactions:
+
+
+- `/` Explore/home
+
+- `/ai/image?model=gpt_image_2` image generator
+
+- `/ai/video?model=seedance_2_5` video generator
+
+- `/audio`
+
+- `/effects/use` effects/preset gallery, plus one effect detail page
+
+- `/community`
+
+- `/pricing`
+
+- Login/sign-up modal flow (look only; don't create an account)
+
+- Asset/history views: the generator's **History** tab, the asset library, and a generation's detail/lightbox
+
+
+Decline cookie banners. Don't submit any forms on higgsfield.ai.
+
+
+**Output of this step:** `docs/ui-inventory.md`, covering every page, the header/nav, every component with its states (empty, loading, generating, failed, blocked by the content filter, success), hover actions, modals, and responsive behavior. Save the screenshots under `docs/screens/`. Build from this document.
+
+
+### 1d. Clone the UX, not the brand
+
+
+Copy the **layout, information architecture, interaction patterns, component behavior and overall visual language** (dark UI, lime accent, bold condensed uppercase display headings, justified media feeds).
+
+
+**Do not** use the Higgsfield name, logo, wordmark, marketing images or videos, testimonials, or their exact copy anywhere users can see. Use {{BRAND_NAME}}, my logo (ask me for it, or use a clean placeholder wordmark), and our own copy. Hero and preset media come from generations we make ourselves with the app (Phase 7). Model-provider icons (Kling, Seedance, and so on) from the template's `public/model-icons/` are fine next to model names.
+
+
+---
+
+
+## 2. Target architecture
+
+
+```
+
+Browser (client components)
+
+  │  prompt dock, pickers, uploads (PUT straight to signed URL), feed
+
+  │  polls GET /api/generations/status?ids=… every 3–4s (our DB only)
+
+  ▼
+
+Next.js server (server actions + route handlers; auth() checked in each one)
+
+  ├─ submitGeneration(): validate vs catalog → price → debit credits (Mongo txn)
+
+  │                       → POST Higgsfield /{model-path}?hf_webhook=… → store request_id
+
+  ├─ cancelGeneration():  POST /requests/{id}/cancel → refund on "canceled"
+
+  ├─ /api/upload:         get signed upload URL from Higgsfield (key stays on server)
+
+  ├─ /api/webhooks/higgsfield: verify token → re-fetch status → finalize (idempotent)
+
+  ├─ /api/webhooks/stripe:     verify signature → grant/adjust credits (idempotent)
+
+  ├─ /api/cron/reconcile:      poll Higgsfield for runs stuck in flight; finish or refund
+
+  └─ finalize(): copy outputs to R2 → set status → refund if failed/nsfw
+
+  ▼
+
+MongoDB Atlas (replica set, transactions)      Cloudflare R2 (media)      Stripe      Resend
+
+```
+
+
+### Changes from the template (it assumes bring-your-own-key and keeps everything in the browser)
+
+
+| Template does | We do |
+
+|---|---|
+
+| The user pastes their own Higgsfield key into `KeyDialog`, stored in an httpOnly cookie (`generation/credentials.ts`) | **One platform key** in the server env `HF_CREDENTIALS=key_id:key_secret`. Delete `KeyDialog`, the key status row and the key cookie. The key never reaches the browser. |
+
+| No users (`device.ts` cookie) | Auth.js users. Every generation, project and upload has an owner `userId`. Remove the device cookie. |
+
+| History and projects in IndexedDB/zustand (`lib/studio/history.ts`, `projects.ts`) | **MongoDB.** Replace those modules and **keep the `useRuns` interface** so the UI components don't need to change (the template contract calls for exactly this). |
+
+| Polls Higgsfield from the client through a batched server action | **Webhook first.** The client polls **our** `GET /api/generations/status` route, which only reads the DB. Keep the template's lesson: *Next dispatches server actions one at a time per client*, so never poll through a server action. |
+
+| Output URLs point at the Higgsfield CDN | Copy to R2 when the run finishes, and serve our URLs |
+
+| Free to use | Credit-metered and Stripe-billed. Every submit is priced and debited up front. |
+
+| "Dark only, no app header" studio | Keep dark only. **Add the higgsfield.ai top navigation** (§8). The site's layout is the source of truth for page structure. The template supplies the components inside it. |
+
+
+---
+
+
+## 3. Higgsfield API integration (server only)
+
+
+Verify every detail below against the live docs and record any differences.
+
+
+- **Base URL:** `HF_API_BASE_URL`, defaulting to `https://api.higgsfield.ai`. The docs and OpenAPI use this host. The template uses `https://platform.higgsfield.ai`, and both hosts answer. Use the documented one unless the docs say otherwise.
+
+- **Auth header:** `Authorization: Key {key_id}:{key_secret}`. Create keys at `console.higgsfield.ai`.
+
+- **Submit:** `POST {BASE}/{model-path}` with a JSON body (for example `POST /bytedance/seedance-2.5`, `POST /higgsfield-ai/soul/v2/standard`). The response is `{ status: "queued", request_id, status_url, cancel_url }`.
+
+- **Webhook:** add `?hf_webhook=<url-encoded URL>` to the submit URL. Higgsfield posts `{ request_id, status: "completed"|"failed"|"nsfw", error, payload }` for terminal states. It retries on network errors and 5xx for about 2 hours, does not retry 4xx, and can deliver the same event more than once, so dedupe by `request_id` plus terminal status. Your endpoint must reply within 10 seconds.
+
+  - **The docs don't describe a webhook signature.** So (a) make the webhook URL `…/api/webhooks/higgsfield?gid={generationId}&t={HMAC_SHA256(generationId, HF_WEBHOOK_SECRET)}` and compare it in constant time, and (b) **never trust the payload.** Always re-fetch `GET /requests/{id}/status` and act on that. If the docs or SDK later describe a signature header (the JS SDK has a `webhook.secret` option), verify it as well.
+
+  - In local dev, where there's no public URL, skip `hf_webhook` and rely on the reconcile poller, or use `cloudflared`/`ngrok` when `HF_WEBHOOK_BASE_URL` is set.
+
+- **Status:** `GET {BASE}/requests/{request_id}/status` returns `{ status, request_id, images?: [{url}], video?: {url}, error? }`. Also handle audio and other artifact payloads as the model docs describe them.
+
+- **Statuses:** `queued` (can be canceled), `in_progress` (can't be canceled), then the terminal ones: `completed`, `failed`, `nsfw` (content moderation), `canceled`. Higgsfield doesn't charge us for failed or nsfw runs, so we refund the user's credits for them too.
+
+- **Cancel:** `POST {BASE}/requests/{id}/cancel` returns 202 while the request is still queued and 400 once it has started. Cancel really cancels on the platform. Don't fake it by stopping the poll.
+
+- **Uploads (reference images, video, audio):** the server calls `POST {BASE}/files/generate-upload-url` with `{ content_type }` and gets `{ upload_url, public_url, content_type, upload_headers }`. The browser PUTs the file to `upload_url` with exactly those headers and `credentials: "omit"`. Use `public_url` in request bodies. Allowed types: JPEG, PNG, WebP, GIF, MP4, WAV. **Never log signed URLs.** Reuse the template's `upload-contract.ts` validation as it is, and add a per-user upload rate limit plus our own size limits.
+
+- **Errors and rate limits:** follow `/docs/concepts/errors.md` and `/docs/concepts/rate-limits.md`. Retry 429 and 5xx on submit with exponential backoff and jitter, and send an **idempotency key** if the API supports one. If it doesn't, protect against double submits yourself with a DB lock on the generation document. Map errors to plain messages in the dock, as the template's upload route does.
+
+- **Retention:** outputs last at least 7 days on Higgsfield, so copy them to R2 when the run finishes (§7).
+
+
+Put all of this in `lib/higgsfield/` (client, types, webhook token helpers). Only server code imports it. Add `import "server-only"`.
+
+
+---
+
+
+## 4. The model catalog: "all models"
+
+
+The goal is **every model the Higgsfield API exposes**, organized the way the site organizes them: by surface (**Image / Video / Audio**) and then by family.
+
+
+### Procedure
+
+
+1. Start with the template catalog: `generation/catalog/models/*.ts` (one file per family, a default export of `ModelEntry[]`). Each entry has `id`, `surface`, `label`, `roles` (media slots: `start`, `end`, `reference`, `video`, `audio`, `source` with max counts), `mediaModes`, `requiredRoles`, `requirePrompt`, typed `settings` (enum, range or boolean with defaults), and either `paths` (text / image / firstLast / reference) or a custom `toPlatform(plane) → { path, body }` mapper. `scripts/sync-models.mjs` regenerates `models.generated.ts`. Never edit that file by hand.
+
+2. Open every model page on docs.higgsfield.ai and the console model list. **For each model and endpoint the API exposes that the template doesn't cover, add a new model file** that follows the same contract and cites its docs URL.
+
+3. Extend `Surface` to `"image" | "video" | "audio"` and add the matching audio UI (text prompt plus an optional reference-audio slot, and an audio player tile in the feed).
+
+4. For each entry, add the metadata the site's model picker shows: `description`, `bestFor`, `badges` (`NEW`, `TOP`, `FAST`, `4K`, `AUDIO`), `provider`, and `icon`. Take the descriptions from `skills/higgsfield-generate/references/model-catalog.md`, reworded in our voice.
+
+5. Write `docs/model-catalog.md`: a table of every model with surface, REST path(s), input modes, settings, price source and status (Live / Unverified / Not in API).
+
+
+### Starting inventory: already in the template (REST paths verified from its source)
+
+
+- **Image:** Soul 2 `higgsfield-ai/soul/v2/standard` · Soul Cinema `higgsfield-ai/soul/cinema` · Flux 2 `flux-2-pro` · Grok Imagine Image 2.0 `xai/grok-imagine-image-2.0` · Ideogram 4 `ideogram/v4.0` · Qwen Image 3 `alibaba/qwen-image-3/text-to-image` · Recraft 4.1 `recraft/v4.1/text-to-image` · Z-Image Turbo `z-image/turbo`
+
+- **Video:** Seedance 2.5 `bytedance/seedance-2.5` (plus `/video-edit` and `/video-extend`) · Seedance 2.0 / Fast / Mini `bytedance/seedance-2.0[/fast|/mini]` · Kling 3.0 Turbo / Std / Pro / 4K `kling-video/v3.0-turbo/*`, `kling-video/v3.0/{std,pro,4k}` · Kling 3.0 Motion Control (std/pro) `kling-video/v3/motion-control/{std,pro}` · Kling 2.6 `kling-video/v2.6/pro/*` · Kling 2.5 Turbo `kling-video/v2.5-turbo/*` · Kling O1 `kling-video/omni/first-last-frame` · Kling O3 `kling-video/o3/first-last-frame` · Wan 2.6 `wan/v2.6/*` · Wan 2.7 `wan/v2.7/*` · Wan 3.0 / 3.0 Prime `alibaba/wan-3.0[-prime]/*` · Happy Horse 1 / 1.1 `alibaba/happy-horse[/v1.1]/*` · MiniMax Hailuo 2.3 `minimax/hailuo-2.3/standard/*` · MiniMax H3 `minimax/h3/*` · LTX 2.5 Fast/Pro `lightricks/ltx-2.5/text-to-video/{fast,pro}` · PixVerse 6 `pixverse/v6/*` · Grok Imagine Video 1.5 `xai/grok-imagine-video/v1.5/reference-to-video` · Flux 3 video `blackforestlabs/flux-3/text-to-video` · Higgsfield DoP `higgsfield-ai/dop/lite`
+
+
+### Check and add if the REST API exposes them (the site or CLI lists them)
+
+
+Genjutsu motion transfer (`/higgsfield/genjutsu/motion-transfer/v1.0` according to the docs) · Nano Banana / 2 / 2 Lite / Pro · GPT Image 2 / 2.5 · Seedream 4.5 / 5.0 Lite · Flux Kontext · Kling O1 Image · Soul Cast / Soul Location · Cinema Studio image and video · Marketing Studio image and video · Google Veo 3 / 3.1 / 3.1 Lite · Gemini Omni Flash · Seedance 1.5 Pro · upscale, outpaint, and image and video background removal · **Audio:** Seed Audio, text-to-speech (Inworld and others), Mirelo text-to-audio, Sonilo music · Soul ID character training (v2 scope, §13).
+
+
+Some of these may exist only in Higgsfield's own web app or agent API and not in the public REST API. **Don't fake them.** Mark them "Not in API".
+
+
+### Validation
+
+
+`submitGeneration` must re-validate the whole request on the server against the catalog, using the template's `parseSettings` and `media-inputs.ts` rules: allowed enums and ranges, required roles, maximum counts per role, and whether a prompt is required. It must also reject any model id that isn't in the catalog. Never pass client-supplied paths through.
+
+
+---
+
+
+## 5. Authentication: NextAuth (Auth.js v5) + Resend magic links
+
+
+- Install `next-auth@5`, `@auth/mongodb-adapter`, `mongodb`, `resend`, `@react-email/components`. Check the current Auth.js install docs for Next 16 compatibility first.
+
+- `auth.ts` at the root exports `{ handlers, auth, signIn, signOut }`, and `app/api/auth/[...nextauth]/route.ts` re-exports the handlers.
+
+- Provider: `Resend` from `next-auth/providers/resend` with `from: EMAIL_FROM`. Override `sendVerificationRequest` to send **our branded React Email template** through the Resend SDK. It needs a big lime "Sign in to {{BRAND_NAME}}" button, a fallback link, an expiry note and a plain-text version.
+
+- Adapter: `MongoDBAdapter(clientPromise)` using the shared cached client from `lib/db/mongo.ts`.
+
+- Sessions use `strategy: "database"` so we can revoke them. The session callback exposes `user.id` and `user.role` only. **Never put the credit balance in the session**, because it would go stale.
+
+- Custom pages: `/login` (email field, styled like higgsfield's auth modal and also available as a modal from the header's "Sign up" / "Login"), `/login/check-email`, `/login/error`.
+
+- `events.createUser`: create a Stripe customer lazily (only at first checkout, not here), grant `SIGNUP_BONUS_CREDITS` (env, default 0) through the ledger, and set `role: "user"`.
+
+- Abuse controls: rate-limit magic-link requests per email and per IP (a Mongo TTL collection, so no Redis is needed), and optionally block disposable email domains.
+
+- **Authorization:** every server action and route handler calls `auth()` itself and checks ownership (`userId`) on every document it reads or changes. `proxy.ts` (Next 16's replacement for middleware) only redirects signed-out users away from `/assets`, `/account` and `/admin`. Never rely on it for security.
+
+- Signed-out users can browse Explore, Effects, Community and Pricing, and can open the generators. Clicking **Generate** or **Upload** opens the auth modal, then continues the action after sign-in (keep the dock state).
+
+
+---
+
+
+## 6. Data model (MongoDB)
+
+
+Build `lib/db/` with typed collections and zod schemas. Create indexes in an idempotent `scripts/db-init.ts`. Use Atlas so you have replica-set transactions.
+
+
+| Collection | Key fields | Indexes |
+
+|---|---|---|
+
+| `users`, `accounts`, `sessions`, `verification_tokens` | Auth.js adapter, plus on users: `role`, `stripeCustomerId`, `credits: { subscription: int, topup: int }`, `plan`, `planRenewsAt`, `createdAt` | adapter defaults, `stripeCustomerId` unique sparse |
+
+| `generations` | `userId`, `projectId?`, `surface`, `modelId`, `modelPath`, `prompt`, `settings`, `media[]` (role, kind, url), `status` (`pending_submit`, `queued`, `in_progress`, `completed`, `failed`, `nsfw`, `canceled`), `hfRequestId`, `cost` (credits), `outputs[]` ({ kind, url, r2Key, width?, height?, durationSec? }), `error?`, `isPublic`, `publishedAt?`, `presetId?`, `createdAt`, `finishedAt` | `{userId, createdAt:-1}`, `{hfRequestId}` unique sparse, `{status, updatedAt}`, `{isPublic, publishedAt:-1}` |
+
+| `projects` | `userId`, `name`, `coverGenerationId?`, timestamps | `{userId, updatedAt:-1}` |
+
+| `uploads` | `userId`, `kind`, `publicUrl`, `contentType`, `bytes`, `createdAt`. This powers the "Uploads" tab of `AssetLibraryModal` | `{userId, createdAt:-1}` |
+
+| `credit_ledger` (append-only) | `userId`, `delta` (±int), `bucket` (`subscription`/`topup`), `reason` (`generation_debit`, `generation_refund`, `subscription_grant`, `subscription_reset`, `topup_purchase`, `signup_bonus`, `admin_adjust`, `stripe_refund`), `refType`, `refId`, `balanceAfter`, `createdAt` | **unique `{reason, refType, refId}`**, which makes every grant, debit and refund idempotent. `{userId, createdAt:-1}` |
+
+| `stripe_events` | `_id = event.id`, `type`, `processedAt` | `_id` unique (dedupe) |
+
+| `hf_webhook_events` | `requestId`, `status`, `receivedAt` | unique `{requestId, status}` |
+
+| `presets` (Effects) | `slug`, `title`, `surface`, `modelId`, `promptTemplate`, `settings`, `coverUrl`, `category`, `order`, `active` | `slug` unique |
+
+| `model_pricing` | `modelId`, `rule` (see §7), `hfUsd` source, `enabled` | `modelId` unique |
+
+| `rate_limits` | `key`, `count`, `expiresAt` (TTL) | TTL on `expiresAt` |
+
+| `reports` | community content reports | `{generationId}` |
+
+
+---
+
+
+## 7. Credits, pricing and the generation lifecycle
+
+
+### Pricing
+
+
+- The Higgsfield API bills us in **USD per model configuration** (video is usually per second, images per image, DoP per generation). Get the numbers from the console price list and `/docs/concepts/billing-and-retention.md`.
+
+- Our price is `credits = ceil(hfUsdCost × CREDIT_MARKUP / CREDIT_USD_VALUE)`, where `CREDIT_USD_VALUE` (env, default `0.01`) is the retail value of one credit before plan discounts.
+
+- `lib/billing/price.ts` exports `priceFor(modelId, settings, media) → credits`, a pure function with unit tests. It is used by **both** the UI (the cost on the Generate button, like higgsfield's "Generate ✦ 60") and `submitGeneration`. The server never trusts a price sent by the client.
+
+- `model_pricing` in the DB can override the config per model, and `enabled: false` hides a model.
+
+
+### Two credit buckets
+
+
+- `subscription` credits are **reset** (not added to) on every paid subscription invoice. `topup` credits never expire. Spend `subscription` credits first, then `topup`. Both behaviors are config flags. Record the defaults in `docs/decisions.md`.
+
+
+### Submit (server action `submitGeneration`)
+
+
+1. `auth()` → validate against the catalog → compute `cost`.
+
+2. **One Mongo transaction:** conditionally decrement the buckets (fail with `INSUFFICIENT_CREDITS` if the balance is too low, and the UI opens the upgrade modal), insert the ledger `generation_debit`, and insert `generations{status:"pending_submit"}`.
+
+3. Call Higgsfield with the webhook URL, then save `hfRequestId` and `status:"queued"`.
+
+4. If the submit fails **for sure** (4xx), refund through the ledger (`generation_refund`, the same refId, so it's idempotent) and mark the generation `failed` with a plain-language error. If the result is **unclear** (timeout or 5xx after retries), leave it `pending_submit` for the reconciler. Never double-charge and never lose a charge.
+
+5. Per-user concurrency limits (the site's "parallel generations": for example Free 1, Starter 2 video / 4 image, Plus 6 / 8) are set per plan in config and checked inside the same transaction.
+
+
+### Finalize (from the webhook, the reconciler or a user-triggered refresh; all of them call the same idempotent `finalizeGeneration(requestId)`)
+
+
+1. Re-fetch the status from Higgsfield. If it isn't terminal yet, update `status` and return.
+
+2. `completed`: stream each output URL to R2 at `u/{userId}/{generationId}/{n}.{ext}` with the correct content-type, record dimensions or duration (image-size probe for images, the settings aspect ratio for video, or ffprobe if it's available), and set `completed` and `finishedAt`.
+
+3. `failed`, `nsfw` or `canceled`: add a ledger refund (idempotent) and store a human-readable error. `nsfw` shows "Blocked by content filter. Credits refunded."
+
+4. Guard state transitions with a conditional update (`status` not already terminal) so two concurrent finalizers can't both act.
+
+
+### Reconciler: `GET /api/cron/reconcile` (Vercel Cron every minute, protected with `CRON_SECRET`)
+
+
+- Finds generations in `pending_submit` older than 2 minutes and resolves them (check whether a request was created; if not, refund), plus `queued`/`in_progress` runs with no update for 3 minutes, and finalizes them. Anything still unfinished after 15 minutes is marked failed and refunded.
+
+
+### Client status
+
+
+- `GET /api/generations/status?ids=a,b,c` reads our DB only, checks ownership, and returns `{ id, status, outputs, error }`. `useRuns` polls it every 3–4 seconds while anything is in flight, then stops. Generating and failed tiles stay in the feed, which is a template rule.
+
+
+---
+
+
+## 8. Stripe billing
+
+
+- Products and prices are configured in `lib/billing/plans.ts`, with Stripe price IDs from env. Mirror higgsfield's plan structure but not its "unlimited" offers (every API call costs us real money):
+
+  - **Free** (sign-up bonus only), **Starter**, **Plus**, **Ultra**: monthly and annual (annual shows "20% OFF" and a per-month equivalent), each with a monthly credit allowance and a concurrency limit.
+
+  - **Top-up packs** (one-time payments), where higher plans get more credits per dollar, like higgsfield's "$1 = N credits" table.
+
+  - Leave the amounts as `{{TBD}}` in config and ask me for the final numbers at the Phase 5 checkpoint.
+
+- **Checkout:** a server action creates a Checkout Session (`mode: "subscription"` or `"payment"`), creating the Stripe customer lazily with `metadata.userId`, and sets `client_reference_id = userId` plus success and cancel URLs.
+
+- **Customer Portal** from `/account/billing` for plan changes, cancellations and invoices.
+
+- **Webhook** `app/api/webhooks/stripe/route.ts` (Node runtime): read the raw body with `await req.text()`, run `stripe.webhooks.constructEvent` with `STRIPE_WEBHOOK_SECRET`, dedupe on `stripe_events._id = event.id`, then:
+
+  - `checkout.session.completed` (mode payment): grant top-up credits (ledger refId = session id)
+
+  - `invoice.paid` (billing_reason `subscription_create` / `subscription_cycle`): **reset** the subscription bucket to the plan allowance (ledger refId = invoice id), and update `plan` and `planRenewsAt`
+
+  - `customer.subscription.updated` / `.deleted`: sync the plan. On cancellation, keep the credits until the period ends
+
+  - `charge.refunded`: claw back the related top-up credits (never below 0) and flag for admin review
+
+- Test locally with `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
+
+- Send Resend receipts for top-ups ("Credits added"), in addition to Stripe's own receipts.
+
+
+---
+
+
+## 9. UI spec: copy higgsfield.ai
+
+
+Build from `docs/ui-inventory.md` (§1c). Use the template's components and the **Quanta tokens** in `styles/quanta/*` + `styles/theme.css`: dark backgrounds, brand lime **`#d1fe17`** as `--primary`, a grotesk display face for headings, a secondary sans for body text, and mono for numbers. Lime is reserved for the Generate CTA and active states (a template rule). Other actions use ghost or outline buttons.
+
+
+### Global chrome
+
+
+- **Top nav** (as on higgsfield.ai): logo · **Explore** · **Image** · **Video** · **Audio** · **Effects** · **Community** · **Pricing**. On the right: a credit balance pill (with a ✦ icon, linking to `/account`), a lime **Upgrade** button, and the avatar menu (Assets, Account, Billing, Sign out). Signed out: **Login** and **Sign up**. The nav collapses into a sheet on mobile.
+
+- An optional dismissible **promo bar** above the nav (the copy comes from config).
+
+- A **cookie consent** banner (EU): Accept all / Reject non-essential / Preferences. Don't load analytics until the user consents.
+
+
+### Routes
+
+
+| Route | What it is (the site equivalent) |
+
+|---|---|
+
+| `/` | **Explore**: full-bleed hero with the template's atmosphere (radial glow + dot field), bold uppercase headline, feature cards for our top models (Seedance 2.5, Nano Banana Pro, Kling 3.0, Soul 2 and so on) linking to the generators with `?model=`, an Effects strip, and a Community feed teaser |
+
+| `/image`, `/video`, `/audio` | **Generator pages** (layout below). `?model=<id>` selects the model, `?preset=<slug>` applies an effect |
+
+| `/effects`, `/effects/[slug]` | Preset gallery (grid of looping cover videos, category filter chips) → a detail page with a "Use effect" CTA that opens the generator already filled in |
+
+| `/community`, `/g/[id]` | Public feed of generations users chose to publish (justified gallery). The detail page shows the prompt, model and settings, with a "Recreate" button that sends them to the generator. Includes a report button |
+
+| `/assets` | The user's library: All generations, Images, Videos, Audio, Uploads, and a Projects sidebar. Multi-select, download, delete, move to project, publish |
+
+| `/projects/[id]` | Project view: the same feed filtered by `projectId`. Rename and delete through the template's `ProjectActions` |
+
+| `/pricing` | Copy higgsfield's pricing page layout: monthly/annual toggle, plan cards ("Most popular" and "Best value" badges), a feature comparison table, a top-up section, an FAQ. The copy is ours |
+
+| `/account`, `/account/billing` | Profile, balance by bucket, credit history (ledger), plan, a portal link |
+
+| `/login` (+ modal) | Magic-link auth |
+
+| `/admin` (role `admin`) | Users (search, adjust credits through a ledger `admin_adjust` entry with a note), generations (filter by status and model), model toggles and pricing overrides, presets CRUD, community moderation queue |
+
+| `/legal/terms`, `/legal/privacy`, `/legal/acceptable-use` | Placeholders I'll replace |
+
+
+### Generator page layout (match `/ai/video` on higgsfield.ai)
+
+
+- **Left control panel** (about 380px, scrolls on its own, sticky footer):
+
+  1. Tabs for the surface's modes. Video: **Create Video / Edit Video / Motion Control**. Image: **Create / Edit**. Each maps to catalog `mediaModes` or entries, such as Seedance 2.5 Edit or Extend, and Kling Motion Control.
+
+  2. **Model card**: a looping preview of the model's media, a category label ("GENERAL", "CINEMATIC", "FAST"), the model name, and a **Change** button. Change opens the **model picker modal**: a searchable grid grouped by family, with provider icon, name, one-line description, badges and "from ✦N".
+
+  3. Sub-tabs where they apply (**References / Extend Video**, or **Frames / References**, from `mediaModes`).
+
+  4. **Add references** drop zone ("Image, Video or Audio") → `AssetLibraryModal` (Uploads tab plus our library tabs). Compact thumbnail and audio chips can be removed one by one. Frame slots (start/end) and source slots appear only when the model supports them. Enforce the per-kind limits from the catalog.
+
+  5. **Prompt** textarea with example placeholder hints, an "Enhance prompt" toggle when the model supports it, and a character count.
+
+  6. **Settings row**: the headline setting pill (aspect ratio or duration), a resolution pill, and a "More" pill that opens `SettingsDialog`, which renders every setting in `model.settings` (enum → Select, range → Slider, boolean → Switch).
+
+  7. **Sticky Generate button**: lime, full width, "Generate ✦ {cost}". It changes to **Cancel** while a queued run is selected. It's disabled with a reason on hover when inputs are invalid, and it opens the upgrade modal when the user doesn't have enough credits.
+
+- **Right canvas**:
+
+  - A header with **History** and **How it works** toggles, plus a density control for the feed.
+
+  - Empty state (signed out, or no history for this surface): a big uppercase headline like "MAKE VIDEOS IN ONE CLICK", a subline, and three step cards (Add image → Choose preset → Get video) using `ScreenEmptyState`.
+
+  - Otherwise, the **justified, virtualized feed** (`UserGenerations`) filtered to this surface, newest first. `GenerationTile` states: generating (shimmer with elapsed time), failed, nsfw, completed. The hover rail (up to 3 visible actions, the rest behind ⋯) has Download, Reuse prompt & settings, Animate (image → video generator with this image as the start frame), Upscale (if the API supports it), Publish to Community, Add to project, and Delete.
+
+  - Lightbox: `GenerationDetailModal` with the full media, prompt, model, settings, cost, created time, and the same actions.
+
+- Mobile: the panel stacks above the feed, and Generate becomes a bottom sticky bar. Never add a second app shell (a template rule).
+
+
+### Visual polish rules
+
+
+- Use the template's motion tokens, respect `prefers-reduced-motion`, keep keyboard focus visible, and make every icon button's aria-label match its tooltip.
+
+- Media loads lazily and has fixed aspect-ratio boxes so nothing shifts. Never unmount loaded media during a fast scroll (a template rule).
+
+- No inert controls. If a feature isn't built yet, **remove its button**.
+
+
+---
+
+
+## 10. Security requirements (check these before each checkpoint)
+
+
+- `HF_CREDENTIALS`, `STRIPE_SECRET_KEY`, `AUTH_SECRET`, `AUTH_RESEND_KEY` and the R2 keys only exist in server env. Use `server-only` imports. A build-time test greps `.next/static` for key prefixes and fails the build if it finds any.
+
+- Every route handler and server action runs `auth()` and checks ownership, returning **404** (not 403) for other users' IDs.
+
+- All input is validated with zod plus the catalog. Model paths come from the catalog, never from the client.
+
+- Stripe and Higgsfield webhooks: signature or token verification, idempotency, raw body for Stripe, quick 2xx after the event is saved.
+
+- Rate limits: magic-link sends, uploads, submits (per user per minute), and the status polling route.
+
+- Credits: only the server changes them, only through the ledger inside transactions, and never below zero.
+
+- Security headers: CSP (media from R2 and Higgsfield CDN hosts, Stripe.js), `frame-ancestors 'none'`, `Referrer-Policy`, and HSTS in production.
+
+- Uploads: check content types and sizes on our side too, and never log signed URLs.
+
+- Community: only generations the owner explicitly published appear. Prompts are shown only on published items. Include report and admin unpublish.
+
+- Run a final audit against the vibe-security checklist (exposed keys, broken access control, client-side trust, payment-flow integrity).
+
+
+---
+
+
+## 11. Environment variables (`.env.example`, all documented)
+
+
+```
+
+# App
+
+APP_URL=http://localhost:3000
+
+NEXT_PUBLIC_BRAND_NAME={{BRAND_NAME}}
+
+# Auth.js
+
+AUTH_SECRET=
+
+AUTH_URL=http://localhost:3000
+
+AUTH_RESEND_KEY=
+
+EMAIL_FROM="{{EMAIL_FROM}}"
+
+SIGNUP_BONUS_CREDITS=0
+
+# MongoDB
+
+MONGODB_URI=
+
+MONGODB_DB={{APP_SLUG}}
+
+# Higgsfield
+
+HF_API_BASE_URL=https://api.higgsfield.ai
+
+HF_CREDENTIALS=key_id:key_secret
+
+HF_WEBHOOK_SECRET=
+
+HF_WEBHOOK_BASE_URL=            # public URL for webhooks; empty = reconcile-only (local dev)
+
+# Credits
+
+CREDIT_USD_VALUE=0.01
+
+CREDIT_MARKUP={{CREDIT_MARKUP}}
+
+# Stripe
+
+STRIPE_SECRET_KEY=
+
+STRIPE_WEBHOOK_SECRET=
+
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+
+STRIPE_PRICE_STARTER_MONTHLY=
+
+STRIPE_PRICE_STARTER_ANNUAL=
+
+STRIPE_PRICE_PLUS_MONTHLY=
+
+STRIPE_PRICE_PLUS_ANNUAL=
+
+STRIPE_PRICE_ULTRA_MONTHLY=
+
+STRIPE_PRICE_ULTRA_ANNUAL=
+
+STRIPE_PRICE_TOPUP_SMALL=
+
+STRIPE_PRICE_TOPUP_MEDIUM=
+
+STRIPE_PRICE_TOPUP_LARGE=
+
+# Cloudflare R2
+
+R2_ACCOUNT_ID=
+
+R2_ACCESS_KEY_ID=
+
+R2_SECRET_ACCESS_KEY=
+
+R2_BUCKET=
+
+R2_PUBLIC_BASE_URL=
+
+# Cron
+
+CRON_SECRET=
+
+```
+
+
+Add a `lib/env.ts` that validates env with zod when the app boots and fails with a clear message.
+
+
+---
+
+
+## 12. Phases and checkpoints
+
+
+| Phase | Scope | Checkpoint proof |
+
+|---|---|---|
+
+| **0. Research** | §1: clone the repos, read the docs, browse the site. Write `docs/ui-inventory.md`, `docs/model-catalog.md`, `docs/decisions.md`, and `docs/screens/*` | The three docs exist. The model table lists every model with its status |
+
+| **1. Scaffold** | The shadcn init from the template, strip BYOK/device/IndexedDB, add `lib/env.ts`, Mongo client, `db-init`, lint/format/typecheck | The app runs, the template studio renders, and the checks pass |
+
+| **2. Auth** | Auth.js + Resend + Mongo adapter, branded email, login modal and pages, `proxy.ts`, rate limits | A real magic link arrives in my inbox and signs me in, sign-out works, and protected routes redirect |
+
+| **3. Generation core** | `lib/higgsfield`, a server-side `submitGeneration` with the platform key, Mongo generations, a webhook route, a reconciler, the status route, `useRuns` on Mongo, R2 copy, cancel | One image model and one video model generate for real, from start to finish. The result survives a refresh, it's served from R2, and cancel on a queued run works |
+
+| **4. All models** | Every verified model from §4, audio surface, picker metadata, server re-validation, unit tests for every mapper | Snapshot tests of `toPlatform` output for every model, and at least one real generation per family |
+
+| **5. Credits and Stripe** | Pricing function, ledger, transactions, plans and top-ups, Checkout, Portal, Stripe webhook, receipts, upgrade modal | Tests: debit and refund are idempotent, concurrent submits can't overdraw, and a test-mode subscription plus top-up credit the right buckets |
+
+| **6. UI clone** | Global nav, Explore, generator pages, Effects, Community, Assets, Projects, Pricing, Account, Admin, following `ui-inventory.md` | Side-by-side screenshots (ours vs higgsfield) for each page at 1440px and 390px wide |
+
+| **7. Content and polish** | Generate our own hero and preset cover media with the app, replace every template placeholder (`/presets/placeholder-*.svg`, mock templates), write the copy, legal placeholders, a11y pass | No placeholder assets are left, and a Lighthouse a11y score of 95+ on the main pages |
+
+| **8. Hardening and deploy** | §10 audit, Playwright E2E, Vercel deploy config (crons, env), Atlas indexes, R2 CORS, Stripe live-mode checklist | E2E passes against a preview deploy, and a short `docs/runbook.md` exists |
+
+
+### Verification scenarios (Playwright plus manual checks)
+
+
+- Sign up by magic link, receive the bonus credits, generate an image from a prompt only, and generate a video with start and end frames and with references. Switch surface and model, change a setting in the dialog, and watch the cost update.
+
+- Not enough credits opens the upgrade modal. Buying a top-up in Stripe test mode adds the credits and makes Generate work.
+
+- A content-filter block (nsfw), a failed run and a cancel on a queued run each leave a visible tile **and** refund the credits exactly once, even when the webhook arrives twice.
+
+- Kill the webhook (no public URL): the reconciler still completes the run.
+
+- Two tabs submit at the same moment with credits for one run: exactly one succeeds.
+
+- User A can't read, publish or delete user B's generation, project or upload through any route.
+
+- Empty library, full library (500+ items, fast scroll keeps loaded media), a project with a few generations, project rename and delete.
+
+- Mobile at 390px: no horizontal scroll, and Generate stays reachable.
+
+
+---
+
+
+## 13. Out of scope for v1 (leave clean extension points)
+
+
+Supercomputer agent, Canvas, Cinema Studio multi-shot timelines, Marketing Studio avatar and product flows, 3D, Academy, Contests, plugins, teams and organizations, **Soul ID character training** (planned for v2: `characters` collection plus a training flow), and an API for our own customers.
+
+
+## 14. Definition of done
+
+
+- Every page in §9 exists, matches `ui-inventory.md`, and uses our brand. No Higgsfield marks and no placeholders are left.
+
+- Every verified Higgsfield API model can be picked and generates for real. Unverified models are listed in the docs, not in the UI.
+
+- Magic-link auth, credits, Stripe subscriptions and top-ups, webhooks and the reconciler all work together, with tests.
+
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` pass, and the Playwright suite passes against a preview deploy.
+
+- `README.md` explains setup, env, local webhooks (Stripe CLI and a tunnel for Higgsfield), how to add a model (one file plus `pnpm models`), and deployment.
+

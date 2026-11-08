@@ -1,0 +1,848 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_spacix",
+      "email": "spacix@ticketplaster.com",
+      "name": "SPACIX Admin",
+      "role": "admin",
+      "adminSubRole": "super_admin",
+      "status": "active",
+      "plan": "ultra",
+      "billingCycle": "annual",
+      "credits": {
+        "subscription": 250,
+        "topup": 0,
+        "total": 250
+      },
+      "createdAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "id": "usr_admin_owner",
+      "email": "earr.music@gmail.com",
+      "name": "Studio Director",
+      "role": "admin",
+      "adminSubRole": "super_admin",
+      "status": "active",
+      "plan": "ultra",
+      "billingCycle": "annual",
+      "credits": {
+        "subscription": 250,
+        "topup": 0,
+        "total": 250
+      },
+      "createdAt": "2026-11-07T22:36:41.903Z"
+    }
+  ],
+  "userPasswords": {
+    "usr_admin_spacix": "pbkdf2_sha256$0b6949b328f5a3dcbb8b5e09a3b31555$52376c9229a7a0eb8139e4b8c2d5cf23aef0f84e309a997e6b31790420d7a673",
+    "usr_admin_owner": "pbkdf2_sha256$a5896d3222b47fb69b5e8badd01fd7b9$3f7d67ad2c05de58b0936b300cd4fd4d69593b6d8295f218042317571af6b489"
+  },
+  "sessionMeta": [],
+  "passwordResets": [],
+  "platformSecrets": [
+    {
+      "key": "AUTH_JWT_SECRET",
+      "category": "auth",
+      "label": "Authentication Session Signing Secret",
+      "secretValue": "8269ea3957b2409c3024bfd7d0c3ceee7b9e5235cbe6c05843666acf722d7d0f",
+      "secretMasked": "8269ea••••••••7d0f",
+      "hasValue": true,
+      "description": "Cryptographic secret stored in DB for signing session tokens and password reset codes.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "RUNWARE_API_KEY",
+      "category": "system",
+      "label": "Runware.ai Primary API Key",
+      "secretValue": "Mw9FXfd5Fij2bfPpR3DLH0Vv7yQ1ef7U",
+      "secretMasked": "Mw9FXf••••••••ef7U",
+      "hasValue": true,
+      "description": "Primary Runware v1 Bearer token synced with the Runware provider gateway.",
+      "updatedAt": "2026-11-07T22:41:57.913Z"
+    },
+    {
+      "key": "FAL_KEY",
+      "category": "system",
+      "label": "fal.ai Primary API Key",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Primary fal.ai API key synced with the fal.ai provider gateway.",
+      "updatedAt": "2026-11-07T22:41:57.913Z"
+    },
+    {
+      "key": "HF_CREDENTIALS",
+      "category": "system",
+      "label": "Higgsfield API Credentials",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Primary Higgsfield key_id:key_secret synced with the Higgsfield provider gateway.",
+      "updatedAt": "2026-11-07T22:41:57.913Z"
+    },
+    {
+      "key": "MUAPI_KEY",
+      "category": "system",
+      "label": "Muapi.ai Primary API Key",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Primary Muapi.ai Bearer key synced with the Muapi provider gateway.",
+      "updatedAt": "2026-11-07T22:41:57.913Z"
+    },
+    {
+      "key": "WEBHOOK_HMAC_SECRET",
+      "category": "webhook",
+      "label": "Provider Webhook HMAC Secret",
+      "secretValue": "2a14868c60469dee1e643d2da4a94dd5445f9e90c80a9763",
+      "secretMasked": "2a1486••••••••9763",
+      "hasValue": true,
+      "description": "HMAC-SHA256 signing secret used to verify incoming provider webhooks.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "STRIPE_SECRET_KEY",
+      "category": "billing",
+      "label": "Stripe Secret Key (sk_live / sk_test)",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Stripe API secret key for live subscription and credit top-up checkout sessions.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "STRIPE_WEBHOOK_SECRET",
+      "category": "billing",
+      "label": "Stripe Webhook Signing Secret (whsec_)",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Stripe webhook endpoint secret for invoice and checkout verification.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "RESEND_API_KEY",
+      "category": "email",
+      "label": "Resend / Transactional Email API Key",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "API key for delivering password reset codes and magic sign-in emails.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "EMAIL_FROM",
+      "category": "email",
+      "label": "Sender Email Identity",
+      "secretValue": "SPACIX <noreply@spacix.ticketplaster.com>",
+      "secretMasked": "SPACIX••••••••com>",
+      "hasValue": true,
+      "description": "Default From address used for password reset and transactional emails.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "R2_ENDPOINT",
+      "category": "storage",
+      "label": "Cloudflare R2 / S3 Endpoint URL",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "S3-compatible endpoint URL for permanent media archiving.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "R2_BUCKET",
+      "category": "storage",
+      "label": "Cloudflare R2 Bucket Name",
+      "secretValue": "spacix-media",
+      "secretMasked": "spacix••••••••edia",
+      "hasValue": true,
+      "description": "Target bucket name for archived generations and reference uploads.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "R2_ACCESS_KEY_ID",
+      "category": "storage",
+      "label": "Cloudflare R2 Access Key ID",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Access Key ID for R2 object storage writes.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "R2_SECRET_ACCESS_KEY",
+      "category": "storage",
+      "label": "Cloudflare R2 Secret Access Key",
+      "secretValue": "",
+      "secretMasked": "No secret configured",
+      "hasValue": false,
+      "description": "Secret Access Key for R2 object storage writes.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    },
+    {
+      "key": "CRON_SECRET",
+      "category": "system",
+      "label": "Cron Reconciler Secret",
+      "secretValue": "b9c2fa9626b20e9d1e39eccdedc0c308da79fd31",
+      "secretMasked": "b9c2fa••••••••fd31",
+      "hasValue": true,
+      "description": "Bearer secret protecting /api/cron/reconcile.",
+      "updatedAt": "2026-11-07T22:36:41.903Z"
+    }
+  ],
+  "providerConfigs": [
+    {
+      "id": "runware",
+      "label": "Runware.ai Sonic Engine",
+      "enabled": true,
+      "baseUrl": "https://api.runware.ai/v1",
+      "authScheme": "Authorization: Bearer $RUNWARE_API_KEY",
+      "rawSecret": "Mw9FXfd5Fij2bfPpR3DLH0Vv7yQ1ef7U",
+      "rawWebhookSecret": "",
+      "secretMasked": "Mw9FXf••••••••ef7U",
+      "hasSecret": true,
+      "apiKeys": [
+        {
+          "id": "key_runware_1794084280607_7552",
+          "label": "Test",
+          "keyValue": "Mw9FXfd5Fij2bfPpR3DLH0Vv7yQ1ef7U",
+          "secretMasked": "Mw9FXf••••••••ef7U",
+          "isPrimary": true,
+          "enabled": true,
+          "createdAt": "2026-11-07T20:44:40.606Z",
+          "updatedAt": "2026-11-07T20:44:40.606Z"
+        }
+      ],
+      "webhookSecretMasked": "No secret configured",
+      "defaultCallingPattern": "task_stream",
+      "priority": 1,
+      "healthStatus": "operational",
+      "updatedAt": "2026-11-07T20:44:40.606Z"
+    },
+    {
+      "id": "fal",
+      "label": "fal.ai Model APIs",
+      "enabled": true,
+      "baseUrl": "https://queue.fal.run",
+      "secondaryUrl": "https://fal.run",
+      "authScheme": "Authorization: Key $FAL_KEY",
+      "rawSecret": "",
+      "rawWebhookSecret": "",
+      "secretMasked": "No active API key configured",
+      "hasSecret": false,
+      "apiKeys": [],
+      "webhookSecretMasked": "No secret configured",
+      "defaultCallingPattern": "subscribe",
+      "priority": 2,
+      "healthStatus": "operational",
+      "updatedAt": "2026-11-07T20:44:16.344Z"
+    },
+    {
+      "id": "higgsfield",
+      "label": "Higgsfield AI",
+      "enabled": true,
+      "baseUrl": "https://api.higgsfield.ai",
+      "authScheme": "Authorization: Key $HF_CREDENTIALS",
+      "rawSecret": "",
+      "rawWebhookSecret": "",
+      "secretMasked": "No active API key configured",
+      "hasSecret": false,
+      "apiKeys": [],
+      "webhookSecretMasked": "No secret configured",
+      "defaultCallingPattern": "queue",
+      "priority": 3,
+      "healthStatus": "operational",
+      "updatedAt": "2026-11-07T20:44:20.014Z"
+    },
+    {
+      "id": "muapi",
+      "label": "Muapi.ai Unified Router",
+      "enabled": true,
+      "baseUrl": "https://api.muapi.ai/v1",
+      "authScheme": "Authorization: Bearer $MUAPI_KEY",
+      "rawSecret": "",
+      "rawWebhookSecret": "",
+      "secretMasked": "No active API key configured",
+      "hasSecret": false,
+      "apiKeys": [],
+      "webhookSecretMasked": "No secret configured",
+      "defaultCallingPattern": "queue",
+      "priority": 4,
+      "healthStatus": "operational",
+      "updatedAt": "2026-11-07T20:44:23.391Z"
+    }
+  ],
+  "modelPricing": [
+    {
+      "modelId": "nano-banana-2-1",
+      "enabled": true,
+      "baseHfUsd": 0.035,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/nano-banana-2"
+    },
+    {
+      "modelId": "fal-nano-banana-pro",
+      "enabled": true,
+      "baseHfUsd": 0.05,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/nano-banana-pro"
+    },
+    {
+      "modelId": "soul-2-standard",
+      "enabled": true,
+      "baseHfUsd": 0.04,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "higgsfield-ai/soul/v2/standard"
+    },
+    {
+      "modelId": "soul-cinema",
+      "enabled": true,
+      "baseHfUsd": 0.06,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "higgsfield-ai/soul/cinema"
+    },
+    {
+      "modelId": "flux-kontext-pro",
+      "enabled": true,
+      "baseHfUsd": 0.05,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "runware",
+        "muapi"
+      ],
+      "customEndpoint": "fal-ai/flux-pro/kontext"
+    },
+    {
+      "modelId": "flux-2-pro",
+      "enabled": true,
+      "baseHfUsd": 0.14,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "runware",
+        "muapi"
+      ],
+      "customEndpoint": "klingai:kling-video@3-4k"
+    },
+    {
+      "modelId": "grok-imagine-image-2",
+      "enabled": true,
+      "baseHfUsd": 0.05,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "xai/grok-imagine-image-2.0"
+    },
+    {
+      "modelId": "ideogram-v4",
+      "enabled": true,
+      "baseHfUsd": 0.055,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/ideogram/v3"
+    },
+    {
+      "modelId": "recraft-v4-1",
+      "enabled": true,
+      "baseHfUsd": 0.04,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/recraft/v4/pro/text-to-image"
+    },
+    {
+      "modelId": "qwen-image-3",
+      "enabled": true,
+      "baseHfUsd": 0.02,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": "alibaba:qwen-image@3.0"
+    },
+    {
+      "modelId": "z-image-turbo",
+      "enabled": true,
+      "baseHfUsd": 0.01,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "higgsfield"
+      ],
+      "customEndpoint": "runware:100@1"
+    },
+    {
+      "modelId": "seedance-2-5",
+      "enabled": true,
+      "baseHfUsd": 0.06,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "fal",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "bytedance/seedance-2.5"
+    },
+    {
+      "modelId": "kling-3-0-pro",
+      "enabled": true,
+      "baseHfUsd": 0.075,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/kling-video/v2.5-turbo/pro/image-to-video"
+    },
+    {
+      "modelId": "flux-3-max-video",
+      "enabled": true,
+      "baseHfUsd": 0.07,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "runware"
+      ],
+      "customEndpoint": "blackforestlabs/flux-3-max/text-to-video"
+    },
+    {
+      "modelId": "kling-o3-frames",
+      "enabled": true,
+      "baseHfUsd": 0.065,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/kling-video/o3/standard/image-to-video"
+    },
+    {
+      "modelId": "minimax-h3",
+      "enabled": true,
+      "baseHfUsd": 0.05,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "minimax/h3-max/text-to-video"
+    },
+    {
+      "modelId": "ltx-2-5-pro",
+      "enabled": true,
+      "baseHfUsd": 0.035,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/ltx-2-19b/image-to-video"
+    },
+    {
+      "modelId": "seedance-2-0-fast",
+      "enabled": true,
+      "baseHfUsd": 0.025,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": "bytedance:seedance-fast@2.0"
+    },
+    {
+      "modelId": "kling-3-0-turbo",
+      "enabled": true,
+      "baseHfUsd": 0.035,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "muapi",
+        "fal",
+        "higgsfield",
+        "runware"
+      ],
+      "customEndpoint": "muapi/kling/v3.0-turbo"
+    },
+    {
+      "modelId": "kling-3-0-motion",
+      "enabled": true,
+      "baseHfUsd": 0.09,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "fal",
+        "runware"
+      ],
+      "customEndpoint": "kling-video/v3/motion-control/pro"
+    },
+    {
+      "modelId": "wan-3-0-prime",
+      "enabled": true,
+      "baseHfUsd": 0.055,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/wan-pro/text-to-video"
+    },
+    {
+      "modelId": "higgsfield-dop-lite",
+      "enabled": true,
+      "baseHfUsd": 0.25,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "higgsfield-ai/dop/lite"
+    },
+    {
+      "modelId": "sonilo-music-v2",
+      "enabled": true,
+      "baseHfUsd": 0.05,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "sonilo/v2/music-generation"
+    },
+    {
+      "modelId": "elevenlabs-music",
+      "enabled": true,
+      "baseHfUsd": 0.06,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/elevenlabs/music"
+    },
+    {
+      "modelId": "beatoven-music-sfx",
+      "enabled": true,
+      "baseHfUsd": 0.035,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/beatoven/music-generation"
+    },
+    {
+      "modelId": "chatterbox-dia-tts",
+      "enabled": true,
+      "baseHfUsd": 0.02,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/chatterbox/text-to-speech"
+    },
+    {
+      "modelId": "inworld-tts-studio",
+      "enabled": true,
+      "baseHfUsd": 0.015,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "fal-ai/minimax/speech-02-hd"
+    },
+    {
+      "modelId": "seed-audio-v1",
+      "enabled": true,
+      "baseHfUsd": 0.02,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "higgsfield",
+        "muapi",
+        "runware"
+      ],
+      "customEndpoint": "bytedance/seed-audio/v1/text-to-audio"
+    },
+    {
+      "modelId": "grok-imagine-2-0",
+      "enabled": true,
+      "baseHfUsd": 0.03,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "muapi"
+      ],
+      "customEndpoint": "xai:grok-imagine@image-2.0"
+    },
+    {
+      "modelId": "fishaudio-s2-1-pro",
+      "enabled": true,
+      "baseHfUsd": 0.015,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal"
+      ],
+      "customEndpoint": "fishaudio:s2.1@pro"
+    }
+  ],
+  "plans": [
+    {
+      "id": "free",
+      "name": "Explorer",
+      "audience": "For testing the workflow & camera rigs",
+      "monthlyUsd": 0,
+      "annualMonthlyUsd": 0,
+      "annualTotalUsd": 0,
+      "monthlyCredits": 250,
+      "parallelLimits": {
+        "video": 1,
+        "image": 2,
+        "audio": 2
+      },
+      "topupRatePerDollar": 80,
+      "features": [
+        "250 starter credits on magic-link signup",
+        "1 video / 2 image parallel runs",
+        "Access to Soul 2.0, Seedance 2.0 Fast & Z-Image",
+        "Standard 1080p & 2K exports stored in R2"
+      ]
+    },
+    {
+      "id": "starter",
+      "name": "Creator",
+      "audience": "For independent directors & storytellers",
+      "monthlyUsd": 19,
+      "annualMonthlyUsd": 15,
+      "annualTotalUsd": 180,
+      "monthlyCredits": 1800,
+      "parallelLimits": {
+        "video": 2,
+        "image": 4,
+        "audio": 4
+      },
+      "topupRatePerDollar": 100,
+      "features": [
+        "1,800 monthly credits (resets each cycle)",
+        "2 video / 4 image parallel generations",
+        "Full access to Seedance 2.5, Kling 3.0 & DoP Rigs",
+        "Commercial license + private R2 asset vault"
+      ]
+    },
+    {
+      "id": "plus",
+      "name": "Studio Plus",
+      "audience": "For high-volume production & creative leads",
+      "monthlyUsd": 49,
+      "annualMonthlyUsd": 39,
+      "annualTotalUsd": 468,
+      "monthlyCredits": 5200,
+      "badge": "Most Popular",
+      "parallelLimits": {
+        "video": 6,
+        "image": 8,
+        "audio": 6
+      },
+      "topupRatePerDollar": 115,
+      "features": [
+        "5,200 monthly credits (resets each cycle)",
+        "6 video / 8 image parallel generations",
+        "4K mastering on Kling 3.0 Pro & Soul Cinema",
+        "Priority queue routing + Kling Motion Control"
+      ]
+    },
+    {
+      "id": "ultra",
+      "name": "Production Ultra",
+      "audience": "For agencies & full-scale post houses",
+      "monthlyUsd": 129,
+      "annualMonthlyUsd": 99,
+      "annualTotalUsd": 1188,
+      "monthlyCredits": 15000,
+      "badge": "Best Value",
+      "parallelLimits": {
+        "video": 12,
+        "image": 16,
+        "audio": 12
+      },
+      "topupRatePerDollar": 130,
+      "features": [
+        "15,000 monthly credits (resets each cycle)",
+        "12 video / 16 image parallel generations",
+        "Highest priority GPU cluster dispatch",
+        "Dedicated R2 archival retention & multi-project workspaces"
+      ]
+    }
+  ],
+  "topups": [
+    {
+      "id": "topup_small",
+      "name": "Boost Pack",
+      "credits": 1000,
+      "priceUsd": 10
+    },
+    {
+      "id": "topup_medium",
+      "name": "Director Pack",
+      "credits": 3000,
+      "priceUsd": 25,
+      "tag": "+20% Bonus Credits"
+    },
+    {
+      "id": "topup_large",
+      "name": "Feature Film Pack",
+      "credits": 8000,
+      "priceUsd": 60,
+      "tag": "+33% Bonus Credits"
+    }
+  ],
+  "billingConfig": {
+    "creditUsdValue": 0.01,
+    "creditMarkup": 2,
+    "signupBonusCredits": 250
+  },
+  "ledger": [],
+  "ledgerUniqueKeys": [
+    "generation_debit:generation:gen_1794084441309_g4t82",
+    "admin_adjust:admin:adm_1794084445851_08cw"
+  ],
+  "generations": [
+    {
+      "id": "gen_1794084441309_g4t82",
+      "userId": "usr_admin_spacix",
+      "userName": "SPACIX Admin",
+      "projectId": null,
+      "surface": "image",
+      "modelId": "flux-2-pro",
+      "modelLabel": "Flux 2 Pro / Flex",
+      "modelPath": "klingai:kling-video@3-4k",
+      "apiProvider": "runware",
+      "callingPattern": "task_stream",
+      "mode": "Create",
+      "prompt": "2.39:1 anamorphic film still of a dog and monket playing with a ball,  oval bokeh, Kodak Vision3 500T 5219 grain.",
+      "settings": {
+        "aspect_ratio": "16:9",
+        "resolution": "1K",
+        "safety_tolerance": 3,
+        "enhance_prompt": true
+      },
+      "media": [],
+      "status": "completed",
+      "cost": 1,
+      "outputs": [
+        {
+          "kind": "image",
+          "url": "https://im.runware.ai/image/os/a01d21/ws/3/ii/0a854f3e-c41b-48c9-b232-aaf50bada975.jpg",
+          "r2Key": "u/usr_director_01/gen_1794084441309_g4t82/0.jpg",
+          "width": 1280,
+          "height": 720
+        }
+      ],
+      "isPublic": false,
+      "createdAt": "2026-11-07T20:47:21.311Z",
+      "updatedAt": "2026-11-07T20:47:25.853Z",
+      "hfRequestId": "9c3f54d2-921a-49f9-98bb-c8520f3cf7fe",
+      "finishedAt": "2026-11-07T20:47:25.851Z"
+    }
+  ],
+  "projects": [],
+  "uploads": [],
+  "notifications": [],
+  "supportTickets": [],
+  "teamMembers": [
+    {
+      "id": "team_admin_01",
+      "name": "SPACIX Admin",
+      "email": "spacix@ticketplaster.com",
+      "adminRole": "super_admin",
+      "department": "Platform Architecture & Operations",
+      "permissions": [
+        "providers.secrets.write",
+        "models.routing.write",
+        "users.crud",
+        "users.subscriptions.write",
+        "billing.pricing.write",
+        "wallets.adjust",
+        "generations.moderate",
+        "notifications.broadcast",
+        "support.manage",
+        "team.rbac.write"
+      ],
+      "status": "active",
+      "lastActiveAt": "2026-11-07T22:36:41.903Z",
+      "createdAt": "2026-11-07T22:36:41.903Z"
+    }
+  ],
+  "adminAuditLog": [],
+  "runwareRoutingConfig": {
+    "enabled": false,
+    "preferences": {
+      "quality": 5,
+      "speed": 3,
+      "cost": 2
+    },
+    "maxPrice": 0.5,
+    "requirements": "Prefer photorealistic cinema optics and natural skin texture.",
+    "filterMode": "none",
+    "allowedModels": [
+      "xai:grok-imagine@image-2.0",
+      "bfl:flux-2@pro",
+      "runware:z-image@0"
+    ],
+    "excludedModels": []
+  },
+  "savedAt": "2026-11-07T22:41:57.914Z"
+}

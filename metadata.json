@@ -1,0 +1,6 @@
+{
+  "name": "Lumen Studio",
+  "description": "SPACIX production-grade AI image, video, and audio generation studio with unified credit ledger and multi-model cinema catalog.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
