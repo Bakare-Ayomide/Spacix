@@ -3,18 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
+  Clapperboard,
+  Command as CommandIcon,
+  Compass,
   CreditCard,
+  Film,
   Folder,
+  Heart,
+  Home,
+  Layers,
   LogOut,
   Menu,
   Shield,
   Sparkles,
-  User,
+  Users,
+  Wand2,
   X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Toaster, toast } from 'sonner';
 import { RoutePath, StudioProvider, useRuns } from './lib/useRuns';
 import { StudioGeneratorView } from './components/StudioGeneratorView';
 import {
@@ -48,15 +58,52 @@ import {
 } from './components/StudioModals';
 import { AuthPage } from './components/AuthPage';
 import { SpacixLogo } from './components/ProviderBrandIcon';
+import {
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Separator,
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/primitives';
 
-const NAV_ITEMS: { route: RoutePath; label: string }[] = [
-  { route: 'explore', label: 'Explore' },
-  { route: 'cinema', label: 'Cinema Studio' },
-  { route: 'character', label: 'Characters' },
-  { route: 'motion', label: 'Motion' },
-  { route: 'wardrobe', label: 'Wardrobe' },
-  { route: 'assets', label: 'Asset Vault' },
-  { route: 'pricing', label: 'Pricing' },
+const PRIMARY_NAV_ITEMS: Array<{
+  id: string;
+  label: string;
+  route: RoutePath;
+  icon: React.ComponentType<{ className?: string }>;
+  params?: Record<string, string>;
+}> = [
+  { id: 'home', label: 'Home', route: 'explore', icon: Home },
+  { id: 'cinema', label: 'Cinema Studio', route: 'cinema', icon: Clapperboard },
+  { id: 'projects', label: 'My Projects', route: 'cinema', icon: Folder, params: { tab: 'projects' } },
+  { id: 'elements', label: 'My Elements', route: 'cinema', icon: Users, params: { tab: 'elements' } },
+  { id: 'favorites', label: 'My Favorites', route: 'cinema', icon: Heart, params: { tab: 'favorites' } },
+  { id: 'community', label: 'Community', route: 'community', icon: Compass },
 ];
 
 const StudioShell: React.FC = () => {
@@ -65,6 +112,7 @@ const StudioShell: React.FC = () => {
     routeParams,
     navigate,
     user,
+    models,
     notifications,
     setUpgradeModalOpen,
     logout,
@@ -72,11 +120,11 @@ const StudioShell: React.FC = () => {
     toastMessage,
   } = useRuns();
 
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [creditPopoverOpen, setCreditPopoverOpen] = useState(false);
   const [customSubCredits, setCustomSubCredits] = useState<string>('');
   const [customTopupCredits, setCustomTopupCredits] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [globalCommandOpen, setGlobalCommandOpen] = useState(false);
   const [dismissedNotifIds, setDismissedNotifIds] = useState<string[]>([]);
   const [cookieConsent, setCookieConsent] = useState<string | null>(() => {
     try {
@@ -85,6 +133,35 @@ const StudioShell: React.FC = () => {
       return 'accepted';
     }
   });
+
+  // Global keyboard shortcut ⌘K / Ctrl+K for the application-wide Command Palette
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        // Only intercept if not inside Cinema Studio (which has its own tool command palette)
+        const isStudioRoute = SPACI6X_STUDIOS.some((s) => s.id === route);
+        if (!isStudioRoute) {
+          e.preventDefault();
+          setGlobalCommandOpen((prev) => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [route]);
+
+  // Connect global toast state with Sonner notification system
+  useEffect(() => {
+    if (toastMessage) {
+      toast(toastMessage, {
+        style: {
+          background: '#14161D',
+          border: '1px solid rgba(70, 236, 213, 0.35)',
+          color: '#FAFAFA',
+        },
+      });
+    }
+  }, [toastMessage]);
 
   const handleCookieChoice = (choice: 'accepted' | 'essential') => {
     try {
@@ -104,113 +181,292 @@ const StudioShell: React.FC = () => {
     return true;
   });
 
+  const isNavItemActive = (item: (typeof PRIMARY_NAV_ITEMS)[number]) => {
+    if (item.id === 'home') return route === 'explore';
+    if (item.id === 'community') return route === 'community';
+    const isStudioRoute = SPACI6X_STUDIOS.some((s) => s.id === route);
+    if (!isStudioRoute) return false;
+    const currentTab = routeParams.tab || 'studio';
+    if (item.id === 'projects') return currentTab === 'projects';
+    if (item.id === 'elements') return currentTab === 'elements';
+    if (item.id === 'favorites') return currentTab === 'favorites';
+    if (item.id === 'cinema') {
+      return (
+        currentTab !== 'projects' &&
+        currentTab !== 'elements' &&
+        currentTab !== 'favorites'
+      );
+    }
+    return false;
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
-      {/* =================================================================== */}
-      {/* ACTIVE PLATFORM NOTIFICATION BROADCAST BANNER                       */}
-      {/* =================================================================== */}
-      {visibleNotification && (
-        <div className="bg-[#11191B] border-b border-[#46ecd5]/30 px-4 py-2 text-xs flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="px-2 py-0.5 rounded bg-[#46ecd5] text-zinc-950 font-mono-tabular font-extrabold text-[10px] uppercase shrink-0">
-              {visibleNotification.type}
-            </span>
-            <span className="font-bold text-white truncate">
-              {visibleNotification.title}
-            </span>
-            <span className="hidden md:inline text-zinc-300 truncate">
-              — {visibleNotification.message}
-            </span>
-          </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            {visibleNotification.ctaLabel && visibleNotification.ctaRoute && (
-              <button
-                onClick={() => navigate(visibleNotification.ctaRoute as RoutePath)}
-                className="px-2.5 py-1 rounded bg-[#46ecd5]/15 hover:bg-[#46ecd5]/25 border border-[#46ecd5]/40 text-[#46ecd5] font-bold text-[11px]"
+    <TooltipProvider delayDuration={150}>
+      <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100 selection:bg-[#46ecd5] selection:text-zinc-950">
+        <Toaster position="bottom-center" theme="dark" richColors />
+
+        {/* =================================================================== */}
+        {/* GLOBAL COMMAND PALETTE (cmdk + Radix UI Dialog)                     */}
+        {/* =================================================================== */}
+        <CommandDialog open={globalCommandOpen} onOpenChange={setGlobalCommandOpen}>
+          <CommandInput placeholder="Search Cinema Studio tools, AI models, camera rigs, or pages..." />
+          <CommandList>
+            <CommandEmpty>No matching studio tools, models, or destinations found.</CommandEmpty>
+            <CommandGroup heading="Primary Destinations">
+              {PRIMARY_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <CommandItem
+                    key={item.id}
+                    value={`${item.label} ${item.id}`}
+                    onSelect={() => {
+                      navigate(item.route, item.params);
+                      setGlobalCommandOpen(false);
+                    }}
+                  >
+                    <Icon className="w-4 h-4 text-[#46ecd5]" />
+                    <span>{item.label}</span>
+                    <CommandShortcut>Go</CommandShortcut>
+                  </CommandItem>
+                );
+              })}
+              <CommandItem
+                value="Automatic Production 4 Stage Guided Film Pipeline"
+                onSelect={() => {
+                  navigate('cinema', { mode: 'automatic' });
+                  setGlobalCommandOpen(false);
+                }}
               >
-                {visibleNotification.ctaLabel} →
-              </button>
-            )}
-            <button
-              onClick={() =>
-                setDismissedNotifIds((prev) => [...prev, visibleNotification.id])
-              }
-              aria-label="Dismiss notification"
-              className="text-zinc-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+                <Sparkles className="w-4 h-4 text-[#46ecd5]" />
+                <span>4-Stage Automatic Film Production</span>
+                <CommandShortcut>Pipeline</CommandShortcut>
+              </CommandItem>
+              <CommandItem
+                value="Camera Rigs Visual Effects Presets"
+                onSelect={() => {
+                  navigate('effects');
+                  setGlobalCommandOpen(false);
+                }}
+              >
+                <Wand2 className="w-4 h-4 text-[#46ecd5]" />
+                <span>Camera Rigs & Visual Effects</span>
+                <CommandShortcut>VFX</CommandShortcut>
+              </CommandItem>
+              <CommandItem
+                value="Pricing Plans Credits Top-Up"
+                onSelect={() => {
+                  navigate('pricing');
+                  setGlobalCommandOpen(false);
+                }}
+              >
+                <CreditCard className="w-4 h-4 text-[#46ecd5]" />
+                <span>Pricing & Token Plans</span>
+                <CommandShortcut>Soon</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading="Cinema Studio Production Tools">
+              {[
+                { label: 'Characters & Facial Identities', cat: 'production_elements', tool: 'character_identity' },
+                { label: 'Locations & INT./EXT. Sets', cat: 'production_elements', tool: 'location_environment' },
+                { label: 'Wardrobes & Outfit Continuity', cat: 'production_elements', tool: 'wardrobe_outfit' },
+                { label: 'Hero Props & Vehicles', cat: 'production_elements', tool: 'prop_object' },
+                { label: 'Cinema Video Creation', cat: 'media_generation', tool: 'video_creation' },
+                { label: 'Optical Image Creation', cat: 'media_generation', tool: 'image_creation' },
+                { label: 'Voice, Dialogue & Lip Sync', cat: 'media_generation', tool: 'lip_sync' },
+                { label: 'Screenplay & Storyboard Planning', cat: 'film_production', tool: 'storyboard_planning' },
+              ].map((t) => (
+                <CommandItem
+                  key={t.tool}
+                  value={`${t.label} ${t.tool}`}
+                  onSelect={() => {
+                    navigate('cinema', { category: t.cat, tool: t.tool });
+                    setGlobalCommandOpen(false);
+                  }}
+                >
+                  <Film className="w-4 h-4 text-zinc-400" />
+                  <span>{t.label}</span>
+                  <CommandShortcut>Studio Tool</CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading="Verified AI Generation Engines">
+              {models.slice(0, 8).map((m) => (
+                <CommandItem
+                  key={m.id}
+                  value={`${m.label} ${m.provider} ${m.surface}`}
+                  onSelect={() => {
+                    navigate('cinema', { model: m.id });
+                    setGlobalCommandOpen(false);
+                  }}
+                >
+                  <Layers className="w-4 h-4 text-[#46ecd5]" />
+                  <span>{m.label}</span>
+                  <CommandShortcut>{m.surface.toUpperCase()}</CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </CommandDialog>
+
+        {/* =================================================================== */}
+        {/* ACTIVE PLATFORM NOTIFICATION BROADCAST BANNER                       */}
+        {/* =================================================================== */}
+        {visibleNotification && (
+          <div className="bg-[#11191B] border-b border-[#46ecd5]/30 px-4 py-2 text-xs flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Badge variant="default" className="bg-[#46ecd5] text-zinc-950">
+                {visibleNotification.type}
+              </Badge>
+              <span className="font-bold text-white truncate">
+                {visibleNotification.title}
+              </span>
+              <span className="hidden md:inline text-zinc-300 truncate">
+                — {visibleNotification.message}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0">
+              {visibleNotification.ctaLabel && visibleNotification.ctaRoute && (
+                <Button
+                  variant="cyanGhost"
+                  size="xs"
+                  onClick={() => navigate(visibleNotification.ctaRoute as RoutePath)}
+                >
+                  {visibleNotification.ctaLabel} →
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="iconSm"
+                onClick={() =>
+                  setDismissedNotifIds((prev) => [...prev, visibleNotification.id])
+                }
+                aria-label="Dismiss notification"
+              >
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* =================================================================== */}
-      {/* GLOBAL TOP NAVIGATION BAR (3-Zone Top Bar Contract)                 */}
-      {/* =================================================================== */}
-      <header className="sticky top-0 z-40 h-16 bg-[#09090B]/90 backdrop-blur-md border-b border-white/10 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-6 lg:gap-8 max-w-full">
-        {/* Zone 1: Single-line Brand Wordmark / Logo */}
-        <button
-          onClick={() => navigate('explore')}
-          aria-label="SPACIX Home"
-          className="flex items-center hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
-        >
-          <SpacixLogo size="md" />
-        </button>
+        {/* =================================================================== */}
+        {/* GLOBAL TOP NAVIGATION BAR (shadcn/ui + Radix UI + Framer Motion)    */}
+        {/* =================================================================== */}
+        <header className="sticky top-0 z-40 h-16 bg-[#09090B]/90 backdrop-blur-2xl border-b border-white/[0.08] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 max-w-full shadow-[0_8px_32px_rgba(0,0,0,0.55)]">
+          {/* Zone 1: Brand Wordmark + Studio Status Pill */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => navigate('explore')}
+              aria-label="SPACIX Home"
+              className="flex items-center hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <SpacixLogo size="md" />
+            </button>
+            <Badge
+              variant="default"
+              className="hidden xl:inline-flex font-mono text-[10px] tracking-widest uppercase px-2.5 py-0.5"
+            >
+              CINEMA STUDIO 4.0
+            </Badge>
+          </div>
 
-        {/* Zone 2: Primary Single-Line Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          {NAV_ITEMS.map((item) => {
-            const active = route === item.route;
-            return (
+          {/* Zone 2: Minimal Main Navigation Links with Framer Motion Layout Pill */}
+          <nav className="hidden lg:flex items-center gap-1 rounded-2xl bg-[#11131A]/95 p-1.5 border border-white/[0.08] shadow-inner">
+            {PRIMARY_NAV_ITEMS.map((item) => {
+              const active = isNavItemActive(item);
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item.route, item.params)}
+                  className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer z-10 ${
+                    active ? 'text-zinc-950' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="spacix-top-nav-pill"
+                      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                      className="absolute inset-0 -z-10 rounded-xl bg-[#46ecd5] shadow-[0_0_24px_rgba(70,236,213,0.38)]"
+                    />
+                  )}
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+            {user?.role === 'admin' && (
               <button
-                key={item.route}
-                onClick={() => navigate(item.route)}
-                className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                  active
-                    ? 'text-[#46ecd5] border-[#46ecd5]'
-                    : 'border-transparent hover:text-white'
+                onClick={() => navigate('admin')}
+                className={`relative px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer z-10 ${
+                  route === 'admin'
+                    ? 'text-zinc-950'
+                    : 'text-[#46ecd5]/85 hover:text-[#46ecd5]'
                 }`}
               >
-                {item.label}
+                {route === 'admin' && (
+                  <motion.span
+                    layoutId="spacix-top-nav-pill"
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    className="absolute inset-0 -z-10 rounded-xl bg-[#46ecd5]"
+                  />
+                )}
+                <Shield className="w-3.5 h-3.5" />
+                <span>Admin</span>
               </button>
-            );
-          })}
-          {user?.role === 'admin' && (
-            <button
-              onClick={() => navigate('admin')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 flex items-center gap-1.5 ${
-                route === 'admin'
-                  ? 'text-[#46ecd5] border-[#46ecd5]'
-                  : 'border-transparent text-[#46ecd5]/85 hover:text-[#46ecd5]'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </button>
-          )}
-        </nav>
+            )}
+          </nav>
 
-        {/* Zone 3: Account / Upgrade Primary Action */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {user ? (
-            <>
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setCustomSubCredits(String(user.credits.subscription));
-                    setCustomTopupCredits(String(user.credits.topup));
-                    setCreditPopoverOpen((prev) => !prev);
-                    setAvatarMenuOpen(false);
-                  }}
-                  title="Click to inspect or adjust credit buckets"
-                  className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1C1C22] border border-white/10 text-xs font-mono-tabular font-semibold text-[#46ecd5] whitespace-nowrap shrink-0 flex items-center gap-1"
+          {/* Zone 3: Global ⌘K Command Trigger + Radix Popover Wallet + Radix Dropdown Account */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setGlobalCommandOpen(true)}
+                  className="hidden md:inline-flex gap-2 bg-[#12141C] border-white/10 text-zinc-300 hover:text-white hover:border-[#46ecd5]/40"
                 >
-                  <span>✦ {user.credits.total.toLocaleString()}</span>
-                  <ChevronDown className="w-3 h-3 text-zinc-400" />
-                </button>
+                  <CommandIcon className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span className="text-xs">Quick Jump</span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-black/60 border border-white/10 font-mono text-[10px] text-[#46ecd5]">
+                    ⌘K
+                  </kbd>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open Global Studio Command Palette (⌘K)</TooltipContent>
+            </Tooltip>
 
-                {creditPopoverOpen && (
-                  <div className="fixed left-3 right-3 top-[68px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 rounded-xl bg-[#141418] border border-white/15 shadow-2xl p-4 z-50 text-xs space-y-3.5 max-h-[82vh] overflow-y-auto">
+            {user ? (
+              <>
+                <Popover
+                  open={creditPopoverOpen}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      setCustomSubCredits(String(user.credits.subscription));
+                      setCustomTopupCredits(String(user.credits.topup));
+                    }
+                    setCreditPopoverOpen(open);
+                  }}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="font-mono-tabular text-[#46ecd5] border-[#46ecd5]/25 bg-[#12171B] hover:bg-[#172126]"
+                        >
+                          <span>✦ {user.credits.total.toLocaleString()} TK</span>
+                          <ChevronDown className="w-3 h-3 text-zinc-400" />
+                        </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Studio Credit Wallet & Balance</TooltipContent>
+                  </Tooltip>
+
+                  <PopoverContent align="end" className="w-80 space-y-3.5 text-xs">
                     <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                       <div>
                         <div className="font-bold text-white uppercase tracking-wider">
@@ -220,22 +476,17 @@ const StudioShell: React.FC = () => {
                           Plan: {user.plan.toUpperCase()} ({user.billingCycle || 'monthly'})
                         </div>
                       </div>
-                      <button
-                        onClick={() => setCreditPopoverOpen(false)}
-                        className="text-zinc-400 hover:text-white"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <Badge variant="default">ACTIVE</Badge>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10">
+                      <div className="p-2.5 rounded-xl bg-[#0D0F14] border border-white/10">
                         <div className="text-[10px] text-zinc-400 uppercase">Subscription</div>
                         <div className="font-mono-tabular font-bold text-sm text-white mt-0.5">
                           ✦ {user.credits.subscription.toLocaleString()}
                         </div>
                       </div>
-                      <div className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10">
+                      <div className="p-2.5 rounded-xl bg-[#0D0F14] border border-white/10">
                         <div className="text-[10px] text-zinc-400 uppercase">Top-Up Vault</div>
                         <div className="font-mono-tabular font-bold text-sm text-[#46ecd5] mt-0.5">
                           ✦ {user.credits.topup.toLocaleString()}
@@ -245,56 +496,58 @@ const StudioShell: React.FC = () => {
 
                     {user.role === 'admin' && (
                       <div className="pt-2 border-t border-white/10 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold uppercase text-[#46ecd5]">
-                            Admin Balance Setter (Persistent)
-                          </span>
+                        <div className="text-[11px] font-bold uppercase text-[#46ecd5]">
+                          Admin Balance Setter (Persistent)
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="text-[10px] text-zinc-400 block mb-1">
                               Subscription Cr
                             </label>
-                            <input
+                            <Input
                               type="number"
                               min="0"
                               value={customSubCredits}
                               onChange={(e) => setCustomSubCredits(e.target.value)}
-                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-white font-mono-tabular"
+                              className="font-mono-tabular"
                             />
                           </div>
                           <div>
                             <label className="text-[10px] text-zinc-400 block mb-1">
                               Top-Up Cr
                             </label>
-                            <input
+                            <Input
                               type="number"
                               min="0"
                               value={customTopupCredits}
                               onChange={(e) => setCustomTopupCredits(e.target.value)}
-                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-white font-mono-tabular"
+                              className="font-mono-tabular"
                             />
                           </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1">
                           {[0, 500, 1000, 2500, 10000].map((presetVal) => (
-                            <button
+                            <Button
                               key={presetVal}
                               type="button"
+                              variant="outline"
+                              size="xs"
                               onClick={() => {
                                 setCustomSubCredits(String(presetVal));
                                 setCustomTopupCredits('0');
                               }}
-                              className="px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-[10px] font-mono-tabular text-zinc-300"
+                              className="font-mono-tabular text-[10px]"
                             >
                               ✦ {presetVal.toLocaleString()}
-                            </button>
+                            </Button>
                           ))}
                         </div>
 
-                        <button
+                        <Button
                           type="button"
+                          variant="default"
+                          size="sm"
                           onClick={async () => {
                             await updateUserCredits(
                               Number(customSubCredits || 0),
@@ -304,10 +557,10 @@ const StudioShell: React.FC = () => {
                             );
                             setCreditPopoverOpen(false);
                           }}
-                          className="w-full py-2 rounded-lg bg-[#46ecd5] text-zinc-950 font-bold uppercase tracking-wider hover:brightness-105"
+                          className="w-full uppercase tracking-wider"
                         >
                           Save Custom Balance
-                        </button>
+                        </Button>
                       </div>
                     )}
 
@@ -318,7 +571,7 @@ const StudioShell: React.FC = () => {
                           setCreditPopoverOpen(false);
                           navigate('account');
                         }}
-                        className="text-[11px] font-semibold text-zinc-300 hover:text-white"
+                        className="text-[11px] font-semibold text-zinc-300 hover:text-white cursor-pointer"
                       >
                         Full Credit Ledger →
                       </button>
@@ -328,368 +581,294 @@ const StudioShell: React.FC = () => {
                           setCreditPopoverOpen(false);
                           setUpgradeModalOpen(true);
                         }}
-                        className="text-[11px] font-bold text-[#46ecd5] hover:underline"
+                        className="text-[11px] font-bold text-[#46ecd5] hover:underline cursor-pointer"
                       >
                         Add Top-Up Credits
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
+                  </PopoverContent>
+                </Popover>
 
-              <button
-                onClick={() => setUpgradeModalOpen(true)}
-                className="hidden sm:inline-flex px-3.5 py-1.5 rounded-lg bg-[#46ecd5] text-zinc-950 text-xs font-bold uppercase tracking-wider hover:brightness-105 transition-all whitespace-nowrap shrink-0"
-              >
-                Upgrade
-              </button>
-
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setAvatarMenuOpen((prev) => !prev);
-                    setCreditPopoverOpen(false);
-                  }}
-                  aria-label="Open account menu"
-                  className="flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1C1C22] border border-white/10 text-xs font-medium text-zinc-200 whitespace-nowrap shrink-0"
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setUpgradeModalOpen(true)}
+                  className="hidden sm:inline-flex uppercase tracking-wider"
                 >
-                  <User className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span className="hidden sm:inline max-w-[100px] truncate">
-                    {user.name}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-                </button>
+                  Upgrade
+                </Button>
 
-                {avatarMenuOpen && (
-                  <div
-                    className="fixed right-3 left-3 top-[68px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-56 rounded-xl bg-[#141418] border border-white/15 shadow-2xl py-2 z-50 text-xs"
-                    onMouseLeave={() => setAvatarMenuOpen(false)}
-                  >
-                    <div className="px-4 py-2 border-b border-white/10">
+                {/* Radix Dropdown Menu for User Account */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label="Open account menu"
+                      className="pl-2 pr-2.5 gap-2"
+                    >
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback>
+                          {user.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="hidden sm:inline max-w-[100px] truncate text-xs">
+                        {user.name}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                    </Button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
                       <div className="font-bold text-white truncate">{user.name}</div>
-                      <div className="text-[11px] font-mono-tabular text-zinc-400 truncate">
+                      <div className="text-[11px] font-mono-tabular text-zinc-400 truncate font-normal">
                         {user.email}
                       </div>
-                    </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
 
-                    <button
-                      onClick={() => {
-                        setAvatarMenuOpen(false);
-                        navigate('assets');
-                      }}
-                      className="w-full px-4 py-2 text-left text-zinc-200 hover:bg-white/5 flex items-center gap-2"
-                    >
+                    <DropdownMenuItem onClick={() => navigate('assets')}>
                       <Folder className="w-3.5 h-3.5 text-[#46ecd5]" />
-                      <span>Assets & Projects</span>
-                    </button>
+                      <span>Assets & Projects Library</span>
+                    </DropdownMenuItem>
 
-                    <button
-                      onClick={() => {
-                        setAvatarMenuOpen(false);
-                        navigate('account');
-                      }}
-                      className="w-full px-4 py-2 text-left text-zinc-200 hover:bg-white/5 flex items-center gap-2"
-                    >
+                    <DropdownMenuItem onClick={() => navigate('account')}>
                       <CreditCard className="w-3.5 h-3.5 text-[#46ecd5]" />
                       <span>Account & Billing Ledger</span>
-                    </button>
+                    </DropdownMenuItem>
 
                     {user.role === 'admin' && (
-                      <button
-                        onClick={() => {
-                          setAvatarMenuOpen(false);
-                          navigate('admin');
-                        }}
-                        className="w-full px-4 py-2 text-left text-zinc-200 hover:bg-white/5 flex items-center gap-2"
-                      >
+                      <DropdownMenuItem onClick={() => navigate('admin')}>
                         <Shield className="w-3.5 h-3.5 text-[#46ecd5]" />
                         <span>Admin Console</span>
-                      </button>
+                      </DropdownMenuItem>
                     )}
 
-                    <div className="my-1 border-t border-white/10" />
+                    <DropdownMenuSeparator />
 
-                    <button
-                      onClick={() => {
-                        setAvatarMenuOpen(false);
-                        logout();
-                      }}
-                      className="w-full px-4 py-2 text-left text-rose-400 hover:bg-white/5 flex items-center gap-2"
+                    <DropdownMenuItem
+                      onClick={() => logout()}
+                      className="text-rose-400 focus:text-rose-300"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Sign Out</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <button
-              onClick={() => navigate('auth')}
-              className="px-4 py-2 rounded-lg bg-[#46ecd5] text-zinc-950 text-xs font-bold uppercase tracking-wider hover:brightness-105 transition-all whitespace-nowrap shrink-0"
-            >
-              Login / Sign Up
-            </button>
-          )}
-
-          {/* Mobile Menu Trigger */}
-          <button
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-label="Toggle mobile navigation"
-            className="lg:hidden p-2 rounded-lg bg-[#141418] border border-white/10 text-zinc-300"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Navigation Sheet */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#111114] border-b border-white/10 px-4 py-4 space-y-3">
-          <div className="text-[10px] font-mono-tabular uppercase tracking-wider text-[#46ecd5]">
-            SPACI6X 12 Production Studios
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-            {SPACI6X_STUDIOS.map((st) => (
-              <button
-                key={st.id}
-                onClick={() => {
-                  navigate(st.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={`px-2.5 py-2 rounded-lg text-xs font-semibold uppercase text-left truncate ${
-                  route === st.id
-                    ? 'bg-[#46ecd5] text-zinc-950 font-bold'
-                    : 'bg-zinc-900 text-zinc-300'
-                }`}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => navigate('auth')}
+                className="uppercase tracking-wider"
               >
-                {st.label}
-              </button>
-            ))}
-          </div>
-          <div className="pt-2 border-t border-white/10 grid grid-cols-2 gap-2">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.route}
-                onClick={() => {
-                  navigate(item.route);
-                  setMobileMenuOpen(false);
-                }}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                  route === item.route
-                    ? 'bg-[#46ecd5] text-zinc-950'
-                    : 'bg-zinc-900 text-zinc-300'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                navigate('image');
-                setMobileMenuOpen(false);
-              }}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'image'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300'
-              }`}
-            >
-              Image Generator
-            </button>
-            <button
-              onClick={() => {
-                navigate('video');
-                setMobileMenuOpen(false);
-              }}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'video'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300'
-              }`}
-            >
-              Video Generator
-            </button>
-            <button
-              onClick={() => {
-                navigate('audio');
-                setMobileMenuOpen(false);
-              }}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'audio'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300'
-              }`}
-            >
-              Audio & Foley
-            </button>
-            <button
-              onClick={() => {
-                navigate('community');
-                setMobileMenuOpen(false);
-              }}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'community'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300'
-              }`}
-            >
-              Community Feed
-            </button>
-            <button
-              onClick={() => {
-                navigate('account');
-                setMobileMenuOpen(false);
-              }}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'account'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'bg-zinc-900 text-zinc-300'
-              }`}
-            >
-              Account & Wallet
-            </button>
-            {user?.role === 'admin' && (
-              <button
-                onClick={() => {
-                  navigate('admin');
-                  setMobileMenuOpen(false);
-                }}
-                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase text-left flex items-center gap-1.5 ${
-                  route === 'admin'
-                    ? 'bg-[#46ecd5] text-zinc-950'
-                    : 'bg-[#46ecd5]/15 text-[#46ecd5] border border-[#46ecd5]/30'
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5 shrink-0" />
-                <span>Admin Console</span>
-              </button>
+                Login / Sign Up
+              </Button>
             )}
+
+            {/* Radix Sheet for Mobile Navigation */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Toggle mobile navigation"
+                  className="lg:hidden"
+                >
+                  <Menu className="w-4 h-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72">
+                <div className="space-y-5 pt-4">
+                  <div className="flex items-center gap-2">
+                    <SpacixLogo size="sm" />
+                    <Badge variant="default">CINEMA STUDIO</Badge>
+                  </div>
+                  <Separator />
+                  <div className="space-y-1.5">
+                    {PRIMARY_NAV_ITEMS.map((item) => {
+                      const active = isNavItemActive(item);
+                      const Icon = item.icon;
+                      return (
+                        <Button
+                          key={item.id}
+                          variant={active ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => {
+                            navigate(item.route, item.params);
+                            setMobileMenuOpen(false);
+                          }}
+                          className="w-full justify-start uppercase tracking-wider gap-2"
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          <span>{item.label}</span>
+                        </Button>
+                      );
+                    })}
+                    <Button
+                      variant={route === 'account' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => {
+                        navigate('account');
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full justify-start uppercase tracking-wider"
+                    >
+                      Account & Wallet
+                    </Button>
+                    {user?.role === 'admin' && (
+                      <Button
+                        variant={route === 'admin' ? 'default' : 'cyanGhost'}
+                        size="sm"
+                        onClick={() => {
+                          navigate('admin');
+                          setMobileMenuOpen(false);
+                        }}
+                        className="w-full justify-start uppercase tracking-wider"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        <span>Admin Console</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {user && (
+                  <Button
+                    variant="default"
+                    size="default"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setUpgradeModalOpen(true);
+                    }}
+                    className="w-full uppercase tracking-wider"
+                  >
+                    Upgrade Plan / Add Credits
+                  </Button>
+                )}
+              </SheetContent>
+            </Sheet>
           </div>
-          {user && (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setUpgradeModalOpen(true);
-              }}
-              className="w-full py-2.5 rounded-lg bg-[#46ecd5] text-zinc-950 text-xs font-bold uppercase tracking-wider"
-            >
-              Upgrade Plan / Add Credits
-            </button>
-          )}
-        </div>
-      )}
+        </header>
 
-      {/* =================================================================== */}
-      {/* MAIN ROUTE VIEWPORT                                                 */}
-      {/* =================================================================== */}
-      <main className="flex-1 w-full max-w-full overflow-x-hidden">
-        {route === 'explore' && <ExplorePage />}
-        {route === 'cinema' && <CinemaStudioView />}
-        {route === 'character' && <CharacterStudioView />}
-        {route === 'motion' && <MotionStudioView />}
-        {route === 'wardrobe' && <WardrobeStudioView />}
-        {route === 'props' && <PropsStudioView />}
-        {route === 'location' && <LocationStudioView />}
-        {route === 'storyboard' && <StoryboardStudioView />}
-        {route === 'marketing' && <MarketingStudioView />}
-        {route === 'lipsync' && <LipSyncStudioView />}
-        {route === 'canvas' && <CanvasStudioView />}
-        {route === 'editing' && <EditingStudioView />}
-        {route === 'image' && <StudioGeneratorView surface="image" />}
-        {route === 'video' && <StudioGeneratorView surface="video" />}
-        {route === 'audio' && <StudioGeneratorView surface="audio" />}
-        {route === 'effects' && <EffectsPage />}
-        {route === 'community' && <CommunityPage />}
-        {route === 'assets' && <AssetsLibraryPage />}
-        {route === 'pricing' && <PricingPage />}
-        {route === 'account' && <AccountBillingPage />}
-        {route === 'admin' && <AdminConsolePage />}
-        {route === 'legal' && <LegalPage section={routeParams.section} />}
-        {route === 'auth' && <AuthPage />}
-      </main>
-
-      {/* =================================================================== */}
-      {/* QUIET FOOTER WITH SPACIX LOGO                                       */}
-      {/* =================================================================== */}
-      <footer className="border-t border-white/10 bg-[#09090B] py-8 px-4 sm:px-6 mt-12">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-500">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('explore')}
-              aria-label="SPACIX Home"
-              className="hover:opacity-90 transition-opacity"
+        {/* =================================================================== */}
+        {/* MAIN ROUTE VIEWPORT WITH FRAMER MOTION TRANSITIONS                  */}
+        {/* =================================================================== */}
+        <main className="flex-1 w-full max-w-full overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${route}-${routeParams.tab || ''}-${routeParams.mode || ''}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
             >
-              <SpacixLogo size="sm" />
-            </button>
-            <span>·</span>
-            <span>Multi-Model AI Image, Video & Audio Production Studio</span>
+              {route === 'explore' && <ExplorePage />}
+              {route === 'cinema' && <CinemaStudioView />}
+              {route === 'character' && <CharacterStudioView />}
+              {route === 'motion' && <MotionStudioView />}
+              {route === 'wardrobe' && <WardrobeStudioView />}
+              {route === 'props' && <PropsStudioView />}
+              {route === 'location' && <LocationStudioView />}
+              {route === 'storyboard' && <StoryboardStudioView />}
+              {route === 'marketing' && <MarketingStudioView />}
+              {route === 'lipsync' && <LipSyncStudioView />}
+              {route === 'canvas' && <CanvasStudioView />}
+              {route === 'editing' && <EditingStudioView />}
+              {route === 'image' && <StudioGeneratorView surface="image" />}
+              {route === 'video' && <StudioGeneratorView surface="video" />}
+              {route === 'audio' && <StudioGeneratorView surface="audio" />}
+              {route === 'effects' && <EffectsPage />}
+              {route === 'community' && <CommunityPage />}
+              {route === 'assets' && <AssetsLibraryPage />}
+              {route === 'pricing' && <PricingPage />}
+              {route === 'account' && <AccountBillingPage />}
+              {route === 'admin' && <AdminConsolePage />}
+              {route === 'legal' && <LegalPage section={routeParams.section} />}
+              {route === 'auth' && <AuthPage />}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+
+        {/* =================================================================== */}
+        {/* QUIET FOOTER WITH SPACIX LOGO (Shown on non-studio pages)           */}
+        {/* =================================================================== */}
+        {!SPACI6X_STUDIOS.some((s) => s.id === route) && (
+          <footer className="border-t border-white/10 bg-[#09090B] py-8 px-4 sm:px-6 mt-12">
+            <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-500">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate('explore')}
+                  aria-label="SPACIX Home"
+                  className="hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <SpacixLogo size="sm" />
+                </button>
+                <span>·</span>
+                <span>Unified AI Cinema Studio & Automatic Film Production</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-5">
+                <button
+                  onClick={() => navigate('legal', { section: 'terms' })}
+                  className="hover:text-zinc-300 transition-colors cursor-pointer"
+                >
+                  Terms of Service
+                </button>
+                <button
+                  onClick={() => navigate('legal', { section: 'privacy' })}
+                  className="hover:text-zinc-300 transition-colors cursor-pointer"
+                >
+                  Privacy Policy
+                </button>
+                <button
+                  onClick={() => navigate('legal', { section: 'acceptable-use' })}
+                  className="hover:text-zinc-300 transition-colors cursor-pointer"
+                >
+                  Acceptable Use
+                </button>
+              </div>
+            </div>
+          </footer>
+        )}
+
+        {/* =================================================================== */}
+        {/* EU COOKIE CONSENT BANNER                                            */}
+        {/* =================================================================== */}
+        {!cookieConsent && (
+          <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-md z-40 p-4 rounded-2xl bg-[#141418]/95 backdrop-blur-xl border border-white/15 shadow-2xl space-y-3">
+            <div className="text-xs font-semibold text-white">
+              Cookie & Storage Preferences
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              SPACIX uses essential session cookies for passwordless authentication and R2 asset delivery. Optional analytics run only with your explicit consent.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => handleCookieChoice('essential')}
+              >
+                Reject Non-Essential
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
+                onClick={() => handleCookieChoice('accepted')}
+              >
+                Accept All
+              </Button>
+            </div>
           </div>
+        )}
 
-          <div className="flex flex-wrap items-center gap-5">
-            <button
-              onClick={() => navigate('legal', { section: 'terms' })}
-              className="hover:text-zinc-300 transition-colors"
-            >
-              Terms of Service
-            </button>
-            <button
-              onClick={() => navigate('legal', { section: 'privacy' })}
-              className="hover:text-zinc-300 transition-colors"
-            >
-              Privacy Policy
-            </button>
-            <button
-              onClick={() => navigate('legal', { section: 'acceptable-use' })}
-              className="hover:text-zinc-300 transition-colors"
-            >
-              Acceptable Use
-            </button>
-          </div>
-        </div>
-      </footer>
-
-      {/* =================================================================== */}
-      {/* EU COOKIE CONSENT BANNER                                            */}
-      {/* =================================================================== */}
-      {!cookieConsent && (
-        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-md z-40 p-4 rounded-xl bg-[#141418] border border-white/15 shadow-2xl space-y-3">
-          <div className="text-xs font-semibold text-white">
-            Cookie & Storage Preferences
-          </div>
-          <p className="text-[11px] text-zinc-400 leading-relaxed">
-            SPACIX uses essential session cookies for passwordless authentication and R2 asset delivery. Optional analytics run only with your explicit consent.
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => handleCookieChoice('essential')}
-              className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 rounded-lg"
-            >
-              Reject Non-Essential
-            </button>
-            <button
-              onClick={() => handleCookieChoice('accepted')}
-              className="px-3.5 py-1.5 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg"
-            >
-              Accept All
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification Banner */}
-      {toastMessage && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-[#18181C] border border-[#46ecd5]/50 text-xs font-medium text-white shadow-2xl flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-[#46ecd5] shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Global Modals */}
-      <GenerationDetailModal />
-      <AuthMagicLinkModal />
-      <UpgradeCreditsModal />
-    </div>
+        {/* Global Modals */}
+        <GenerationDetailModal />
+        <AuthMagicLinkModal />
+        <UpgradeCreditsModal />
+      </div>
+    </TooltipProvider>
   );
 };
 

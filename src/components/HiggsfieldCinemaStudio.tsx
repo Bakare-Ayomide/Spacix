@@ -1,29 +1,30 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  Bookmark,
+  ArrowUpDown,
   Camera,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsUpDown,
   Clapperboard,
   Clock,
   Compass,
+  Diamond,
   Download,
   Edit3,
   Eye,
+  FileText,
   Film,
   Folder,
-  FolderPlus,
   Heart,
   Home,
   Image as ImageIcon,
   Layers,
   Loader2,
-  Lock,
   MapPin,
   Maximize2,
   Mic,
@@ -33,16 +34,14 @@ import {
   Palette,
   PanelLeftClose,
   PanelLeftOpen,
-  Play,
   Plus,
-  RefreshCw,
-  RotateCcw,
+  RectangleHorizontal,
+  Scissors,
   Search,
   Shirt,
   Sliders,
   Sparkles,
   Sun,
-  Trash2,
   Upload,
   Users,
   Video,
@@ -53,16 +52,68 @@ import {
 } from 'lucide-react';
 import { useRuns } from '../lib/useRuns';
 import {
-  CinemaProductionProject,
+  CharacterExpression,
   CinemaProductionType,
+  LocationCategory,
+  LocationItem,
   MediaSlotInput,
-  ProductionScene,
-  ProductionShot,
+  MotionCategory,
+  PropCategory,
   StudioId,
+  SupportedCharacterLanguage,
+  Surface,
+  WardrobeCategory,
 } from '../types/studio';
 import { StoryStudioView } from './StoryStudioView';
-import { MusicVideoStudio } from './MusicVideoStudio';
-import { SPACI6X_STUDIOS } from './ContinuityStudiosView';
+import { AutomaticProductionWorkflow } from './AutomaticProductionWorkflow';
+import {
+  CINEMA_TOOL_CATEGORIES,
+  CINEMA_TOOL_LIST,
+  CINEMA_TOOLS,
+  CinemaToolCategoryId,
+  CinemaToolId,
+  getCompatibleModelsForTool,
+  resolveCompatibleModel,
+} from '../catalog/modelCapabilities';
+import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
+import {
+  Badge,
+  Button,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  Input,
+  ScrollArea,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from './ui/primitives';
+import {
+  AnimatedPillTabs,
+  BorderBeam,
+  ShimmerButton,
+  SpotlightCard,
+} from './ui/aceternity-magic';
+
+// High-resolution showcase assets matching the fanned 3-card stack in the reference screenshot
+import showcaseMonologueImg from '../assets/images/showcase_cinema_monologue_1794663513979.jpg';
+import showcaseCorridorImg from '../assets/images/showcase_corridor_tracking_1794663516993.jpg';
+import showcaseArchitectureImg from '../assets/images/showcase_sunlit_architecture_1794663516452.jpg';
 
 // ============================================================================
 // HIGGSFIELD CINEMA STUDIO 4.0 — VISUAL DIRECTING PRESETS & OPTICS CATALOG
@@ -116,6 +167,191 @@ export interface AIDirectorShotSuggestion {
   emotion: string;
   action: string;
 }
+
+export interface StudioWorkspaceConfig {
+  id: StudioId;
+  title: string;
+  shortBadge: string;
+  defaultSurface: 'video' | 'image';
+  setupCardLabel: string;
+  cameraCardLabel: string;
+  promptPlaceholder: string;
+  vaultButtonLabel: string;
+  directivePrefix: string;
+}
+
+export const STUDIO_WORKSPACE_CONFIGS: Record<StudioId, StudioWorkspaceConfig> = {
+  cinema: {
+    id: 'cinema',
+    title: 'Cinema Studio',
+    shortBadge: 'CINEMA',
+    defaultSurface: 'video',
+    setupCardLabel: 'Film setup',
+    cameraCardLabel: 'Camera',
+    promptPlaceholder: 'Describe your scene - use @ to add characters & locations',
+    vaultButtonLabel: '4-Stage Story Studio',
+    directivePrefix: 'Cinema Studio 4.0 Direction',
+  },
+  character: {
+    id: 'character',
+    title: 'Character Studio',
+    shortBadge: 'CHARACTER',
+    defaultSurface: 'image',
+    setupCardLabel: 'Identity setup',
+    cameraCardLabel: 'Portrait optics',
+    promptPlaceholder:
+      'Describe character face, body, expression, wardrobe & voice - use @ to reference saved assets',
+    vaultButtonLabel: 'Character Vault & Voice Lab',
+    directivePrefix: 'Character Studio Identity Lock',
+  },
+  motion: {
+    id: 'motion',
+    title: 'Motion Studio',
+    shortBadge: 'MOTION',
+    defaultSurface: 'video',
+    setupCardLabel: 'Motion setup',
+    cameraCardLabel: 'Camera & rig',
+    promptPlaceholder:
+      'Describe body movement, pose transfer, gesture or action - use @ to lock target character',
+    vaultButtonLabel: 'Motion Choreographer & Keyframes',
+    directivePrefix: 'Motion Control Studio Transfer',
+  },
+  wardrobe: {
+    id: 'wardrobe',
+    title: 'Wardrobe Studio',
+    shortBadge: 'WARDROBE',
+    defaultSurface: 'image',
+    setupCardLabel: 'Wardrobe setup',
+    cameraCardLabel: 'Lookbook lens',
+    promptPlaceholder:
+      'Describe garments, fabrics, footwear, accessories & jewellery - use @ to assign to a character',
+    vaultButtonLabel: 'Wardrobe Closet & Lookbook',
+    directivePrefix: 'Wardrobe Continuity Plate',
+  },
+  props: {
+    id: 'props',
+    title: 'Props Studio',
+    shortBadge: 'PROPS',
+    defaultSurface: 'image',
+    setupCardLabel: 'Prop setup',
+    cameraCardLabel: 'Macro & angle',
+    promptPlaceholder:
+      'Describe hero vehicle, gadget, weapon, artifact or furniture - use @ to link characters & sets',
+    vaultButtonLabel: 'Props Vault & Registry',
+    directivePrefix: 'Hero Prop Continuity Plate',
+  },
+  location: {
+    id: 'location',
+    title: 'Location Studio',
+    shortBadge: 'LOCATION',
+    defaultSurface: 'image',
+    setupCardLabel: 'Set & weather',
+    cameraCardLabel: 'Set camera',
+    promptPlaceholder:
+      'Describe INT./EXT. filming environment, architecture, time of day & weather - use @ for assets',
+    vaultButtonLabel: 'Locations & Multi-Angle Sets',
+    directivePrefix: 'Location Environment Plate',
+  },
+  storyboard: {
+    id: 'storyboard',
+    title: 'Storyboard Studio',
+    shortBadge: 'STORYBOARD',
+    defaultSurface: 'image',
+    setupCardLabel: 'Board setup',
+    cameraCardLabel: 'Framing & lens',
+    promptPlaceholder:
+      'Describe storyboard shot composition, blocking & camera angle - use @ to lock cast & set',
+    vaultButtonLabel: 'Storyboard Sequence Grid',
+    directivePrefix: 'Storyboard Continuity Frame',
+  },
+  marketing: {
+    id: 'marketing',
+    title: 'Marketing Studio',
+    shortBadge: 'MARKETING',
+    defaultSurface: 'video',
+    setupCardLabel: 'Campaign setup',
+    cameraCardLabel: 'Commercial rig',
+    promptPlaceholder:
+      'Describe commercial hook, UGC creator action & product showcase - use @ for character & prop',
+    vaultButtonLabel: 'Campaign & UGC Builder',
+    directivePrefix: 'Marketing & Commercial Production',
+  },
+  lipsync: {
+    id: 'lipsync',
+    title: 'Lip Sync Studio',
+    shortBadge: 'LIP SYNC',
+    defaultSurface: 'video',
+    setupCardLabel: 'Dialogue & voice',
+    cameraCardLabel: 'Close-up lens',
+    promptPlaceholder:
+      'Enter spoken dialogue or performance direction - use @ to lock speaking character face & voice',
+    vaultButtonLabel: 'Multilingual Lip Sync Console',
+    directivePrefix: 'Lip Sync Viseme Performance',
+  },
+  effects: {
+    id: 'effects',
+    title: 'Effects Studio',
+    shortBadge: 'EFFECTS',
+    defaultSurface: 'video',
+    setupCardLabel: 'VFX preset',
+    cameraCardLabel: 'Rig & motion',
+    promptPlaceholder:
+      'Describe visual effect transformation, particle simulation or camera rig - use @ for elements',
+    vaultButtonLabel: 'VFX & Camera Rig Catalog',
+    directivePrefix: 'Visual Effects & Camera Rig',
+  },
+  canvas: {
+    id: 'canvas',
+    title: 'Canvas Studio',
+    shortBadge: 'CANVAS',
+    defaultSurface: 'video',
+    setupCardLabel: 'Node pipeline',
+    cameraCardLabel: 'Optical chain',
+    promptPlaceholder:
+      'Describe connected multi-model keyframe-to-video scene - use @ to wire character, set & prop nodes',
+    vaultButtonLabel: 'Node Graph Pipeline',
+    directivePrefix: 'Connected Canvas Workflow',
+  },
+  editing: {
+    id: 'editing',
+    title: 'Editing Studio',
+    shortBadge: 'EDITING',
+    defaultSurface: 'video',
+    setupCardLabel: 'Cut & pacing',
+    cameraCardLabel: 'Master optics',
+    promptPlaceholder:
+      'Describe transition shot, B-roll insert or final sequence cut - use @ to keep scene continuity',
+    vaultButtonLabel: 'Multi-Track Timeline Sequencer',
+    directivePrefix: 'Timeline Sequence Assembly',
+  },
+};
+
+const SHOWCASE_CARDS = [
+  {
+    id: 'monologue',
+    image: showcaseMonologueImg,
+    tag: 'WINDOW LIGHT · 50MM PRIME · f/1.4',
+    title: 'Intimate Living Room Monologue',
+    prompt:
+      'Intimate dramatic monologue in a sunlit living room, soft daylight filtering through sheer lace curtains, 50mm Cooke Panchro prime lens at f/1.4, subtle film grain, authentic emotional performance.',
+  },
+  {
+    id: 'corridor',
+    image: showcaseCorridorImg,
+    tag: '35MM STEADICAM · TWILIGHT FABLE',
+    title: 'Architectural Corridor Tracking',
+    prompt:
+      'Low-angle Steadicam tracking shot gliding down a brutalist concrete corridor with recessed linear LED ceiling strips, 35mm anamorphic lens, crisp reflections on dark stone floor.',
+  },
+  {
+    id: 'architecture',
+    image: showcaseArchitectureImg,
+    tag: '70MM ANAMORPHIC · GOLDEN HOUR',
+    title: 'Sunlit Timber Atrium',
+    prompt:
+      'Monumental 70mm IMAX wide shot inside a warm timber skylight atrium during golden hour, volumetric sunbeams cutting through atmospheric dust motes, deep dynamic range.',
+  },
+];
 
 const GENRE_PRESETS = [
   {
@@ -392,38 +628,75 @@ const EMOTION_DIRECTIONS = [
   'Contemplative',
 ];
 
-export const HiggsfieldCinemaStudio: React.FC = () => {
+const SUPPORTED_LANGUAGES: SupportedCharacterLanguage[] = [
+  'English',
+  'Nigerian Pidgin',
+  'Yoruba',
+  'Igbo',
+  'Hausa',
+  'French',
+  'Swahili',
+  'Spanish',
+  'Arabic',
+  'Mandarin',
+];
+
+export interface HiggsfieldCinemaStudioProps {
+  studioId?: StudioId;
+  initialSurface?: 'video' | 'image';
+  renderStudioVault?: () => React.ReactNode;
+}
+
+export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
+  studioId = 'cinema',
+  initialSurface,
+  renderStudioVault,
+}) => {
   const {
     models,
     generations,
-    uploads,
     characters,
     wardrobes,
     propsList,
     locations,
+    motionTemplates,
     cinemaProjects,
+    presets,
     activeContinuity,
     setActiveContinuity,
     submitGeneration,
     uploadReferenceFile,
     composeContinuityPrompt,
+    saveCharacter,
+    saveMotionTemplate,
+    saveWardrobe,
+    saveProp,
+    saveLocation,
     saveCinemaProject,
+    calculateTokenCost,
     navigate,
     routeParams,
     showToast,
   } = useRuns();
 
+  const studioConfig = STUDIO_WORKSPACE_CONFIGS[studioId] || STUDIO_WORKSPACE_CONFIGS.cinema;
+
   // ==========================================================================
-  // WORKSPACE MODE & NAVIGATION STATE
+  // WORKSPACE MODE, CONTEXTUAL TOOL & NAVIGATION STATE
   // ==========================================================================
-  const [workingMode, setWorkingMode] = useState<'director' | 'music_video' | 'production'>(() =>
-    routeParams?.mode === 'music_video' ? 'music_video' : 'director'
-  );
+  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'production'>('director');
+  const [activeCategory, setActiveCategory] = useState<CinemaToolCategoryId>('media_generation');
+  const [activeToolId, setActiveToolId] = useState<CinemaToolId>('video_creation');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'home' | 'elements' | 'favorites' | 'project'>('home');
   const [projectSearch, setProjectSearch] = useState('');
+  const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [projectSort, setProjectSort] = useState<'recent' | 'alpha' | 'type'>('recent');
   const [activeSubfolder, setActiveSubfolder] = useState<'all' | 'scenes' | 'versions' | 'deliverables'>('all');
   const [favoriteGenIds, setFavoriteGenIds] = useState<string[]>([]);
+  const [activeShowcaseIdx, setActiveShowcaseIdx] = useState<number>(0);
+  const [showLiveMonitor, setShowLiveMonitor] = useState<boolean>(false);
 
   // Active Production Project State
   const [selectedProjId, setSelectedProjId] = useState<string | null>(
@@ -437,12 +710,17 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
   );
 
   // ==========================================================================
-  // HIGGSFIELD CINEMA STUDIO 4.0 DOCK & DIRECTOR'S PANEL STATE
+  // UNIVERSAL GENERATION WORKSPACE & DIRECTOR'S PANEL STATE
   // ==========================================================================
-  const [dockSurface, setDockSurface] = useState<'video' | 'image'>('video');
+  const [dockSurface, setDockSurface] = useState<Surface>(
+    () => initialSurface || studioConfig.defaultSurface
+  );
+
   const [scenePrompt, setScenePrompt] = useState('');
   const [selectedVideoModelId, setSelectedVideoModelId] = useState('seedance-2-5');
   const [selectedImageModelId, setSelectedImageModelId] = useState('soul-2-standard');
+  const [selectedAudioModelId, setSelectedAudioModelId] = useState('inworld-tts-studio');
+  const [voicePersona, setVoicePersona] = useState<string>('noir_narrator');
   const [resolution, setResolution] = useState<'1080p' | '2K' | '4K'>('1080p');
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '21:9' | '9:16' | '1:1'>('16:9');
   const [durationSec, setDurationSec] = useState<number>(5);
@@ -451,15 +729,154 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
   const [selectedEmotion, setSelectedEmotion] = useState<string>('Auto');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  const activeToolSpec = useMemo(
+    () => CINEMA_TOOLS[activeToolId] || CINEMA_TOOLS.video_creation,
+    [activeToolId]
+  );
+
+  // Sync URL/Header routeParams (tab, mode, category, tool) with Cinema Studio state
+  useEffect(() => {
+    if (routeParams?.mode === 'auto_production') {
+      setWorkingMode('auto_production');
+    } else if (routeParams?.mode === 'production') {
+      setWorkingMode('production');
+    }
+    if (routeParams?.tab === 'elements') {
+      setWorkingMode('director');
+      setSidebarTab('elements');
+    } else if (routeParams?.tab === 'favorites') {
+      setWorkingMode('director');
+      setSidebarTab('favorites');
+    } else if (routeParams?.tab === 'projects') {
+      setWorkingMode('director');
+      setSidebarTab('project');
+    } else if (routeParams?.tab === 'home') {
+      setWorkingMode('director');
+      setSidebarTab('home');
+    }
+    if (
+      routeParams?.category === 'production_elements' ||
+      routeParams?.category === 'media_generation' ||
+      routeParams?.category === 'film_production'
+    ) {
+      setActiveCategory(routeParams.category);
+    }
+    if (routeParams?.tool) {
+      const foundTool = CINEMA_TOOL_LIST.find((t) => t.id === routeParams.tool);
+      if (foundTool) {
+        setActiveCategory(foundTool.category);
+        setActiveToolId(foundTool.id);
+        setDockSurface(
+          foundTool.targetSurface === 'llm' ? 'image' : foundTool.targetSurface
+        );
+      }
+    }
+  }, [routeParams]);
+
+  // Select a tool inside Cinema Studio and automatically route surface & model capability
+  const handleSelectCinemaTool = (toolId: CinemaToolId) => {
+    const spec = CINEMA_TOOLS[toolId];
+    if (!spec) return;
+    setActiveToolId(spec.id);
+    setActiveCategory(spec.category);
+    setWorkingMode('director');
+
+    const effectiveSurface: Surface =
+      spec.targetSurface === 'llm' ? 'image' : spec.targetSurface;
+
+    // Switch surface to match the tool's primary capability
+    setDockSurface(effectiveSurface);
+
+    // Ensure the selected model for that surface is compatible with this tool
+    const compatible = resolveCompatibleModel(
+      spec.id,
+      effectiveSurface === 'video'
+        ? selectedVideoModelId
+        : effectiveSurface === 'audio'
+        ? selectedAudioModelId
+        : selectedImageModelId,
+      models,
+      effectiveSurface
+    );
+
+    if (effectiveSurface === 'video') {
+      setSelectedVideoModelId(compatible.id);
+    } else if (effectiveSurface === 'audio') {
+      setSelectedAudioModelId(compatible.id);
+    } else {
+      setSelectedImageModelId(compatible.id);
+    }
+
+    // Open contextual panel only when user selects a tool that benefits from it
+    if (spec.id === 'visual_reference') {
+      setActivePopover('references');
+    } else if (spec.id === 'camera_coverage') {
+      setActivePopover('camera');
+    } else if (spec.id === 'lighting_cinema') {
+      setActivePopover('lighting');
+    } else if (spec.id === 'script_screenplay' || spec.id === 'scene_breakdown') {
+      setAiDirectorOpen(true);
+    } else if (spec.id === 'video_sequencing') {
+      setWorkingMode('production');
+    }
+  };
+
+  // Studio-specific quick builder state (accessible inside Film/Studio Setup popover)
+  const [quickCharName, setQuickCharName] = useState('');
+  const [quickCharRole, setQuickCharRole] = useState('Lead Protagonist');
+  const [quickCharLang, setQuickCharLang] = useState<SupportedCharacterLanguage>('English');
+  const [quickCharFeatures, setQuickCharFeatures] = useState(
+    'Athletic build, braided crown locs, warm confident gaze'
+  );
+  const [quickMotionName, setQuickMotionName] = useState('Kinetic Walk & Turn');
+  const [quickMotionCat, setQuickMotionCat] = useState<MotionCategory>('Walking');
+  const [quickWardrobeName, setQuickWardrobeName] = useState('');
+  const [quickWardrobeCat, setQuickWardrobeCat] = useState<WardrobeCategory>('Traditional');
+  const [quickWardrobeGarments, setQuickWardrobeGarments] = useState(
+    'Hand-loomed indigo Agbada with gold embroidery'
+  );
+  const [quickPropName, setQuickPropName] = useState('');
+  const [quickPropCat, setQuickPropCat] = useState<PropCategory>('Cars & Vehicles');
+  const [quickPropFinish, setQuickPropFinish] = useState('Matte Obsidian & Brushed Titanium');
+  const [quickLocName, setQuickLocName] = useState('');
+  const [quickLocSetting, setQuickLocSetting] = useState<'INT.' | 'EXT.' | 'INT./EXT.'>('EXT.');
+  const [quickLocCat, setQuickLocCat] = useState<LocationCategory>('Cities');
+  const [quickLocTime, setQuickLocTime] = useState<LocationItem['timeOfDay']>('Night');
+  const [quickLocWeather, setQuickLocWeather] = useState<LocationItem['weather']>('Rain');
+  const [quickLipSyncLang, setQuickLipSyncLang] = useState<SupportedCharacterLanguage>('English');
+  const [quickLipSyncLine, setQuickLipSyncLine] = useState(
+    'Every frame remembers our face, voice, and soul across the entire production.'
+  );
+  const [quickMarketingFormat, setQuickMarketingFormat] = useState('UGC Creator Review (9:16)');
+
   // Stage 3 Director's Panel Popover State
   const [activePopover, setActivePopover] = useState<
     null | 'references' | 'film_setup' | 'camera' | 'color_palette' | 'lighting' | 'models' | 'at_elements'
   >(null);
-  const [filmSetupTab, setFilmSetupTab] = useState<'genre' | 'era' | 'tempo'>('genre');
+  const [filmSetupTab, setFilmSetupTab] = useState<'studio' | 'genre' | 'era' | 'tempo'>(() =>
+    studioId === 'cinema' ? 'genre' : 'studio'
+  );
+
+  useEffect(() => {
+    setFilmSetupTab(studioId === 'cinema' ? 'genre' : 'studio');
+  }, [studioId]);
+
   const [cameraModalTab, setCameraModalTab] = useState<'setup' | 'movement'>('setup');
   const [movementSearch, setMovementSearch] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
   const [lightingSearch, setLightingSearch] = useState('');
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // Custom user-created presets in modals
   const [customPalettes, setCustomPalettes] = useState<ColorGradePreset[]>([]);
@@ -630,15 +1047,33 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
     () => models.filter((m) => m.surface === 'image'),
     [models]
   );
+  const audioModels = useMemo(
+    () => models.filter((m) => m.surface === 'audio'),
+    [models]
+  );
+
+  // Intelligent Model-Capability Routing: filter models strictly by active tool & surface
+  const compatibleModels = useMemo(
+    () => getCompatibleModelsForTool(activeToolId, models, dockSurface),
+    [activeToolId, models, dockSurface]
+  );
 
   const activeModel = useMemo(() => {
-    const targetId = dockSurface === 'video' ? selectedVideoModelId : selectedImageModelId;
-    return (
-      models.find((m) => m.id === targetId) ||
-      (dockSurface === 'video' ? videoModels[0] : imageModels[0]) ||
-      models[0]
-    );
-  }, [dockSurface, selectedVideoModelId, selectedImageModelId, models, videoModels, imageModels]);
+    const requestedId =
+      dockSurface === 'video'
+        ? selectedVideoModelId
+        : dockSurface === 'audio'
+        ? selectedAudioModelId
+        : selectedImageModelId;
+    return resolveCompatibleModel(activeToolId, requestedId, models, dockSurface);
+  }, [
+    activeToolId,
+    dockSurface,
+    selectedVideoModelId,
+    selectedAudioModelId,
+    selectedImageModelId,
+    models,
+  ]);
 
   const allPalettes = useMemo(
     () => [...COLOR_PALETTES, ...customPalettes],
@@ -666,16 +1101,52 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
     [generations, inspectedGenId]
   );
 
+  const sortedProjects = useMemo(() => {
+    const filtered = cinemaProjects.filter((p) =>
+      !projectSearch.trim()
+        ? true
+        : p.title.toLowerCase().includes(projectSearch.toLowerCase())
+    );
+    const copy = [...filtered];
+    if (projectSort === 'alpha') {
+      copy.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (projectSort === 'type') {
+      copy.sort((a, b) => a.productionType.localeCompare(b.productionType));
+    }
+    return copy;
+  }, [cinemaProjects, projectSearch, projectSort]);
+
   const estimatedCredits = useMemo(() => {
-    const base = activeModel
-      ? Math.max(5, Math.round(activeModel.baseHfUsd * 200))
-      : dockSurface === 'video'
-      ? 65
-      : 15;
-    const resMult = resolution === '4K' ? 1.5 : resolution === '2K' ? 1.2 : 1;
-    const durMult = dockSurface === 'video' && durationSec > 5 ? 1.6 : 1;
-    return Math.round(base * resMult * durMult * batchSize);
-  }, [activeModel, dockSurface, resolution, durationSec, batchSize]);
+    const modelId =
+      activeModel?.id || (dockSurface === 'video' ? 'seedance-2-5' : 'soul-2-standard');
+    const settingsPayload: Record<string, string | number | boolean> = {
+      aspect_ratio: aspectRatio === '21:9' ? '16:9' : aspectRatio,
+      resolution,
+    };
+    if (dockSurface === 'video') {
+      settingsPayload.duration = durationSec;
+      settingsPayload.sound = soundEnabled;
+    }
+    const refMedia: MediaSlotInput[] = allReferences
+      .filter((r) => Boolean(r.url))
+      .map((r) => ({
+        role: r.kind === 'video' ? 'video' : 'reference',
+        kind: r.kind === 'video' ? 'video' : 'image',
+        url: r.url,
+        label: r.label,
+      }));
+    return calculateTokenCost(modelId, settingsPayload, refMedia, batchSize);
+  }, [
+    activeModel,
+    dockSurface,
+    aspectRatio,
+    resolution,
+    durationSec,
+    soundEnabled,
+    allReferences,
+    batchSize,
+    calculateTokenCost,
+  ]);
 
   // Summary labels for the 5 Director's Panel cards in the dock
   const filmSetupSummary = useMemo(() => {
@@ -684,8 +1155,21 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
       filmSetup.era !== 'Auto' ? filmSetup.era : '',
       filmSetup.tempo !== 'Auto' ? filmSetup.tempo : '',
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(' · ') : 'Auto';
-  }, [filmSetup]);
+    if (parts.length > 0) return parts.join(' · ');
+    if (studioId === 'character' && activeContinuity.characterIds.length > 0) {
+      const c = characters.find((item) => item.id === activeContinuity.characterIds[0]);
+      return c ? c.name : 'Auto';
+    }
+    if (studioId === 'wardrobe' && activeContinuity.wardrobeId) {
+      const w = wardrobes.find((item) => item.id === activeContinuity.wardrobeId);
+      return w ? w.name : 'Auto';
+    }
+    if (studioId === 'location' && activeContinuity.locationId) {
+      const l = locations.find((item) => item.id === activeContinuity.locationId);
+      return l ? l.name : 'Auto';
+    }
+    return 'Auto';
+  }, [filmSetup, studioId, activeContinuity, characters, wardrobes, locations]);
 
   const cameraSummary = useMemo(() => {
     const parts = [
@@ -696,6 +1180,16 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(' · ') : 'Auto';
   }, [cameraOptics]);
+
+  // Ordered showcase cards based on activeShowcaseIdx
+  const orderedShowcase = useMemo(() => {
+    const total = SHOWCASE_CARDS.length;
+    return [
+      SHOWCASE_CARDS[activeShowcaseIdx % total],
+      SHOWCASE_CARDS[(activeShowcaseIdx + 1) % total],
+      SHOWCASE_CARDS[(activeShowcaseIdx + 2) % total],
+    ];
+  }, [activeShowcaseIdx]);
 
   // ==========================================================================
   // COMPOSE FULL CINEMATOGRAPHY + CONTINUITY PROMPT & GENERATE (STAGE 3 & 4)
@@ -742,55 +1236,95 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
       directives.push(`Character emotional performance: ${selectedEmotion}`);
     }
 
+    if (studioId === 'lipsync' && quickLipSyncLine.trim()) {
+      directives.push(
+        `Spoken Language: ${quickLipSyncLang}, synchronized viseme lip performance speaking: "${quickLipSyncLine.trim()}"`
+      );
+    }
+    if (studioId === 'marketing') {
+      directives.push(`Commercial Format: ${quickMarketingFormat}`);
+    }
+
     const cleanScene =
       rawUserPrompt.trim() ||
-      `Cinematic shot from "${projectTitle}" (${productionType})`;
+      `Cinematic ${studioConfig.title} production shot from "${projectTitle}" (${productionType})`;
 
     return directives.length > 0
-      ? `[Cinema Studio 4.0 Direction — ${directives.join(' | ')}] ${cleanScene}`
-      : cleanScene;
+      ? `[${studioConfig.directivePrefix} — ${directives.join(' | ')}] ${cleanScene}`
+      : `[${studioConfig.directivePrefix}] ${cleanScene}`;
   };
 
   const handleGenerateShot = async (overridePrompt?: string, overrideMedia?: MediaSlotInput[]) => {
-    const directed = buildDirectedPrompt(overridePrompt ?? scenePrompt);
+    // Intelligent Model-Capability Routing: resolve strictly compatible model for the current tool & surface
+    const routedModel = resolveCompatibleModel(
+      activeToolId,
+      activeModel?.id,
+      models,
+      dockSurface
+    );
+
+    const isAudioTask = routedModel.surface === 'audio' || dockSurface === 'audio';
+    const rawText = (overridePrompt ?? scenePrompt).trim();
+
+    const directed = isAudioTask
+      ? rawText || `Cinematic ${activeToolSpec.label} for "${projectTitle}"`
+      : buildDirectedPrompt(rawText);
+
     const extraMedia: MediaSlotInput[] = overrideMedia ? [...overrideMedia] : [];
 
-    for (const ref of customRefs) {
-      if (ref.url) {
-        extraMedia.push({
-          role: ref.kind === 'video' ? 'video' : 'reference',
-          kind: ref.kind === 'video' ? 'video' : 'image',
-          url: ref.url,
-          label: ref.label,
-        });
+    if (!isAudioTask) {
+      for (const ref of customRefs) {
+        if (ref.url) {
+          extraMedia.push({
+            role: ref.kind === 'video' ? 'video' : 'reference',
+            kind: ref.kind === 'video' ? 'video' : 'image',
+            url: ref.url,
+            label: ref.label,
+          });
+        }
       }
     }
 
-    const composed = composeContinuityPrompt(directed, undefined, extraMedia);
-    const modelId =
-      activeModel?.id || (dockSurface === 'video' ? 'seedance-2-5' : 'soul-2-standard');
+    const composed = isAudioTask
+      ? { prompt: directed, media: [] as MediaSlotInput[] }
+      : composeContinuityPrompt(directed, undefined, extraMedia);
 
     setIsSubmitting(true);
     try {
       for (let i = 0; i < batchSize; i++) {
-        const settingsPayload: Record<string, string | number | boolean> = {
-          aspect_ratio: aspectRatio === '21:9' ? '16:9' : aspectRatio,
-          resolution,
-        };
-        if (dockSurface === 'video') {
-          settingsPayload.duration = durationSec;
-          settingsPayload.sound = soundEnabled;
-        }
+        const settingsPayload: Record<string, string | number | boolean> =
+          routedModel.surface === 'audio'
+            ? {
+                duration: String(durationSec || 10),
+                voice_persona: voicePersona,
+                speaking_rate: 1.0,
+                instrumental_only: activeToolId === 'music_sfx',
+              }
+            : {
+                aspect_ratio: aspectRatio === '21:9' ? '16:9' : aspectRatio,
+                resolution,
+                ...(routedModel.surface === 'video'
+                  ? { duration: durationSec, sound: soundEnabled }
+                  : {}),
+              };
+
         const res = await submitGeneration({
-          surface: dockSurface,
-          modelId,
-          mode: dockSurface === 'video' ? 'Create Video' : 'Create',
+          surface: routedModel.surface,
+          modelId: routedModel.id,
+          mode:
+            routedModel.modes[0] ||
+            (routedModel.surface === 'video'
+              ? 'Create Video'
+              : routedModel.surface === 'audio'
+              ? 'Voice & SFX'
+              : 'Create'),
           prompt: composed.prompt,
           settings: settingsPayload,
           media: composed.media,
         });
         if (res.generation?.id) {
           setInspectedGenId(res.generation.id);
+          setShowLiveMonitor(true);
         }
       }
       setActivePopover(null);
@@ -820,7 +1354,7 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
         url: out.url,
       },
     ]);
-    showToast('Added shot to Cinema Studio 4.0 References rack (up to 50)');
+    showToast('Added shot to References rack (up to 50)');
   };
 
   const handleExtendShot = async (direction: 'forward' | 'backward') => {
@@ -1035,7 +1569,7 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
       title: nextTitle,
       productionType: 'Short Films',
       aspectRatio: '16:9',
-      logline: 'New virtual film production directed in SPACI6X Cinema Studio.',
+      logline: `New virtual production directed in SPACIX ${studioConfig.title}.`,
       screenplayRaw: `INT. MAIN SOUNDSTAGE - NIGHT\nCamera dollies in on the hero under soft cross lighting.`,
       castCharacterIds: characters.map((c) => c.id),
       wardrobeIds: wardrobes.map((w) => w.id),
@@ -1047,628 +1581,2784 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
       setSelectedProjId(created.id);
       setProjectTitle(created.title);
       setProductionType(created.productionType);
-      showToast(`Created production "${created.title}"`);
+      showToast(`Created project "${created.title}"`);
+    }
+  };
+
+  // Studio-specific quick-save handlers inside the popover modal
+  const handleQuickSaveCharacter = async () => {
+    if (!quickCharName.trim()) {
+      showToast('Enter a character name first');
+      return;
+    }
+    const saved = await saveCharacter({
+      name: quickCharName.trim(),
+      roleTitle: quickCharRole,
+      facialIdentityLock: true,
+      identitySeed: Math.floor(100000 + Math.random() * 900000),
+      facePromptDescriptor: quickCharFeatures,
+      ageRange: '25-32',
+      genderPresentation: 'Hero Lead',
+      skinTone: 'Warm Natural',
+      bodyType: 'Athletic',
+      height: '5\'10"',
+      hairstyle: 'Signature Style',
+      eyeColor: 'Deep Brown',
+      distinctiveFeatures: quickCharFeatures,
+      voiceId: `VLOCK-${Math.floor(1000 + Math.random() * 9000)}`,
+      voiceName: `${quickCharName.trim()} Locked Voice`,
+      voiceIdentityLock: true,
+      voiceCloneConsent: true,
+      primaryLanguage: quickCharLang,
+      supportedLanguages: [quickCharLang, 'English'],
+      speechAccent: 'Authentic Native',
+      pitch: 'Medium',
+      tone: 'Warm & Resonant',
+      defaultEmotion: 'Determined',
+      speakingSpeed: 1.0,
+      deliveryStyle: 'Naturalistic Cinema',
+      activeExpression: 'Determined',
+      expressionSheetUrls: {},
+      defaultWardrobeId: wardrobes[0]?.id || null,
+      consistencyLock: true,
+    });
+    if (saved) {
+      insertElementToken(`@${saved.name.toUpperCase()}`, saved.id);
+      setQuickCharName('');
+      showToast(`Saved & locked character @${saved.name} [${saved.identityId}]`);
+    }
+  };
+
+  const handleQuickSaveWardrobe = async () => {
+    if (!quickWardrobeName.trim()) {
+      showToast('Enter an outfit name first');
+      return;
+    }
+    const saved = await saveWardrobe({
+      name: quickWardrobeName.trim(),
+      category: quickWardrobeCat,
+      description: quickWardrobeGarments,
+      garments: quickWardrobeGarments,
+      shoes: 'Matched production footwear',
+      accessories: 'Signature continuity accessories',
+      jewellery: 'Subtle metallic accents',
+      hairstyleOverride: '',
+      colorPalette: activePalette.name,
+      referenceImageUrl: '',
+      assignedCharacterIds: activeContinuity.characterIds,
+      sceneContinuityLock: true,
+    });
+    if (saved) {
+      setActiveContinuity((prev) => ({ ...prev, wardrobeId: saved.id }));
+      setQuickWardrobeName('');
+      showToast(`Saved & locked wardrobe "${saved.name}"`);
+    }
+  };
+
+  const handleQuickSaveProp = async () => {
+    if (!quickPropName.trim()) {
+      showToast('Enter a prop name first');
+      return;
+    }
+    const saved = await saveProp({
+      name: quickPropName.trim(),
+      category: quickPropCat,
+      description: `${quickPropName.trim()} (${quickPropCat})`,
+      materialAndFinish: quickPropFinish,
+      scaleAndDimensions: 'Hero production scale',
+      referenceImageUrl: '',
+      assignedCharacterIds: activeContinuity.characterIds,
+      assignedSceneIds: [],
+      appearanceLock: true,
+    });
+    if (saved) {
+      insertElementToken(`[PROP: ${saved.name}]`, undefined, undefined, saved.id);
+      setQuickPropName('');
+      showToast(`Saved & locked prop "${saved.name}"`);
+    }
+  };
+
+  const handleQuickSaveLocation = async () => {
+    if (!quickLocName.trim()) {
+      showToast('Enter a location name first');
+      return;
+    }
+    const saved = await saveLocation({
+      name: quickLocName.trim(),
+      category: quickLocCat,
+      settingType: quickLocSetting,
+      timeOfDay: quickLocTime,
+      weather: quickLocWeather,
+      description: `${quickLocSetting} ${quickLocName.trim()} (${quickLocTime}, ${quickLocWeather})`,
+      lightingAndMood: activeLighting.name,
+      primaryImageUrl: '',
+      cameraAngleReferences: [],
+      continuityLock: true,
+    });
+    if (saved) {
+      insertElementToken(`@${saved.name.toUpperCase()}`, undefined, saved.id);
+      setQuickLocName('');
+      showToast(`Saved & locked location @${saved.name}`);
+    }
+  };
+
+  const handleQuickSaveMotion = async () => {
+    if (!quickMotionName.trim()) {
+      showToast('Enter a motion preset name');
+      return;
+    }
+    const saved = await saveMotionTemplate({
+      name: quickMotionName.trim(),
+      movementCategory: quickMotionCat,
+      referenceVideoUrl: '',
+      sourceImageUrl: '',
+      targetCharacterId: activeContinuity.characterIds[0] || characters[0]?.id || null,
+      preserveAppearanceLock: true,
+      bodyPoseTransfer: true,
+      facialExpressionTransfer: true,
+      handGestureControl: true,
+      cameraMovement: cameraOptics.movements[0] || 'Tracking shot',
+      keyframes: [
+        { timeSec: 0, x: 20, y: 65, poseNote: 'Start stance', expression: 'Neutral' },
+        { timeSec: 5, x: 75, y: 45, poseNote: 'Final mark', expression: 'Determined' },
+      ],
+      motionPrompt: scenePrompt || `${quickMotionCat} motion transfer`,
+    });
+    if (saved) {
+      setActiveContinuity((prev) => ({ ...prev, motionTemplateId: saved.id }));
+      showToast(`Saved & locked motion preset "${saved.name}"`);
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-[#090A0C] text-zinc-100 flex flex-col">
+    <div className="min-h-[calc(100vh-4rem)] bg-[#090A0C] text-zinc-100 flex flex-col overflow-x-hidden">
       {/* ====================================================================
-          TOP STUDIO & CONTINUITY BAR (12 SPACI6X STUDIOS + MODE SWITCHER)
+          MAIN UNIFIED STUDIO WORKSPACE
+          Matches attached screenshot across all 12 SPACIX Studios
           ==================================================================== */}
-      <div className="bg-[#0D0E11] border-b border-white/10 px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {SPACI6X_STUDIOS.map((st) => {
-            const isActive = st.id === 'cinema';
-            return (
-              <button
-                key={st.id}
-                onClick={() => navigate(st.id as StudioId)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  isActive
-                    ? 'bg-[#46ecd5] text-zinc-950 font-bold shadow-sm'
-                    : 'bg-[#141519] text-zinc-400 hover:text-white border border-white/5'
-                }`}
-              >
-                <Clapperboard className="w-3 h-3" />
-                <span>{st.shortLabel}</span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="flex-1 flex relative overflow-hidden">
+        {/* Mobile Backdrop for Left Sidebar Drawer */}
+        {mobileSidebarOpen && (
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs z-40 lg:hidden"
+          />
+        )}
 
-        {/* Three Working Modes Toggle: DIRECTOR MODE vs MUSIC VIDEO vs PRODUCTION MODE */}
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center p-0.5 rounded-xl bg-[#141519] border border-white/10">
-            <button
-              type="button"
-              onClick={() => setWorkingMode('director')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                workingMode === 'director'
-                  ? 'bg-[#46ecd5] text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Camera className="w-3.5 h-3.5" />
-              <span>DIRECTOR MODE</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setWorkingMode('music_video')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                workingMode === 'music_video'
-                  ? 'bg-[#46ecd5] text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Music className="w-3.5 h-3.5" />
-              <span>MUSIC VIDEO</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setWorkingMode('production')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                workingMode === 'production'
-                  ? 'bg-[#46ecd5] text-zinc-950 shadow'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>PRODUCTION MODE</span>
-            </button>
-          </div>
-
-          {workingMode === 'director' && (
-            <button
-              type="button"
-              onClick={() => setAiDirectorOpen((v) => !v)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                aiDirectorOpen
-                  ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-[#46ecd5]'
-                  : 'bg-[#141519] border-white/10 text-zinc-200 hover:border-white/25'
-              }`}
-            >
-              <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
-              <span>AI Director</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ====================================================================
-          MAIN WORKSPACE BODY
-          ==================================================================== */}
-      {workingMode === 'production' ? (
-        <div className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-4">
-          <StoryStudioView onSwitchToLegacyCinema={() => setWorkingMode('director')} />
-        </div>
-      ) : workingMode === 'music_video' ? (
-        <MusicVideoStudio projectId={selectedProjId} projectTitle={projectTitle} />
-      ) : (
-        <div className="flex-1 flex relative overflow-hidden">
-          {/* ================================================================
-              A. LEFT PERSISTENT PRODUCTION & ELEMENTS SIDEBAR (HIGGSFIELD UI)
-              ================================================================ */}
-          <aside
-            className={`${
-              sidebarCollapsed ? 'w-16' : 'w-64'
-            } shrink-0 bg-[#121316] border-r border-white/10 flex flex-col justify-between transition-all duration-200 select-none z-20`}
-          >
-            <div className="p-3 space-y-4 overflow-y-auto no-scrollbar">
-              {/* Top Brand Pill & Collapse Toggle */}
-              <div className="flex items-center justify-between gap-2">
-                {!sidebarCollapsed && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#1A1C20] border border-white/10 flex-1 min-w-0">
+        {/* ================================================================
+            1. FIXED NARROW LEFT SIDEBAR (EXACT MATCH TO SCREENSHOT)
+            Top: [SPACIX Logo / Studio Switcher ⌄] [◧]
+            Nav: Home, My elements, My favorites
+            Projects: Search, Sorting, + New project
+            Bottom: Community
+            ================================================================ */}
+        <aside
+          className={`${
+            mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          } ${
+            sidebarCollapsed ? 'lg:w-16' : 'lg:w-60'
+          } fixed lg:static inset-y-0 left-0 w-64 max-w-[85vw] shrink-0 bg-[#0E0F12] border-r border-white/[0.07] flex flex-col justify-between transition-all duration-200 select-none z-50 lg:z-20`}
+        >
+          <div className="p-3 space-y-4 overflow-y-auto no-scrollbar">
+            {/* Top Row: [SPACIX Cinema Studio Identity] + [◧ Collapse Toggle] */}
+            <div className="flex items-center justify-between gap-1.5 relative">
+              {!sidebarCollapsed && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-[#18191E] border border-white/10 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
                     <img
                       src="/brand/logo.png"
                       alt="SPACIX"
-                      className="h-5 w-auto object-contain"
+                      className="h-4 w-auto object-contain shrink-0"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                       }}
                     />
-                    <span className="text-xs font-extrabold tracking-wider uppercase text-white truncate">
-                      CINEMA 4.0
+                    <span className="text-[11px] font-extrabold tracking-wider uppercase text-white truncate">
+                      CINEMA STUDIO
                     </span>
                   </div>
+                  <span className="w-2 h-2 rounded-full bg-[#46ecd5] shrink-0" />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.innerWidth < 1024) {
+                    setMobileSidebarOpen(false);
+                  } else {
+                    setSidebarCollapsed((v) => !v);
+                  }
+                }}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="w-9 h-9 rounded-2xl bg-[#18191E] hover:bg-[#202228] border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center shrink-0 transition-colors"
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="w-4 h-4" />
+                ) : (
+                  <PanelLeftClose className="w-4 h-4" />
                 )}
-                <button
-                  type="button"
-                  onClick={() => setSidebarCollapsed((v) => !v)}
-                  title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                  className="p-2 rounded-xl bg-[#1A1C20] hover:bg-[#22252B] border border-white/10 text-zinc-400 hover:text-white"
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen className="w-4 h-4" />
-                  ) : (
-                    <PanelLeftClose className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+              </button>
+            </div>
 
-              {/* Primary Navigation: Home, My elements, My favorites */}
-              <nav className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('home')}
-                  className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    sidebarTab === 'home'
-                      ? 'bg-[#202227] text-white shadow-inner border border-white/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <span className="w-7 h-7 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0">
-                    <Home className="w-3.5 h-3.5 text-zinc-200" />
+            {/* Sidebar Navigation: Home, My elements, My favorites */}
+            <nav className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkingMode('director');
+                  setSidebarTab('home');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                  sidebarTab === 'home' && workingMode === 'director'
+                    ? 'bg-[#1C1E24] text-white shadow-inner border border-white/10'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-zinc-600/60 to-zinc-800 border border-white/15 flex items-center justify-center shrink-0 shadow">
+                  <Home className="w-3.5 h-3.5 text-white" />
+                </span>
+                {!sidebarCollapsed && <span>Home</span>}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkingMode('director');
+                  setSidebarTab('elements');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                  sidebarTab === 'elements' && workingMode === 'director'
+                    ? 'bg-[#1C1E24] text-white shadow-inner border border-white/10'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-sky-400/40 to-blue-600/40 border border-sky-400/50 flex items-center justify-center shrink-0 text-sky-200 font-mono text-xs font-extrabold shadow">
+                    @
                   </span>
-                  {!sidebarCollapsed && <span>Home</span>}
-                </button>
+                  {!sidebarCollapsed && <span>My elements</span>}
+                </div>
+                {!sidebarCollapsed && (
+                  <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">
+                    {characters.length + locations.length + propsList.length + wardrobes.length}
+                  </span>
+                )}
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('elements')}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    sidebarTab === 'elements'
-                      ? 'bg-[#202227] text-white shadow-inner border border-white/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center shrink-0 text-sky-400 font-mono text-xs font-extrabold">
-                      @
-                    </span>
-                    {!sidebarCollapsed && <span>My elements</span>}
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkingMode('director');
+                  setSidebarTab('favorites');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                  sidebarTab === 'favorites' && workingMode === 'director'
+                    ? 'bg-[#1C1E24] text-white shadow-inner border border-white/10'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-pink-400/40 to-rose-600/40 border border-pink-400/50 flex items-center justify-center shrink-0 shadow">
+                    <Heart className="w-3.5 h-3.5 text-pink-200 fill-pink-200" />
+                  </span>
+                  {!sidebarCollapsed && <span>My favorites</span>}
+                </div>
+                {!sidebarCollapsed && favoriteGenIds.length > 0 && (
+                  <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300">
+                    {favoriteGenIds.length}
+                  </span>
+                )}
+              </button>
+            </nav>
+
+            {/* Projects Section with Search, Sorting & New Project */}
+            {!sidebarCollapsed && (
+              <div className="pt-4 border-t border-white/[0.06] space-y-2.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold text-zinc-400">Projects</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setProjectSearchOpen((v) => !v)}
+                      title="Search projects"
+                      className={`p-1 rounded-lg transition-colors ${
+                        projectSearchOpen || projectSearch
+                          ? 'text-[#46ecd5] bg-white/5'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextSort =
+                          projectSort === 'recent'
+                            ? 'alpha'
+                            : projectSort === 'alpha'
+                            ? 'type'
+                            : 'recent';
+                        setProjectSort(nextSort);
+                        showToast(
+                          `Projects sorted by: ${
+                            nextSort === 'recent'
+                              ? 'Most Recent'
+                              : nextSort === 'alpha'
+                              ? 'Name (A–Z)'
+                              : 'Format Type'
+                          }`
+                        );
+                      }}
+                      title={`Sort projects (current: ${projectSort})`}
+                      className="p-1 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  {!sidebarCollapsed && (
-                    <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">
-                      {characters.length + locations.length + propsList.length + wardrobes.length}
-                    </span>
-                  )}
-                </button>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('favorites')}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    sidebarTab === 'favorites'
-                      ? 'bg-[#202227] text-white shadow-inner border border-white/10'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-pink-500/20 border border-pink-400/40 flex items-center justify-center shrink-0">
-                      <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
-                    </span>
-                    {!sidebarCollapsed && <span>My favorites</span>}
-                  </div>
-                  {!sidebarCollapsed && favoriteGenIds.length > 0 && (
-                    <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300">
-                      {favoriteGenIds.length}
-                    </span>
-                  )}
-                </button>
-              </nav>
-
-              {/* Projects Section */}
-              {!sidebarCollapsed && (
-                <div className="pt-3 border-t border-white/10 space-y-2.5">
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-[11px] font-semibold text-zinc-400">Projects</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setWorkingMode('production')}
-                        title="Open 4-Stage Storyboard & Script Pipeline"
-                        className="p-1 text-zinc-500 hover:text-white"
-                      >
-                        <Sliders className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
+                {projectSearchOpen && (
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={projectSearch}
                       onChange={(e) => setProjectSearch(e.target.value)}
-                      placeholder="Search productions..."
-                      className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-[#181A1F] border border-white/10 text-[11px] text-white placeholder:text-zinc-500"
+                      placeholder="Search projects..."
+                      className="w-full pl-8 pr-2.5 py-1.5 rounded-xl bg-[#16181D] border border-white/10 text-[11px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5]"
                     />
                   </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={handleCreateNewProduction}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-[#1A1C22] hover:bg-[#22252D] border border-white/10 text-xs font-semibold text-zinc-200 transition-all"
-                  >
-                    <span className="w-6 h-6 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center">
-                      <Plus className="w-3.5 h-3.5 text-[#46ecd5]" />
-                    </span>
-                    <span>New project</span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNewProduction}
+                  className="w-full flex items-center gap-3 px-2.5 py-2 rounded-2xl hover:bg-white/5 text-xs font-semibold text-zinc-300 hover:text-white transition-all"
+                >
+                  <span className="w-7 h-7 rounded-xl bg-[#1B1D23] border border-white/10 flex items-center justify-center shrink-0">
+                    <Plus className="w-3.5 h-3.5 text-zinc-300" />
+                  </span>
+                  <span>New project</span>
+                </button>
 
-                  {/* Active Production List + Subfolders (Scenes / Versions / Deliverables) */}
-                  <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                    {cinemaProjects
-                      .filter((p) =>
-                        !projectSearch.trim()
-                          ? true
-                          : p.title.toLowerCase().includes(projectSearch.toLowerCase())
-                      )
-                      .map((proj) => {
-                        const isSelected = proj.id === selectedProjId;
-                        return (
-                          <div key={proj.id} className="space-y-1">
+                {/* Active Production List */}
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {sortedProjects.map((proj) => {
+                    const isSelected = proj.id === selectedProjId;
+                    return (
+                      <div key={proj.id} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjId(proj.id);
+                            setProjectTitle(proj.title);
+                            setProductionType(proj.productionType);
+                            setAspectRatio(proj.aspectRatio);
+                            setSidebarTab('project');
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs transition-all ${
+                            isSelected
+                              ? 'bg-[#1C1E24] text-white font-bold border border-white/10'
+                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="truncate">{proj.title}</span>
+                          <span className="text-[10px] font-mono-tabular text-zinc-500">
+                            {proj.aspectRatio}
+                          </span>
+                        </button>
+                        {isSelected && sidebarTab === 'project' && (
+                          <div className="pl-4 space-y-0.5 text-[11px]">
+                            {(
+                              [
+                                { id: 'scenes', label: `Scenes (${proj.scenes?.length || 1})` },
+                                { id: 'versions', label: `Versions (${generations.length})` },
+                                {
+                                  id: 'deliverables',
+                                  label: `Deliverables (${deliverableIds.length})`,
+                                },
+                              ] as const
+                            ).map((folder) => (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() => setActiveSubfolder(folder.id)}
+                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg ${
+                                  activeSubfolder === folder.id
+                                    ? 'text-[#46ecd5] bg-white/5 font-semibold'
+                                    : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                              >
+                                <Folder className="w-3 h-3" />
+                                <span>{folder.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Community & Pricing Navigation */}
+          <div className="p-3 border-t border-white/[0.06] space-y-1">
+            <button
+              type="button"
+              onClick={() => navigate('pricing')}
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-2xl text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-[#46ecd5]/30 to-teal-700/30 border border-[#46ecd5]/40 flex items-center justify-center shrink-0 text-[#46ecd5] font-mono text-[11px] font-extrabold">
+                  ✦
+                </span>
+                {!sidebarCollapsed && <span>Pricing</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#46ecd5]/15 text-[#46ecd5] border border-[#46ecd5]/30">
+                  Soon
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('community')}
+              className="w-full flex items-center gap-3 px-2.5 py-2 rounded-2xl text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-zinc-600/50 to-zinc-800 border border-white/15 flex items-center justify-center shrink-0">
+                <Compass className="w-3.5 h-3.5 text-zinc-200" />
+              </span>
+              {!sidebarCollapsed && <span>Community</span>}
+            </button>
+          </div>
+        </aside>
+
+        {/* ================================================================
+            2. LARGE CENTRAL CREATIVE WORKSPACE + UNIVERSAL COMPOSER
+            ================================================================ */}
+        <main className="flex-1 min-w-0 flex flex-col justify-between overflow-y-auto overflow-x-hidden relative bg-[#090A0C]">
+          {/* ================================================================
+              PERSISTENT PROJECT HEADER & COMPACT CONTEXTUAL TOOL NAVIGATION
+              Categories: Production Elements | Media Generation | Film Production
+              Modes: Studio Workspace | Automatic Production (4-Stage) | Multi-Track Sequencer
+              ================================================================ */}
+          <div className="border-b border-white/[0.07] bg-[#090A0C]/95 backdrop-blur-md sticky top-0 z-20">
+            {/* Row 1: Persistent Project Header + Category Switcher + Mode Controls */}
+            <div className="px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="lg:hidden h-8 w-8 rounded-xl shrink-0"
+                  title="Open Studio Sidebar"
+                >
+                  <PanelLeftOpen className="w-4 h-4 text-[#46ecd5]" />
+                </Button>
+
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-[#13151B] border border-white/10">
+                  <Clapperboard className="w-3.5 h-3.5 text-[#46ecd5] shrink-0" />
+                  <input
+                    type="text"
+                    value={projectTitle}
+                    onChange={(e) => setProjectTitle(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-white focus:outline-none w-28 sm:w-40 truncate"
+                    title="Active Production Title"
+                  />
+                  <Badge variant="outline" className="hidden md:inline-flex font-mono text-[10px]">
+                    {productionType}
+                  </Badge>
+                </div>
+
+                {/* 3 Logical Tool Category Pills — Framer Motion AnimatedPillTabs */}
+                <div className="hidden sm:block">
+                  <AnimatedPillTabs
+                    layoutId="cinema-tool-category-tabs"
+                    activeId={workingMode === 'director' ? activeCategory : ''}
+                    items={CINEMA_TOOL_CATEGORIES.map((cat) => ({
+                      id: cat.id,
+                      label: cat.label,
+                    }))}
+                    onChange={(catId) => {
+                      setWorkingMode('director');
+                      setActiveCategory(catId);
+                      const firstTool = CINEMA_TOOL_LIST.find((t) => t.category === catId);
+                      if (firstTool) handleSelectCinemaTool(firstTool.id);
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Right Controls: Command Palette (⌘K) | Automatic Production (4-Stage) | Multi-Track Sequencer | AI Director */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setCommandPaletteOpen(true)}
+                      className="hidden sm:inline-flex gap-1.5"
+                    >
+                      <Search className="w-3.5 h-3.5 text-[#46ecd5]" />
+                      <span>Tools</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-black/50 border border-white/10 font-mono text-[10px] text-zinc-400">
+                        ⌘K
+                      </kbd>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open Cinema Studio Command Palette (⌘K)</TooltipContent>
+                </Tooltip>
+
+                <Button
+                  type="button"
+                  variant={workingMode === 'auto_production' ? 'default' : 'accent'}
+                  size="sm"
+                  onClick={() =>
+                    setWorkingMode((prev) =>
+                      prev === 'auto_production' ? 'director' : 'auto_production'
+                    )
+                  }
+                  className="whitespace-nowrap"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {workingMode === 'auto_production'
+                      ? '← Studio Workspace'
+                      : 'Automatic Production'}
+                  </span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={workingMode === 'production' ? 'default' : 'secondary'}
+                  size="sm"
+                  onClick={() =>
+                    setWorkingMode((prev) => (prev === 'production' ? 'director' : 'production'))
+                  }
+                  className="whitespace-nowrap"
+                >
+                  <Layers className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span className="hidden md:inline">
+                    {workingMode === 'production' ? '← Workspace' : 'Timeline & Vault'}
+                  </span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={aiDirectorOpen ? 'accent' : 'secondary'}
+                  size="sm"
+                  onClick={() => setAiDirectorOpen((v) => !v)}
+                  className="shrink-0"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span className="hidden xl:inline">AI Director</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Row 2: Compact Contextual Tool Bar (Shows tools for active category only when in Studio Workspace) */}
+            {workingMode === 'director' && (
+              <div className="px-3 sm:px-6 py-1.5 border-t border-white/[0.04] bg-[#0D0E12]/90 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+                {/* Mobile Category Switcher */}
+                <div className="flex sm:hidden items-center gap-1 pr-2 border-r border-white/10 shrink-0">
+                  {CINEMA_TOOL_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap ${
+                        activeCategory === cat.id
+                          ? 'bg-[#46ecd5]/20 text-[#46ecd5]'
+                          : 'text-zinc-500'
+                      }`}
+                    >
+                      {cat.shortLabel}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {CINEMA_TOOL_LIST.filter((t) => t.category === activeCategory).map((tool) => {
+                    const isToolSelected = activeToolId === tool.id;
+                    return (
+                      <Tooltip key={tool.id}>
+                        <TooltipTrigger asChild>
+                          <motion.button
+                            whileHover={{ y: -1 }}
+                            whileTap={{ scale: 0.98 }}
+                            type="button"
+                            onClick={() => {
+                              handleSelectCinemaTool(tool.id);
+                              toast.success(`Switched to ${tool.label}`);
+                            }}
+                            className={`relative px-2.5 py-1 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all shrink-0 border ${
+                              isToolSelected
+                                ? 'bg-[#46ecd5]/15 text-[#46ecd5] border-[#46ecd5]/40 font-bold shadow-[0_0_15px_rgba(70,236,213,0.18)]'
+                                : 'bg-[#14161C] text-zinc-300 border-white/[0.05] hover:text-white hover:border-white/15'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-75" />
+                            <span>{tool.shortLabel}</span>
+                          </motion.button>
+                        </TooltipTrigger>
+                        <TooltipContent>{tool.description}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden lg:flex items-center gap-2 text-[10px] font-mono text-zinc-400 shrink-0">
+                  <span>ACTIVE TOOL:</span>
+                  <Badge variant="default" className="uppercase font-mono">
+                    {activeToolSpec.label}
+                  </Badge>
+                  <span>·</span>
+                  <span>ENGINE: {activeModel?.label}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {workingMode === 'auto_production' ? (
+            /* 4-STAGE GUIDED AUTOMATIC FILM PRODUCTION WORKFLOW */
+            <div className="flex-1 w-full max-w-[1480px] mx-auto px-3 sm:px-6 py-4 overflow-x-hidden">
+              <AutomaticProductionWorkflow
+                projectTitle={projectTitle}
+                productionType={productionType}
+                onProjectTitleChange={(t) => setProjectTitle(t)}
+                onOpenAdvancedStoryStudio={() => setWorkingMode('production')}
+              />
+            </div>
+          ) : workingMode === 'production' ? (
+            /* FULL STUDIO VAULT / 4-STAGE PIPELINE VIEW INSIDE UNIFIED SHELL */
+            <div className="flex-1 w-full max-w-[1560px] mx-auto px-3 sm:px-6 py-4 overflow-x-hidden">
+              {renderStudioVault ? (
+                renderStudioVault()
+              ) : (
+                <StoryStudioView onSwitchToLegacyCinema={() => setWorkingMode('director')} />
+              )}
+            </div>
+          ) : (
+            <>
+              {/* ============================================================
+                  CENTER VIEWPORT: UPPER-CENTRE SHOWCASE + GENEROUS EMPTY SPACE
+                  ============================================================ */}
+              <div className="flex-1 flex flex-col justify-center px-3 sm:px-8 py-4 sm:py-6 max-w-[1280px] w-full mx-auto">
+                {sidebarTab === 'elements' ? (
+                  /* @ MY ELEMENTS — REUSABLE CONTINUITY VAULT (ACETERNITY SPOTLIGHT CARDS + SHADCN SCROLLAREA) */
+                  <div className="space-y-5">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                      <div>
+                        <div className="text-xs font-mono-tabular text-sky-400 uppercase tracking-wider">
+                          @ MY ELEMENTS — REUSABLE CONTINUITY VAULT ({allReferences.length}/50 ACTIVE)
+                        </div>
+                        <h2 className="font-display text-2xl font-bold uppercase text-white mt-0.5">
+                          Characters, Locations, Wardrobes & Props
+                        </h2>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          onClick={() => {
+                            setActivePopover('film_setup');
+                            setFilmSetupTab('studio');
+                          }}
+                        >
+                          + Quick Create Element
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setWorkingMode('auto_production')}
+                        >
+                          Open Automatic Production
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Characters Column */}
+                      <SpotlightCard className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-[#46ecd5]" />
+                            <span>Characters ({characters.length})</span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              setSidebarTab('home');
+                              handleSelectCinemaTool('character_identity');
+                            }}
+                            className="text-[#46ecd5]"
+                          >
+                            + Character Tool
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-64 pr-1">
+                          <div className="space-y-2">
+                            {characters.map((c) => {
+                              const locked = activeContinuity.characterIds.includes(c.id);
+                              return (
+                                <div
+                                  key={c.id}
+                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                    locked
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
+                                      : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-white truncate">@{c.name}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">
+                                      {c.identityId} · {c.primaryLanguage}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant={locked ? 'default' : 'secondary'}
+                                    size="xs"
+                                    onClick={() =>
+                                      insertElementToken(`@${c.name.toUpperCase()}`, c.id)
+                                    }
+                                    className="shrink-0"
+                                  >
+                                    {locked ? 'In Shot' : '+ Cast'}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </SpotlightCard>
+
+                      {/* Locations Column */}
+                      <SpotlightCard className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                            <MapPin className="w-4 h-4 text-[#46ecd5]" />
+                            <span>Locations ({locations.length})</span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              setSidebarTab('home');
+                              handleSelectCinemaTool('location_environment');
+                            }}
+                            className="text-[#46ecd5]"
+                          >
+                            + Location Tool
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-64 pr-1">
+                          <div className="space-y-2">
+                            {locations.map((loc) => {
+                              const locked = activeContinuity.locationId === loc.id;
+                              return (
+                                <div
+                                  key={loc.id}
+                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                    locked
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
+                                      : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-white truncate">@{loc.name}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">
+                                      {loc.settingType} · {loc.timeOfDay} · {loc.weather}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant={locked ? 'default' : 'secondary'}
+                                    size="xs"
+                                    onClick={() =>
+                                      insertElementToken(
+                                        `@${loc.name.toUpperCase()}`,
+                                        undefined,
+                                        loc.id
+                                      )
+                                    }
+                                    className="shrink-0"
+                                  >
+                                    {locked ? 'Active Set' : '+ Set'}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </SpotlightCard>
+
+                      {/* Wardrobes Column */}
+                      <SpotlightCard className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                            <Shirt className="w-4 h-4 text-[#46ecd5]" />
+                            <span>Wardrobes ({wardrobes.length})</span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              setSidebarTab('home');
+                              handleSelectCinemaTool('wardrobe_outfit');
+                            }}
+                            className="text-[#46ecd5]"
+                          >
+                            + Wardrobe Tool
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-64 pr-1">
+                          <div className="space-y-2">
+                            {wardrobes.map((w) => {
+                              const locked = activeContinuity.wardrobeId === w.id;
+                              return (
+                                <div
+                                  key={w.id}
+                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                    locked
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
+                                      : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-white truncate">{w.name}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">
+                                      {w.category}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant={locked ? 'default' : 'secondary'}
+                                    size="xs"
+                                    onClick={() =>
+                                      setActiveContinuity((prev) => ({
+                                        ...prev,
+                                        wardrobeId: locked ? null : w.id,
+                                      }))
+                                    }
+                                    className="shrink-0"
+                                  >
+                                    {locked ? 'Locked' : '+ Outfit'}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </SpotlightCard>
+
+                      {/* Props Column */}
+                      <SpotlightCard className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                            <Package className="w-4 h-4 text-[#46ecd5]" />
+                            <span>Props ({propsList.length})</span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              setSidebarTab('home');
+                              handleSelectCinemaTool('prop_object');
+                            }}
+                            className="text-[#46ecd5]"
+                          >
+                            + Props Tool
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-64 pr-1">
+                          <div className="space-y-2">
+                            {propsList.map((p) => {
+                              const locked = activeContinuity.propIds.includes(p.id);
+                              return (
+                                <div
+                                  key={p.id}
+                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                    locked
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
+                                      : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-white truncate">{p.name}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">
+                                      {p.category}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant={locked ? 'default' : 'secondary'}
+                                    size="xs"
+                                    onClick={() =>
+                                      insertElementToken(
+                                        `[PROP: ${p.name}]`,
+                                        undefined,
+                                        undefined,
+                                        p.id
+                                      )
+                                    }
+                                    className="shrink-0"
+                                  >
+                                    {locked ? 'In Shot' : '+ Prop'}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </SpotlightCard>
+                    </div>
+                  </div>
+                ) : (
+                  /* UPPER-CENTRE MEDIA SHOWCASE ("COMMUNITIES") + HEADLINE (EXACT SCREENSHOT MATCH) */
+                  <div className="space-y-6 sm:space-y-8 my-auto py-4">
+                    <div className="flex flex-col items-center text-center space-y-5">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.18em] text-white">
+                          COMMUNITIES
+                        </span>
+                        {inspectedGen && inspectedGen.outputs[0] && (
+                          <button
+                            type="button"
+                            onClick={() => setShowLiveMonitor((v) => !v)}
+                            className="px-2.5 py-0.5 rounded-full bg-[#181A20] border border-white/15 text-[10px] font-mono text-[#46ecd5] hover:bg-white/10"
+                          >
+                            {showLiveMonitor ? 'Show Showcase Stack' : 'Show Latest Generated Shot'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Fanned 3-Card Media Showcase Stack (Exact Match to Screenshot) */}
+                      <div className="relative w-full max-w-xl h-44 sm:h-56 flex items-center justify-center px-4 select-none">
+                        {/* Back Right Fanned Card */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowLiveMonitor(false);
+                            setActiveShowcaseIdx((prev) => (prev + 2) % SHOWCASE_CARDS.length);
+                          }}
+                          className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-10 sm:translate-x-20 rotate-[4deg] scale-90 opacity-85 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
+                          title={orderedShowcase[2].title}
+                        >
+                          <img
+                            src={orderedShowcase[2].image}
+                            alt={orderedShowcase[2].title}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+
+                        {/* Middle Fanned Card */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowLiveMonitor(false);
+                            setActiveShowcaseIdx((prev) => (prev + 1) % SHOWCASE_CARDS.length);
+                          }}
+                          className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-5 sm:translate-x-10 rotate-[2deg] scale-95 opacity-95 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
+                          title={orderedShowcase[1].title}
+                        >
+                          <img
+                            src={orderedShowcase[1].image}
+                            alt={orderedShowcase[1].title}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+
+                        {/* Front Primary Showcase / Monitor Card */}
+                        <div
+                          onClick={() => {
+                            if (!showLiveMonitor) {
+                              setScenePrompt(orderedShowcase[0].prompt);
+                              showToast(`Loaded "${orderedShowcase[0].title}" prompt into composer`);
+                            }
+                          }}
+                          className="w-64 sm:w-[360px] h-40 sm:h-52 rounded-3xl overflow-hidden border border-white/20 bg-[#14161B] relative z-10 -translate-x-2 sm:-translate-x-4 shadow-[0_24px_60px_rgba(0,0,0,0.9)] cursor-pointer group transition-transform duration-300 hover:scale-[1.01]"
+                        >
+                          {showLiveMonitor && inspectedGen && inspectedGen.outputs[0] ? (
+                            inspectedGen.outputs[0].kind === 'video' ? (
+                              <video
+                                src={inspectedGen.outputs[0].url}
+                                controls
+                                loop
+                                muted
+                                autoPlay
+                                playsInline
+                                style={{
+                                  filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
+                                    0,
+                                    gradeWarmth
+                                  )}%)`,
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={inspectedGen.outputs[0].url}
+                                alt={inspectedGen.prompt}
+                                style={{
+                                  filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
+                                    0,
+                                    gradeWarmth
+                                  )}%)`,
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            )
+                          ) : (
+                            <>
+                              <img
+                                src={orderedShowcase[0].image}
+                                alt={orderedShowcase[0].title}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 text-left">
+                                <span className="text-[10px] font-mono text-[#46ecd5]">
+                                  {orderedShowcase[0].tag}
+                                </span>
+                                <span className="text-xs font-bold text-white">
+                                  {orderedShowcase[0].title} — Click to load prompt
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Center Headline from Screenshot */}
+                      <div className="pt-4 sm:pt-8 space-y-1">
+                        <h1 className="font-display text-2xl sm:text-4xl font-extrabold uppercase tracking-wider text-[#46ecd5]">
+                          HERE, YOUR IDEAS COMES ALIVE
+                        </h1>
+                      </div>
+                    </div>
+
+                    {/* Stage 5 & 6 Shot Inspector (Shown when user inspects or generates a live shot) */}
+                    {showLiveMonitor && inspectedGen && inspectedGen.outputs[0] && (
+                      <div className="rounded-2xl bg-[#121418] border border-white/10 p-3.5 max-w-[980px] mx-auto space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="px-2 py-0.5 rounded bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-[10px] font-mono font-bold text-[#46ecd5] uppercase">
+                              {studioConfig.shortBadge} SHOT INSPECTOR
+                            </span>
+                            <span className="text-xs font-bold text-white truncate">
+                              {inspectedGen.modelLabel} · {inspectedGen.prompt.slice(0, 65)}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleAddGenerationAsReference(inspectedGen.id)}
+                              className="px-2.5 py-1 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3 text-[#46ecd5]" />
+                              <span>Use as Ref ({allReferences.length}/50)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleExtendShot('forward')}
+                              className="px-2.5 py-1 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <ArrowRight className="w-3 h-3 text-[#46ecd5]" />
+                              <span>Extend +5s</span>
+                            </button>
+
+                            <a
+                              href={inspectedGen.outputs[0].url}
+                              download={`spacix-${studioId}-${inspectedGen.id}`}
+                              className="px-2.5 py-1 rounded-xl bg-[#46ecd5] text-zinc-950 text-[11px] font-bold flex items-center gap-1"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Download</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Favorites or Project Subfolder Drawer when selected from Sidebar */}
+                    {(sidebarTab === 'favorites' || sidebarTab === 'project') &&
+                      generations.length > 0 && (
+                        <div className="max-w-[980px] mx-auto space-y-2.5 pt-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                              {sidebarTab === 'favorites'
+                                ? `Saved Favorites (${favoriteGenIds.length})`
+                                : `${projectTitle} · Dailies (${generations.length})`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSidebarTab('home')}
+                              className="text-[11px] text-zinc-400 hover:text-white"
+                            >
+                              Close Strip
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {generations
+                              .filter((g) =>
+                                sidebarTab === 'favorites'
+                                  ? favoriteGenIds.includes(g.id)
+                                  : activeSubfolder === 'deliverables'
+                                  ? deliverableIds.includes(g.id)
+                                  : true
+                              )
+                              .slice(0, 4)
+                              .map((gen) => {
+                                const out = gen.outputs[0];
+                                const isFav = favoriteGenIds.includes(gen.id);
+                                return (
+                                  <div
+                                    key={gen.id}
+                                    onClick={() => {
+                                      setInspectedGenId(gen.id);
+                                      setShowLiveMonitor(true);
+                                    }}
+                                    className="cursor-pointer rounded-xl overflow-hidden bg-[#14161B] border border-white/10 hover:border-[#46ecd5]"
+                                  >
+                                    <div className="aspect-video bg-black relative">
+                                      {out ? (
+                                        out.kind === 'video' ? (
+                                          <video
+                                            src={out.url}
+                                            muted
+                                            loop
+                                            playsInline
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <img
+                                            src={out.url}
+                                            alt={gen.prompt}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        )
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFavoriteGenIds((prev) =>
+                                            prev.includes(gen.id)
+                                              ? prev.filter((id) => id !== gen.id)
+                                              : [...prev, gen.id]
+                                          );
+                                        }}
+                                        className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-zinc-300"
+                                      >
+                                        <Heart
+                                          className={`w-3 h-3 ${
+                                            isFav ? 'text-pink-400 fill-pink-400' : ''
+                                          }`}
+                                        />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* ============================================================
+                  RADIX UI DIALOG DIRECTOR'S PANEL (ABOVE COMPOSER)
+                  Matching Screenshots: Film setup, Camera, Color palette, Lighting
+                  ============================================================ */}
+              <Dialog
+                open={Boolean(activePopover)}
+                onOpenChange={(open) => {
+                  if (!open) setActivePopover(null);
+                }}
+              >
+                <DialogContent className="max-w-[1040px] w-[96vw] p-0 bg-transparent border-none shadow-none overflow-visible">
+                  <DialogTitle className="sr-only">Cinema Studio Director Controls</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Configure visual references, film setup, camera optics, color grading palettes, lighting schemes, and AI engines.
+                  </DialogDescription>
+                  <div className="w-full max-h-[85vh] overflow-y-auto space-y-2.5">
+                    {/* Top Radix / Framer Motion Quick-Switch Pill Bar across all Director Controls */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[#12141B]/95 backdrop-blur-xl border border-white/15 shadow-2xl">
+                      <AnimatedPillTabs
+                        layoutId="director-modal-top-switcher"
+                        activeId={activePopover === 'at_elements' ? 'references' : activePopover || 'film_setup'}
+                        items={[
+                          { id: 'references', label: `References (${allReferences.length}/50)` },
+                          { id: 'film_setup', label: 'Film Setup' },
+                          { id: 'camera', label: 'Camera & Lens' },
+                          { id: 'color_palette', label: 'Color Palette' },
+                          { id: 'lighting', label: 'Lighting' },
+                          { id: 'models', label: 'AI Engine' },
+                        ]}
+                        onChange={(tabId) =>
+                          setActivePopover(
+                            tabId as
+                              | 'references'
+                              | 'film_setup'
+                              | 'camera'
+                              | 'color_palette'
+                              | 'lighting'
+                              | 'models'
+                          )
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => setActivePopover(null)}
+                        className="rounded-xl"
+                      >
+                        Done (Esc)
+                      </Button>
+                    </div>
+                    {/* 1. FILM SETUP & STUDIO SETUP POPOVER MODAL */}
+                    {activePopover === 'film_setup' && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-white/10">
+                          <span className="text-base font-bold text-white">
+                            {studioConfig.setupCardLabel}
+                          </span>
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedProjId(proj.id);
-                                setProjectTitle(proj.title);
-                                setProductionType(proj.productionType);
-                                setAspectRatio(proj.aspectRatio);
-                                setSidebarTab('project');
+                                setActivePopover(null);
+                                setWorkingMode('production');
                               }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs transition-all ${
-                                isSelected
-                                  ? 'bg-[#46ecd5]/15 text-[#46ecd5] font-bold border border-[#46ecd5]/30'
-                                  : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                              className="px-3 py-1.5 rounded-full bg-[#46ecd5]/15 hover:bg-[#46ecd5]/25 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5]"
+                            >
+                              Open Full {studioConfig.vaultButtonLabel}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFilmSetup({ genre: 'Auto', era: 'Auto', tempo: 'Auto' })
+                              }
+                              className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
+                            >
+                              Reset all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePopover(null)}
+                              className="p-1.5 rounded-full text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-12 min-h-[300px] sm:min-h-[340px]">
+                          {/* Left Tabs: Studio Controls (when in specialized studio) + Genre, Era, Tempo */}
+                          <div className="sm:col-span-3 border-b sm:border-b-0 sm:border-r border-white/10 p-2.5 sm:p-3 flex sm:flex-col gap-1.5 sm:space-y-1 overflow-x-auto">
+                            {studioId !== 'cinema' && (
+                              <button
+                                type="button"
+                                onClick={() => setFilmSetupTab('studio')}
+                                className={`flex-1 sm:w-full flex items-center justify-between gap-2 px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                  filmSetupTab === 'studio'
+                                    ? 'bg-[#25272E] text-[#46ecd5]'
+                                    : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                <span>{studioConfig.shortBadge}</span>
+                                <span className="w-2 h-2 rounded-full bg-[#46ecd5]" />
+                              </button>
+                            )}
+                            {(
+                              [
+                                { id: 'genre', label: 'Genre', activeVal: filmSetup.genre },
+                                { id: 'era', label: 'Era', activeVal: filmSetup.era },
+                                { id: 'tempo', label: 'Tempo', activeVal: filmSetup.tempo },
+                              ] as const
+                            ).map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setFilmSetupTab(tab.id)}
+                                className={`flex-1 sm:w-full flex items-center justify-between gap-2 px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                  filmSetupTab === tab.id
+                                    ? 'bg-[#25272E] text-white'
+                                    : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                <span>{tab.label}</span>
+                                {tab.activeVal !== 'Auto' && (
+                                  <span className="w-2 h-2 rounded-full bg-lime-400" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Right Content Area */}
+                          <div className="sm:col-span-9 p-4 sm:p-6 flex flex-col justify-between">
+                            {filmSetupTab === 'studio' && (
+                              <div className="space-y-4 text-xs">
+                                {studioId === 'character' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Character Identity & Voice Lock
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Create a permanent character identity or lock a saved character into the composer
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                      <input
+                                        type="text"
+                                        value={quickCharName}
+                                        onChange={(e) => setQuickCharName(e.target.value)}
+                                        placeholder="Character Name (e.g. Kemi)"
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={quickCharRole}
+                                        onChange={(e) => setQuickCharRole(e.target.value)}
+                                        placeholder="Role (e.g. Lead Detective)"
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <select
+                                        value={quickCharLang}
+                                        onChange={(e) =>
+                                          setQuickCharLang(
+                                            e.target.value as SupportedCharacterLanguage
+                                          )
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {SUPPORTED_LANGUAGES.map((l) => (
+                                          <option key={l} value={l}>
+                                            Voice: {l}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={quickCharFeatures}
+                                        onChange={(e) => setQuickCharFeatures(e.target.value)}
+                                        placeholder="Appearance & distinctive features..."
+                                        className="flex-1 px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleQuickSaveCharacter}
+                                        className="px-4 py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold shrink-0"
+                                      >
+                                        + Save & Lock ID
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 pt-2">
+                                      {characters.map((c) => {
+                                        const locked = activeContinuity.characterIds.includes(c.id);
+                                        return (
+                                          <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() =>
+                                              insertElementToken(`@${c.name.toUpperCase()}`, c.id)
+                                            }
+                                            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+                                              locked
+                                                ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-[#46ecd5]'
+                                                : 'bg-[#22242B] border-white/10 text-zinc-300'
+                                            }`}
+                                          >
+                                            @{c.name} [{c.identityId}]
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+
+                                {studioId === 'motion' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Motion Transfer & Pose Rig
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Transfer reference-video movement onto your locked character
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                      <input
+                                        type="text"
+                                        value={quickMotionName}
+                                        onChange={(e) => setQuickMotionName(e.target.value)}
+                                        placeholder="Motion Preset Name"
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <select
+                                        value={quickMotionCat}
+                                        onChange={(e) =>
+                                          setQuickMotionCat(e.target.value as MotionCategory)
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Walking',
+                                          'Running',
+                                          'Dancing',
+                                          'Fighting',
+                                          'Gesture & Hand',
+                                          'Facial Performance',
+                                          'Camera Path',
+                                        ].map((cat) => (
+                                          <option key={cat} value={cat}>
+                                            {cat}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={handleQuickSaveMotion}
+                                        className="px-4 py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold"
+                                      >
+                                        + Save Motion Rig
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {motionTemplates.map((m) => (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveContinuity((prev) => ({
+                                              ...prev,
+                                              motionTemplateId: m.id,
+                                            }));
+                                            setScenePrompt((prev) =>
+                                              `${prev} [MOTION: ${m.name} - ${m.movementCategory}]`.trim()
+                                            );
+                                          }}
+                                          className={`px-3 py-1.5 rounded-xl border text-xs ${
+                                            activeContinuity.motionTemplateId === m.id
+                                              ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-[#46ecd5]'
+                                              : 'bg-[#22242B] border-white/10 text-zinc-300'
+                                          }`}
+                                        >
+                                          {m.name} ({m.movementCategory})
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+
+                                {studioId === 'wardrobe' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Wardrobe & Outfit Continuity
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Create and lock character outfits across scenes
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                      <input
+                                        type="text"
+                                        value={quickWardrobeName}
+                                        onChange={(e) => setQuickWardrobeName(e.target.value)}
+                                        placeholder="Outfit Name (e.g. Royal Indigo Agbada)"
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <select
+                                        value={quickWardrobeCat}
+                                        onChange={(e) =>
+                                          setQuickWardrobeCat(e.target.value as WardrobeCategory)
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Traditional',
+                                          'Formal',
+                                          'Casual',
+                                          'Corporate',
+                                          'Futuristic',
+                                          'Costume',
+                                          'Streetwear',
+                                          'Tactical',
+                                        ].map((c) => (
+                                          <option key={c} value={c}>
+                                            {c}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={quickWardrobeGarments}
+                                        onChange={(e) => setQuickWardrobeGarments(e.target.value)}
+                                        placeholder="Garments, fabrics, footwear & jewellery..."
+                                        className="flex-1 px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleQuickSaveWardrobe}
+                                        className="px-4 py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold shrink-0"
+                                      >
+                                        + Save Outfit
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+
+                                {studioId === 'props' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Hero Props & Vehicles Registry
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Register a reusable prop with locked finish and scale
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                      <input
+                                        type="text"
+                                        value={quickPropName}
+                                        onChange={(e) => setQuickPropName(e.target.value)}
+                                        placeholder="Prop Name (e.g. Matte-Black Defender)"
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <select
+                                        value={quickPropCat}
+                                        onChange={(e) =>
+                                          setQuickPropCat(e.target.value as PropCategory)
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Cars & Vehicles',
+                                          'Phones & Tech',
+                                          'Furniture',
+                                          'Weapons & Action',
+                                          'Bags & Luggage',
+                                          'Hero Artifacts',
+                                        ].map((c) => (
+                                          <option key={c} value={c}>
+                                            {c}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={quickPropFinish}
+                                        onChange={(e) => setQuickPropFinish(e.target.value)}
+                                        placeholder="Material & finish..."
+                                        className="flex-1 px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleQuickSaveProp}
+                                        className="px-4 py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold shrink-0"
+                                      >
+                                        + Save Prop
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+
+                                {studioId === 'location' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Filming Location & Environment Lock
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Register an INT./EXT. filming location with locked weather & time of day
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                      <select
+                                        value={quickLocSetting}
+                                        onChange={(e) =>
+                                          setQuickLocSetting(
+                                            e.target.value as 'INT.' | 'EXT.' | 'INT./EXT.'
+                                          )
+                                        }
+                                        className="px-2.5 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        <option value="EXT.">EXT.</option>
+                                        <option value="INT.">INT.</option>
+                                        <option value="INT./EXT.">INT./EXT.</option>
+                                      </select>
+                                      <input
+                                        type="text"
+                                        value={quickLocName}
+                                        onChange={(e) => setQuickLocName(e.target.value)}
+                                        placeholder="Location Name"
+                                        className="sm:col-span-2 px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      />
+                                      <select
+                                        value={quickLocCat}
+                                        onChange={(e) =>
+                                          setQuickLocCat(e.target.value as LocationCategory)
+                                        }
+                                        className="px-2.5 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Cities',
+                                          'Houses',
+                                          'Offices',
+                                          'Streets',
+                                          'Villages',
+                                          'Landscapes',
+                                          'Studios & Sets',
+                                        ].map((c) => (
+                                          <option key={c} value={c}>
+                                            {c}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={quickLocTime}
+                                        onChange={(e) =>
+                                          setQuickLocTime(
+                                            e.target.value as LocationItem['timeOfDay']
+                                          )
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Night',
+                                          'Day',
+                                          'Golden Hour',
+                                          'Sunset',
+                                          'Dawn',
+                                          'Blue Hour',
+                                        ].map((t) => (
+                                          <option key={t} value={t}>
+                                            {t}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <select
+                                        value={quickLocWeather}
+                                        onChange={(e) =>
+                                          setQuickLocWeather(
+                                            e.target.value as LocationItem['weather']
+                                          )
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {[
+                                          'Rain',
+                                          'Clear',
+                                          'Fog',
+                                          'Harmattan Dust',
+                                          'Overcast',
+                                          'Storm',
+                                        ].map((w) => (
+                                          <option key={w} value={w}>
+                                            {w}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={handleQuickSaveLocation}
+                                        className="px-4 py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold ml-auto"
+                                      >
+                                        + Save Set
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+
+                                {studioId === 'lipsync' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Multilingual Lip-Sync & Voice Performance
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Synchronize spoken dialogue with your locked character identity
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                      <select
+                                        value={quickLipSyncLang}
+                                        onChange={(e) =>
+                                          setQuickLipSyncLang(
+                                            e.target.value as SupportedCharacterLanguage
+                                          )
+                                        }
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {SUPPORTED_LANGUAGES.map((l) => (
+                                          <option key={l} value={l}>
+                                            Language: {l}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <select
+                                        value={selectedEmotion}
+                                        onChange={(e) => setSelectedEmotion(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        {EMOTION_DIRECTIONS.map((em) => (
+                                          <option key={em} value={em}>
+                                            Expression: {em}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <textarea
+                                      rows={2}
+                                      value={quickLipSyncLine}
+                                      onChange={(e) => setQuickLipSyncLine(e.target.value)}
+                                      placeholder="Enter spoken dialogue line to lip-sync..."
+                                      className="w-full px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                    />
+                                  </>
+                                )}
+
+                                {studioId === 'effects' && (
+                                  <>
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        Camera Rigs & Visual Effects Presets
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Click any VFX preset to load its optical template into the composer
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto">
+                                      {presets.map((p) => (
+                                        <button
+                                          key={p.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setScenePrompt(p.promptTemplate);
+                                            setDockSurface(
+                                              p.surface === 'image' ? 'image' : 'video'
+                                            );
+                                            showToast(`Loaded "${p.title}" into composer`);
+                                          }}
+                                          className="p-2.5 rounded-xl bg-[#22242B] hover:bg-[#2C2F38] border border-white/10 text-left space-y-1"
+                                        >
+                                          <div className="font-bold text-white truncate">
+                                            {p.title}
+                                          </div>
+                                          <div className="text-[10px] text-[#46ecd5]">
+                                            {p.category}
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+
+                                {(studioId === 'marketing' ||
+                                  studioId === 'storyboard' ||
+                                  studioId === 'canvas' ||
+                                  studioId === 'editing') && (
+                                  <div className="space-y-3">
+                                    <div>
+                                      <div className="text-sm font-bold text-white">
+                                        {studioConfig.title} Quick Configuration
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        Configure format and continuity assets or open the full {studioConfig.vaultButtonLabel}
+                                      </div>
+                                    </div>
+                                    {studioId === 'marketing' && (
+                                      <select
+                                        value={quickMarketingFormat}
+                                        onChange={(e) => {
+                                          setQuickMarketingFormat(e.target.value);
+                                          if (e.target.value.includes('9:16')) {
+                                            setAspectRatio('9:16');
+                                          } else {
+                                            setAspectRatio('16:9');
+                                          }
+                                        }}
+                                        className="w-full px-3 py-2 rounded-xl bg-[#22242B] border border-white/10 text-white"
+                                      >
+                                        <option value="UGC Creator Review (9:16)">
+                                          UGC Creator Review (9:16 Vertical)
+                                        </option>
+                                        <option value="Hero Product Commercial (16:9)">
+                                          Hero Product Commercial (16:9 Widescreen)
+                                        </option>
+                                        <option value="Social Brand Hook (9:16)">
+                                          Social Brand Hook (9:16 Vertical)
+                                        </option>
+                                      </select>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePopover(null);
+                                        setWorkingMode('production');
+                                      }}
+                                      className="px-4 py-2.5 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold inline-flex items-center gap-2"
+                                    >
+                                      <Layers className="w-4 h-4" />
+                                      <span>Launch Full {studioConfig.vaultButtonLabel}</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {filmSetupTab === 'genre' && (
+                              <>
+                                <div>
+                                  <div className="text-sm font-bold text-white">Select genre</div>
+                                  <div className="text-xs text-zinc-400">
+                                    Story conventions the model should follow
+                                  </div>
+                                </div>
+
+                                <div className="my-4 flex items-center justify-center gap-4">
+                                  {GENRE_PRESETS.map((g) => {
+                                    const isSel =
+                                      (filmSetup.genre === 'Auto' && g.id === 'General') ||
+                                      filmSetup.genre === g.id;
+                                    if (!isSel) return null;
+                                    return (
+                                      <div
+                                        key={g.id}
+                                        className={`w-72 h-40 rounded-2xl border border-white/20 bg-gradient-to-br ${g.gradient} p-5 flex flex-col justify-end relative shadow-2xl`}
+                                      >
+                                        <span className="w-2 h-2 rounded-full bg-lime-400 absolute bottom-3 right-3" />
+                                        <div className="text-sm font-extrabold text-white">
+                                          {g.label}
+                                        </div>
+                                        <div className="text-[11px] text-zinc-300">
+                                          {g.subtitle}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFilmSetup((prev) => ({
+                                          ...prev,
+                                          genre: cycleWheelOption(
+                                            GENRE_PRESETS,
+                                            prev.genre === 'Auto' ? 'General' : prev.genre,
+                                            -1
+                                          ),
+                                        }))
+                                      }
+                                      className="w-8 h-8 rounded-full bg-[#25272E] hover:bg-[#30333C] border border-white/10 flex items-center justify-center text-zinc-200"
+                                    >
+                                      <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <div className="px-6 py-1.5 rounded-full bg-[#25272E] border border-white/15 text-xs font-bold text-white min-w-[120px] text-center">
+                                      {filmSetup.genre === 'Auto' ? 'General' : filmSetup.genre}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFilmSetup((prev) => ({
+                                          ...prev,
+                                          genre: cycleWheelOption(
+                                            GENRE_PRESETS,
+                                            prev.genre === 'Auto' ? 'General' : prev.genre,
+                                            1
+                                          ),
+                                        }))
+                                      }
+                                      className="w-8 h-8 rounded-full bg-[#25272E] hover:bg-[#30333C] border border-white/10 flex items-center justify-center text-zinc-200"
+                                    >
+                                      <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                    {GENRE_PRESETS.map((g) => (
+                                      <button
+                                        key={g.id}
+                                        type="button"
+                                        onClick={() =>
+                                          setFilmSetup((prev) => ({ ...prev, genre: g.id }))
+                                        }
+                                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                                          filmSetup.genre === g.id
+                                            ? 'bg-lime-400 text-zinc-950 font-bold'
+                                            : 'bg-[#22242A] text-zinc-400 hover:text-white'
+                                        }`}
+                                      >
+                                        {g.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {filmSetupTab === 'era' && (
+                              <>
+                                <div>
+                                  <div className="text-sm font-bold text-white">Select era</div>
+                                  <div className="text-xs text-zinc-400">
+                                    The period the film belongs to
+                                  </div>
+                                </div>
+
+                                <div className="my-4 flex flex-col items-center gap-5">
+                                  <div className="w-72 h-36 rounded-2xl border border-white/20 bg-gradient-to-tr from-indigo-500/40 via-amber-400/35 to-rose-500/40 p-5 flex flex-col justify-end shadow-2xl">
+                                    <div className="text-xs font-mono uppercase text-lime-300">
+                                      OPTICAL PERIOD STOCK
+                                    </div>
+                                    <div className="text-base font-extrabold text-white">
+                                      {filmSetup.era}
+                                    </div>
+                                  </div>
+
+                                  <div className="w-full max-w-lg space-y-2">
+                                    <div className="flex items-end justify-between px-4 h-7">
+                                      {Array.from({ length: 25 }).map((_, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={`w-0.5 rounded-full ${
+                                            idx === 12
+                                              ? 'h-7 bg-lime-400'
+                                              : idx % 4 === 0
+                                              ? 'h-5 bg-zinc-500'
+                                              : 'h-3 bg-zinc-700'
+                                          }`}
+                                        />
+                                      ))}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                                      {ERA_PRESETS.map((era) => {
+                                        const active = filmSetup.era === era.id;
+                                        return (
+                                          <button
+                                            key={era.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setFilmSetup((prev) => ({ ...prev, era: era.id }))
+                                            }
+                                            className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                                              active
+                                                ? 'text-lime-400 text-sm sm:text-base scale-110'
+                                                : 'text-zinc-500 hover:text-zinc-300'
+                                            }`}
+                                          >
+                                            {era.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {filmSetupTab === 'tempo' && (
+                              <>
+                                <div>
+                                  <div className="text-sm font-bold text-white">Select tempo</div>
+                                  <div className="text-xs text-zinc-400">
+                                    Pacing of the montage
+                                  </div>
+                                </div>
+
+                                <div className="my-4 flex items-center justify-center">
+                                  {TEMPO_PRESETS.map((t) => {
+                                    if (t.id !== filmSetup.tempo) return null;
+                                    return (
+                                      <div
+                                        key={t.id}
+                                        className="w-80 h-40 rounded-2xl border border-white/20 bg-gradient-to-br from-emerald-600/40 via-teal-900/50 to-zinc-950 p-4 flex flex-col justify-between shadow-2xl"
+                                      >
+                                        <div className="text-xs font-bold text-white">
+                                          {t.label} Pacing
+                                        </div>
+                                        <div className="space-y-2">
+                                          <div className="text-[11px] text-zinc-200">
+                                            {t.subtitle}
+                                          </div>
+                                          <div className="grid grid-cols-5 gap-1.5 pt-1">
+                                            {Array.from({ length: 5 }).map((_, idx) => (
+                                              <div
+                                                key={idx}
+                                                className={`h-1.5 rounded-full ${
+                                                  idx < t.bars ? 'bg-lime-400' : 'bg-white/20'
+                                                }`}
+                                              />
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-center gap-2">
+                                  {TEMPO_PRESETS.map((t) => (
+                                    <button
+                                      key={t.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setFilmSetup((prev) => ({ ...prev, tempo: t.id }))
+                                      }
+                                      className={`px-4 py-1.5 rounded-full text-xs font-bold border ${
+                                        filmSetup.tempo === t.id
+                                          ? 'bg-[#282B33] border-white/30 text-white'
+                                          : 'bg-[#1F2127] border-white/5 text-zinc-400 hover:text-white'
+                                      }`}
+                                    >
+                                      {t.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. CAMERA POPOVER MODAL (Setup 3-Drum Wheels + Movement Grid) */}
+                    {activePopover === 'camera' && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                          <span className="text-base font-bold text-white">
+                            {studioConfig.cameraCardLabel}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCameraOptics({
+                                  camera: 'Auto',
+                                  lens: 'Auto',
+                                  aperture: 'Auto',
+                                  movements: [],
+                                })
+                              }
+                              className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
+                            >
+                              Reset all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePopover(null)}
+                              className="p-1.5 rounded-full text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-12 min-h-[300px] sm:min-h-[360px]">
+                          <div className="sm:col-span-3 border-b sm:border-b-0 sm:border-r border-white/10 p-2.5 sm:p-3 flex sm:flex-col gap-1.5 sm:space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => setCameraModalTab('setup')}
+                              className={`flex-1 sm:w-full flex items-center justify-between px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                cameraModalTab === 'setup'
+                                  ? 'bg-[#25272E] text-white'
+                                  : 'text-zinc-400 hover:text-white'
                               }`}
                             >
-                              <span className="truncate">{proj.title}</span>
-                              <span className="text-[10px] font-mono-tabular opacity-75">
-                                {proj.aspectRatio}
-                              </span>
+                              <span>Setup</span>
+                              {(cameraOptics.camera !== 'Auto' ||
+                                cameraOptics.lens !== 'Auto' ||
+                                cameraOptics.aperture !== 'Auto') && (
+                                <span className="w-2 h-2 rounded-full bg-lime-400" />
+                              )}
                             </button>
-                            {isSelected && (
-                              <div className="pl-4 space-y-0.5 text-[11px]">
-                                {(
-                                  [
-                                    { id: 'scenes', label: `Scenes (${proj.scenes?.length || 1})` },
-                                    { id: 'versions', label: `Versions (${generations.length})` },
-                                    {
-                                      id: 'deliverables',
-                                      label: `Deliverables (${deliverableIds.length})`,
-                                    },
-                                  ] as const
-                                ).map((folder) => (
+                            <button
+                              type="button"
+                              onClick={() => setCameraModalTab('movement')}
+                              className={`flex-1 sm:w-full flex items-center justify-between px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                cameraModalTab === 'movement'
+                                  ? 'bg-[#25272E] text-white'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              <span>Movement</span>
+                              {cameraOptics.movements.length > 0 && (
+                                <span className="px-1.5 py-0.2 rounded-full bg-lime-400 text-zinc-950 text-[10px]">
+                                  {cameraOptics.movements.length}
+                                </span>
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="sm:col-span-9 p-3.5 sm:p-5">
+                            {cameraModalTab === 'setup' ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 h-full">
+                                {/* Column 1: CAMERA */}
+                                <div className="flex flex-col items-center justify-between py-2 border-r border-white/5">
+                                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                                    CAMERA
+                                  </div>
                                   <button
-                                    key={folder.id}
                                     type="button"
-                                    onClick={() => {
-                                      setActiveSubfolder(folder.id);
-                                      setSidebarTab('project');
-                                    }}
-                                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded ${
-                                      activeSubfolder === folder.id && sidebarTab === 'project'
-                                        ? 'text-[#46ecd5] bg-white/5 font-semibold'
-                                        : 'text-zinc-500 hover:text-zinc-300'
-                                    }`}
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        camera: cycleWheelOption(CAMERA_BODIES, prev.camera, -1),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
                                   >
-                                    <Folder className="w-3 h-3" />
-                                    <span>{folder.label}</span>
+                                    <ChevronUp className="w-3.5 h-3.5" />
                                   </button>
-                                ))}
+
+                                  <div className="w-full px-3 space-y-2">
+                                    {CAMERA_BODIES.map((cam) => {
+                                      const active = cameraOptics.camera === cam.id;
+                                      return (
+                                        <button
+                                          key={cam.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setCameraOptics((prev) => ({
+                                              ...prev,
+                                              camera: cam.id,
+                                            }))
+                                          }
+                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                            active
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                          }`}
+                                        >
+                                          <span className="text-xs font-bold">{cam.label}</span>
+                                          <span className="text-[10px] opacity-75">{cam.sub}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        camera: cycleWheelOption(CAMERA_BODIES, prev.camera, 1),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                {/* Column 2: LENS */}
+                                <div className="flex flex-col items-center justify-between py-2 border-r border-white/5">
+                                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                                    LENS
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        lens: cycleWheelOption(LENS_OPTICS, prev.lens, -1),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
+                                  >
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <div className="w-full px-3 space-y-2">
+                                    {LENS_OPTICS.map((lens) => {
+                                      const active = cameraOptics.lens === lens.id;
+                                      return (
+                                        <button
+                                          key={lens.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setCameraOptics((prev) => ({
+                                              ...prev,
+                                              lens: lens.id,
+                                            }))
+                                          }
+                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                            active
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                          }`}
+                                        >
+                                          <span className="text-xs font-bold">{lens.label}</span>
+                                          <span className="text-[10px] opacity-75">{lens.sub}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        lens: cycleWheelOption(LENS_OPTICS, prev.lens, 1),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                {/* Column 3: APERTURE */}
+                                <div className="flex flex-col items-center justify-between py-2">
+                                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                                    APERTURE
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        aperture: cycleWheelOption(
+                                          APERTURE_STOPS,
+                                          prev.aperture,
+                                          -1
+                                        ),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
+                                  >
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <div className="w-full px-3 space-y-2">
+                                    {APERTURE_STOPS.map((ap) => {
+                                      const active = cameraOptics.aperture === ap.id;
+                                      return (
+                                        <button
+                                          key={ap.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setCameraOptics((prev) => ({
+                                              ...prev,
+                                              aperture: ap.id,
+                                            }))
+                                          }
+                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                            active
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                          }`}
+                                        >
+                                          <span className="text-xs font-bold">{ap.label}</span>
+                                          <span className="text-[10px] opacity-75">{ap.sub}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCameraOptics((prev) => ({
+                                        ...prev,
+                                        aperture: cycleWheelOption(
+                                          APERTURE_STOPS,
+                                          prev.aperture,
+                                          1
+                                        ),
+                                      }))
+                                    }
+                                    className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-bold text-white">
+                                      Direct a camera move
+                                    </div>
+                                    <div className="text-xs text-zinc-400">
+                                      Adds to the prompt box, or type{' '}
+                                      <span className="text-lime-400 font-mono">#</span> there.
+                                      Several per shot; order matters.
+                                    </div>
+                                  </div>
+                                  <div className="relative">
+                                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                    <input
+                                      type="text"
+                                      value={movementSearch}
+                                      onChange={(e) => setMovementSearch(e.target.value)}
+                                      placeholder="Search moves..."
+                                      className="pl-8 pr-3 py-1.5 rounded-xl bg-[#22242B] border border-white/10 text-xs text-white"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-1">
+                                  {CAMERA_MOVEMENTS.filter((m) =>
+                                    !movementSearch.trim()
+                                      ? true
+                                      : m.label
+                                          .toLowerCase()
+                                          .includes(movementSearch.toLowerCase())
+                                  ).map((move) => {
+                                    const orderIdx = cameraOptics.movements.indexOf(move.label);
+                                    const isSelected = orderIdx >= 0;
+                                    return (
+                                      <button
+                                        key={move.id}
+                                        type="button"
+                                        onClick={() => toggleCameraMovement(move.label)}
+                                        className="group text-center space-y-1.5 focus:outline-none"
+                                      >
+                                        <div
+                                          className={`aspect-[4/3] rounded-2xl bg-gradient-to-br ${
+                                            move.gradient
+                                          } border transition-all p-3 flex flex-col justify-between relative overflow-hidden ${
+                                            isSelected
+                                              ? 'border-lime-400 ring-2 ring-lime-400/30'
+                                              : 'border-white/10 group-hover:border-white/30'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span className="px-1.5 py-0.5 rounded bg-black/50 text-[10px] font-mono text-lime-300">
+                                              #{move.label.replace(/\s+/g, '')}
+                                            </span>
+                                            {isSelected && (
+                                              <span className="w-5 h-5 rounded-full bg-lime-400 text-zinc-950 text-[10px] font-extrabold flex items-center justify-center">
+                                                {orderIdx + 1}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="text-[11px] text-zinc-200 text-left">
+                                            {move.desc}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs font-semibold text-white">
+                                          {move.label}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             )}
                           </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Community Button */}
-            <div className="p-3 border-t border-white/10">
-              <button
-                type="button"
-                onClick={() => navigate('explore')}
-                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 transition-all"
-              >
-                <span className="w-7 h-7 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0">
-                  <Compass className="w-3.5 h-3.5 text-[#46ecd5]" />
-                </span>
-                {!sidebarCollapsed && <span>Community</span>}
-              </button>
-            </div>
-          </aside>
-
-          {/* ================================================================
-              B. CENTER DIRECTING WORKSPACE + FLOATING COMMAND DOCK
-              ================================================================ */}
-          <main className="flex-1 flex flex-col justify-between overflow-y-auto relative bg-[#0A0B0E]">
-            {/* Top Project Status Bar */}
-            <div className="px-4 sm:px-8 py-3 border-b border-white/5 flex flex-wrap items-center justify-between gap-3 bg-[#0D0E12]/80 backdrop-blur-md sticky top-0 z-10">
-              <div className="flex items-center gap-3">
-                <span className="px-2 py-0.5 rounded bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-[10px] font-mono-tabular font-bold text-[#46ecd5] uppercase">
-                  {productionType}
-                </span>
-                <input
-                  type="text"
-                  value={projectTitle}
-                  onChange={(e) => setProjectTitle(e.target.value)}
-                  aria-label="Production title"
-                  className="bg-transparent text-sm sm:text-base font-extrabold text-white focus:outline-none border-b border-transparent focus:border-[#46ecd5] px-1"
-                />
-                <span className="text-[11px] text-emerald-400 font-mono-tabular flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  <span>Continuity Active ({allReferences.length}/50 Refs)</span>
-                </span>
-              </div>
-
-              {/* Active Continuity Quick-Pills */}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('elements')}
-                  className="px-2.5 py-1 rounded-lg bg-[#16181D] hover:bg-[#1E2128] border border-white/10 text-zinc-300 flex items-center gap-1.5"
-                >
-                  <Users className="w-3.5 h-3.5 text-sky-400" />
-                  <span>
-                    Cast ({activeContinuity.characterIds.length}/{characters.length})
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWorkingMode('production')}
-                  className="px-2.5 py-1 rounded-lg bg-[#16181D] hover:bg-[#1E2128] border border-white/10 text-zinc-300 flex items-center gap-1.5"
-                >
-                  <Clapperboard className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span>Script & Storyboard</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('editing')}
-                  className="px-2.5 py-1 rounded-lg bg-[#16181D] hover:bg-[#1E2128] border border-white/10 text-zinc-300 flex items-center gap-1.5"
-                >
-                  <Sliders className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span>Video Timeline</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ==============================================================
-                CENTER VIEWPORT CONTENT (HOME / ELEMENTS / FAVORITES / PROJECT)
-                ============================================================== */}
-            <div className="flex-1 px-4 sm:px-8 py-6 max-w-[1360px] w-full mx-auto space-y-8">
-              {sidebarTab === 'elements' ? (
-                /* C. REFERENCE AND ELEMENTS LIBRARY (@ MY ELEMENTS) */
-                <div className="space-y-6">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
-                    <div>
-                      <div className="text-xs font-mono-tabular text-sky-400 uppercase tracking-wider">
-                        @ MY ELEMENTS — REUSABLE CONTINUITY VAULT (UP TO 50 PER SHOT)
+                        </div>
                       </div>
-                      <h2 className="font-display text-2xl font-bold uppercase text-white mt-0.5">
-                        Characters, Locations, Wardrobes, Props & Visual References
-                      </h2>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => navigate('character')}
-                        className="px-3 py-1.5 rounded-lg bg-[#16181E] hover:bg-[#1F222A] border border-white/10 text-xs font-semibold text-white"
-                      >
-                        + Character Studio
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate('location')}
-                        className="px-3 py-1.5 rounded-lg bg-[#16181E] hover:bg-[#1F222A] border border-white/10 text-xs font-semibold text-white"
-                      >
-                        + Location Studio
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate('wardrobe')}
-                        className="px-3 py-1.5 rounded-lg bg-[#16181E] hover:bg-[#1F222A] border border-white/10 text-xs font-semibold text-white"
-                      >
-                        + Wardrobe Studio
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate('props')}
-                        className="px-3 py-1.5 rounded-lg bg-[#16181E] hover:bg-[#1F222A] border border-white/10 text-xs font-semibold text-white"
-                      >
-                        + Props Studio
-                      </button>
-                    </div>
-                  </div>
+                    )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Characters Column */}
-                    <div className="rounded-2xl bg-[#131519] border border-white/10 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                          <Users className="w-4 h-4 text-[#46ecd5]" />
-                          <span>Characters ({characters.length})</span>
-                        </span>
-                        <button
-                          onClick={() => navigate('character')}
-                          className="text-[11px] text-[#46ecd5] hover:underline"
-                        >
-                          Manage
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                        {characters.map((c) => {
-                          const locked = activeContinuity.characterIds.includes(c.id);
-                          return (
-                            <div
-                              key={c.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                                locked
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
-                                  : 'bg-[#0D0E12] border-white/10'
-                              }`}
-                            >
-                              <div className="min-w-0">
-                                <div className="font-bold text-white truncate">@{c.name}</div>
-                                <div className="text-[10px] text-zinc-400 truncate">
-                                  {c.identityId} · {c.primaryLanguage}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  insertElementToken(`@${c.name.toUpperCase()}`, c.id)
-                                }
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 ${
-                                  locked
-                                    ? 'bg-[#46ecd5] text-zinc-950'
-                                    : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
-                                }`}
-                              >
-                                {locked ? 'In Shot' : '+ Cast'}
-                              </button>
+                    {/* 3. COLOR PALETTE POPOVER MODAL */}
+                    {activePopover === 'color_palette' && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                          <div>
+                            <div className="text-base font-bold text-white">Color palette</div>
+                            <div className="text-xs text-zinc-400">
+                              Palette the color grade should follow
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Locations Column */}
-                    <div className="rounded-2xl bg-[#131519] border border-white/10 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                          <MapPin className="w-4 h-4 text-[#46ecd5]" />
-                          <span>Locations ({locations.length})</span>
-                        </span>
-                        <button
-                          onClick={() => navigate('location')}
-                          className="text-[11px] text-[#46ecd5] hover:underline"
-                        >
-                          Manage
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                        {locations.map((loc) => {
-                          const locked = activeContinuity.locationId === loc.id;
-                          return (
-                            <div
-                              key={loc.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                                locked
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
-                                  : 'bg-[#0D0E12] border-white/10'
-                              }`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={paletteSearch}
+                              onChange={(e) => setPaletteSearch(e.target.value)}
+                              placeholder="Filter palettes..."
+                              className="px-3 py-1.5 rounded-xl bg-[#23252C] border border-white/10 text-xs text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPaletteId('Auto')}
+                              className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
                             >
-                              <div className="min-w-0">
-                                <div className="font-bold text-white truncate">@{loc.name}</div>
-                                <div className="text-[10px] text-zinc-400 truncate">
-                                  {loc.settingType} · {loc.timeOfDay} · {loc.weather}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  insertElementToken(
-                                    `@${loc.name.toUpperCase()}`,
-                                    undefined,
-                                    loc.id
-                                  )
-                                }
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 ${
-                                  locked
-                                    ? 'bg-[#46ecd5] text-zinc-950'
-                                    : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
-                                }`}
-                              >
-                                {locked ? 'Active Set' : '+ Set'}
-                              </button>
+                              Reset all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePopover(null)}
+                              className="p-1.5 rounded-full text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 max-h-80 overflow-y-auto pr-1">
+                          <div className="rounded-2xl bg-[#22242A] border border-white/10 p-3 flex flex-col justify-between space-y-2">
+                            <div className="text-xs font-bold text-white">New palette</div>
+                            <input
+                              type="text"
+                              value={newPaletteName}
+                              onChange={(e) => setNewPaletteName(e.target.value)}
+                              placeholder="e.g. Lagos Midnight Cyan"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#16181D] border border-white/10 text-xs text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newPaletteName.trim()) return;
+                                const id = newPaletteName.trim();
+                                setCustomPalettes((prev) => [
+                                  ...prev,
+                                  {
+                                    id,
+                                    name: id,
+                                    description: 'Custom production color palette',
+                                    promptTokens: `${id} cinema color grade palette`,
+                                    swatches: [
+                                      '#090d16',
+                                      '#0e7490',
+                                      '#06b6d4',
+                                      '#46ecd5',
+                                      '#f59e0b',
+                                      '#f43f5e',
+                                      '#f8fafc',
+                                    ],
+                                    previewGradient: 'from-cyan-500/50 via-amber-500/40 to-zinc-950',
+                                  },
+                                ]);
+                                setSelectedPaletteId(id);
+                                setNewPaletteName('');
+                              }}
+                              className="w-full py-1.5 rounded-xl bg-[#2E313A] hover:bg-[#383C47] text-xs font-bold text-white flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Palette</span>
+                            </button>
+                          </div>
+
+                          {allPalettes
+                            .filter((p) =>
+                              !paletteSearch.trim()
+                                ? true
+                                : p.name.toLowerCase().includes(paletteSearch.toLowerCase())
+                            )
+                            .map((pal) => {
+                              const active = selectedPaletteId === pal.id;
+                              return (
+                                <button
+                                  key={pal.id}
+                                  type="button"
+                                  onClick={() => setSelectedPaletteId(pal.id)}
+                                  className="group text-center space-y-1.5 focus:outline-none"
+                                >
+                                  <div
+                                    className={`rounded-2xl overflow-hidden border transition-all ${
+                                      active
+                                        ? 'border-white ring-2 ring-white/40'
+                                        : 'border-white/10 group-hover:border-white/30'
+                                    }`}
+                                  >
+                                    <div
+                                      className={`h-24 bg-gradient-to-br ${pal.previewGradient} p-2.5 flex items-end text-left`}
+                                    >
+                                      <span className="text-[10px] text-zinc-200 line-clamp-2 drop-shadow">
+                                        {pal.description}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-7 h-4">
+                                      {pal.swatches.map((hex, idx) => (
+                                        <span
+                                          key={idx}
+                                          style={{ backgroundColor: hex }}
+                                          className="w-full h-full"
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className={`text-xs font-semibold truncate ${
+                                      active ? 'text-white font-bold' : 'text-zinc-400'
+                                    }`}
+                                  >
+                                    {pal.name}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. LIGHTING POPOVER MODAL */}
+                    {activePopover === 'lighting' && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                          <div>
+                            <div className="text-base font-bold text-white">Lighting</div>
+                            <div className="text-xs text-zinc-400">
+                              Pick a scheme or place your own lights
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Wardrobes Column */}
-                    <div className="rounded-2xl bg-[#131519] border border-white/10 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                          <Shirt className="w-4 h-4 text-[#46ecd5]" />
-                          <span>Wardrobes ({wardrobes.length})</span>
-                        </span>
-                        <button
-                          onClick={() => navigate('wardrobe')}
-                          className="text-[11px] text-[#46ecd5] hover:underline"
-                        >
-                          Manage
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                        {wardrobes.map((w) => {
-                          const locked = activeContinuity.wardrobeId === w.id;
-                          return (
-                            <div
-                              key={w.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                                locked
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
-                                  : 'bg-[#0D0E12] border-white/10'
-                              }`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={lightingSearch}
+                              onChange={(e) => setLightingSearch(e.target.value)}
+                              placeholder="Filter lighting..."
+                              className="px-3 py-1.5 rounded-xl bg-[#23252C] border border-white/10 text-xs text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLightingId('Auto')}
+                              className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
                             >
-                              <div className="min-w-0">
-                                <div className="font-bold text-white truncate">{w.name}</div>
-                                <div className="text-[10px] text-zinc-400 truncate">
-                                  {w.category}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveContinuity((prev) => ({
-                                    ...prev,
-                                    wardrobeId: locked ? null : w.id,
-                                  }))
-                                }
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 ${
-                                  locked
-                                    ? 'bg-[#46ecd5] text-zinc-950'
-                                    : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
-                                }`}
-                              >
-                                {locked ? 'Locked' : '+ Outfit'}
-                              </button>
+                              Reset all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePopover(null)}
+                              className="p-1.5 rounded-full text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-h-80 overflow-y-auto pr-1">
+                          <div className="rounded-2xl bg-[#22242A] border border-white/10 p-3.5 flex flex-col justify-between space-y-2">
+                            <div className="text-xs font-bold text-white">New lighting preset</div>
+                            <input
+                              type="text"
+                              value={newLightingName}
+                              onChange={(e) => setNewLightingName(e.target.value)}
+                              placeholder="e.g. Sodium Vapor Street Rim"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#16181D] border border-white/10 text-xs text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newLightingName.trim()) return;
+                                const id = newLightingName.trim();
+                                setCustomLighting((prev) => [
+                                  ...prev,
+                                  {
+                                    id,
+                                    name: id,
+                                    description: 'Custom studio lighting rig',
+                                    promptTokens: `${id} cinema lighting setup`,
+                                    previewGradient: 'from-amber-500/45 via-cyan-900/45 to-black',
+                                  },
+                                ]);
+                                setSelectedLightingId(id);
+                                setNewLightingName('');
+                              }}
+                              className="w-full py-1.5 rounded-xl bg-[#2E313A] hover:bg-[#383C47] text-xs font-bold text-white flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Save Lighting Preset</span>
+                            </button>
+                          </div>
+
+                          {allLighting
+                            .filter((l) =>
+                              !lightingSearch.trim()
+                                ? true
+                                : l.name.toLowerCase().includes(lightingSearch.toLowerCase())
+                            )
+                            .map((light) => {
+                              const active = selectedLightingId === light.id;
+                              return (
+                                <button
+                                  key={light.id}
+                                  type="button"
+                                  onClick={() => setSelectedLightingId(light.id)}
+                                  className="group text-center space-y-1.5 focus:outline-none"
+                                >
+                                  <div
+                                    className={`h-28 rounded-2xl bg-gradient-to-br ${
+                                      light.previewGradient
+                                    } border p-3.5 flex flex-col justify-end text-left transition-all ${
+                                      active
+                                        ? 'border-white ring-2 ring-white/40'
+                                        : 'border-white/10 group-hover:border-white/30'
+                                    }`}
+                                  >
+                                    <div className="text-[11px] text-zinc-200 line-clamp-2">
+                                      {light.description}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className={`text-xs font-semibold ${
+                                      active ? 'text-white font-bold' : 'text-zinc-300'
+                                    }`}
+                                  >
+                                    {light.name}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5. REFERENCES (0/50) & @ ELEMENTS POPOVER MODAL */}
+                    {(activePopover === 'references' || activePopover === 'at_elements') && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                          <div>
+                            <div className="text-base font-bold text-white">
+                              Visual References & @Elements ({allReferences.length}/50)
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Props Column */}
-                    <div className="rounded-2xl bg-[#131519] border border-white/10 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                          <Package className="w-4 h-4 text-[#46ecd5]" />
-                          <span>Props ({propsList.length})</span>
-                        </span>
-                        <button
-                          onClick={() => navigate('props')}
-                          className="text-[11px] text-[#46ecd5] hover:underline"
-                        >
-                          Manage
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                        {propsList.map((p) => {
-                          const locked = activeContinuity.propIds.includes(p.id);
-                          return (
-                            <div
-                              key={p.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                                locked
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
-                                  : 'bg-[#0D0E12] border-white/10'
-                              }`}
+                            <div className="text-xs text-zinc-400">
+                              Combine reusable Characters, Locations, Props, Wardrobes, Photos & Video references for continuity
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              ref={refUploadInputRef}
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={handleUploadCustomReference}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => refUploadInputRef.current?.click()}
+                              className="px-3.5 py-1.5 rounded-full bg-[#46ecd5] text-zinc-950 text-xs font-bold flex items-center gap-1"
                             >
-                              <div className="min-w-0">
-                                <div className="font-bold text-white truncate">{p.name}</div>
-                                <div className="text-[10px] text-zinc-400 truncate">
-                                  {p.category}
-                                </div>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Upload Photo / Video Ref</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePopover(null)}
+                              className="p-1.5 rounded-full text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {allReferences.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-white/10">
+                            {allReferences.map((r) => (
+                              <div
+                                key={r.id}
+                                className="px-3 py-1.5 rounded-xl bg-[#23262E] border border-[#46ecd5]/40 text-xs flex items-center gap-2"
+                              >
+                                <span className="font-bold text-[#46ecd5]">{r.label}</span>
+                                <span className="text-[10px] text-zinc-400">{r.sublabel}</span>
+                                {r.id.startsWith('ref_gen_') || r.id.startsWith('ref_upl_') ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCustomRefs((prev) =>
+                                        prev.filter((item) => item.id !== r.id)
+                                      )
+                                    }
+                                    className="text-zinc-400 hover:text-rose-400"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                ) : null}
                               </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-bold uppercase text-zinc-400">
+                              @Characters ({characters.length})
+                            </div>
+                            {characters.map((c) => {
+                              const active = activeContinuity.characterIds.includes(c.id);
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() =>
+                                    insertElementToken(`@${c.name.toUpperCase()}`, c.id)
+                                  }
+                                  className={`w-full p-2 rounded-xl border text-left text-xs flex items-center justify-between ${
+                                    active
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                                      : 'bg-[#202228] border-white/5 text-zinc-300'
+                                  }`}
+                                >
+                                  <span>@{c.name}</span>
+                                  <span className="text-[10px] text-[#46ecd5]">{c.identityId}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-bold uppercase text-zinc-400">
+                              @Locations ({locations.length})
+                            </div>
+                            {locations.map((l) => {
+                              const active = activeContinuity.locationId === l.id;
+                              return (
+                                <button
+                                  key={l.id}
+                                  type="button"
+                                  onClick={() =>
+                                    insertElementToken(`@${l.name.toUpperCase()}`, undefined, l.id)
+                                  }
+                                  className={`w-full p-2 rounded-xl border text-left text-xs flex items-center justify-between ${
+                                    active
+                                      ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                                      : 'bg-[#202228] border-white/5 text-zinc-300'
+                                  }`}
+                                >
+                                  <span>@{l.name}</span>
+                                  <span className="text-[10px] text-zinc-400">{l.timeOfDay}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-bold uppercase text-zinc-400">
+                              Props & Wardrobes ({propsList.length + wardrobes.length})
+                            </div>
+                            {propsList.map((p) => (
                               <button
+                                key={p.id}
                                 type="button"
                                 onClick={() =>
                                   insertElementToken(
@@ -1678,1485 +4368,151 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                                     p.id
                                   )
                                 }
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 ${
-                                  locked
-                                    ? 'bg-[#46ecd5] text-zinc-950'
-                                    : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
-                                }`}
+                                className="w-full p-2 rounded-xl bg-[#202228] border border-white/5 text-left text-xs text-zinc-300 flex items-center justify-between"
                               >
-                                {locked ? 'In Shot' : '+ Prop'}
+                                <span>{p.name}</span>
+                                <span className="text-[10px] text-zinc-500">{p.category}</span>
                               </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* HOME / DIRECTOR STAGE (MATCHING HIGGSFIELD CINEMA STUDIO SCREENSHOTS) */
-                <div className="space-y-8">
-                  {/* Top Fanned Showcase Carousel ("COMMUNITIES") + Active Shot Monitor */}
-                  <div className="flex flex-col items-center text-center space-y-4 pt-2">
-                    <div className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.22em] text-zinc-200">
-                      COMMUNITIES
-                    </div>
-
-                    {/* Fanned 3-Card Cinema Stack */}
-                    <div className="relative w-full max-w-xl h-52 sm:h-60 flex items-center justify-center">
-                      {/* Back Right Card */}
-                      <div className="w-64 sm:w-80 h-44 sm:h-52 rounded-2xl overflow-hidden border border-white/15 bg-gradient-to-br from-amber-700/40 via-stone-900 to-black absolute translate-x-14 sm:translate-x-20 scale-90 opacity-75 shadow-2xl">
-                        <div className="p-4 h-full flex flex-col justify-end text-left bg-gradient-to-t from-black/80 via-transparent to-transparent">
-                          <span className="text-[10px] font-mono uppercase text-amber-300">
-                            70MM ANAMORPHIC · GOLDEN HOUR
-                          </span>
-                          <span className="text-xs font-bold text-white">
-                            Architectural Sunbeams & Dust
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Middle Card */}
-                      <div className="w-64 sm:w-80 h-44 sm:h-52 rounded-2xl overflow-hidden border border-white/15 bg-gradient-to-br from-slate-600/50 via-zinc-900 to-black absolute translate-x-7 sm:translate-x-10 scale-95 opacity-90 shadow-2xl">
-                        <div className="p-4 h-full flex flex-col justify-end text-left bg-gradient-to-t from-black/80 via-transparent to-transparent">
-                          <span className="text-[10px] font-mono uppercase text-cyan-300">
-                            35MM STEADICAM · TWILIGHT FABLE
-                          </span>
-                          <span className="text-xs font-bold text-white">
-                            Neo-Noir Corridor Tracking
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Front Primary Monitor Card (Shows latest generated shot or interactive cinema reel) */}
-                      <div className="w-72 sm:w-96 h-48 sm:h-56 rounded-2xl overflow-hidden border border-white/20 bg-[#14161B] relative z-10 shadow-[0_24px_60px_rgba(0,0,0,0.85)] group">
-                        {inspectedGen && inspectedGen.outputs[0] ? (
-                          inspectedGen.outputs[0].kind === 'video' ? (
-                            <video
-                              src={inspectedGen.outputs[0].url}
-                              controls
-                              loop
-                              muted
-                              autoPlay
-                              playsInline
-                              style={{
-                                filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
-                                  0,
-                                  gradeWarmth
-                                )}%)`,
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <img
-                              src={inspectedGen.outputs[0].url}
-                              alt={inspectedGen.prompt}
-                              style={{
-                                filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
-                                  0,
-                                  gradeWarmth
-                                )}%)`,
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                          )
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-stone-700/60 via-zinc-900 to-black flex flex-col justify-between p-5 text-left">
-                            <div className="flex items-center justify-between">
-                              <span className="px-2 py-0.5 rounded bg-black/50 border border-white/15 text-[10px] font-mono text-[#46ecd5]">
-                                WINDOW LIGHT · 50MM PRIME · f/1.4
-                              </span>
-                              <span className="text-[10px] font-mono text-zinc-400">
-                                24 FPS
-                              </span>
-                            </div>
-                            <div className="space-y-1">
-                              <div className="text-sm font-bold text-white">
-                                Intimate Living Room Monologue
-                              </div>
-                              <p className="text-[11px] text-zinc-300 line-clamp-2">
-                                Soft daylight through sheer curtains, shallow depth of field, authentic character emotion.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Center Headline from Screenshot */}
-                    <h1 className="font-display text-2xl sm:text-4xl font-extrabold uppercase tracking-wider text-[#46ecd5] pt-2">
-                      HERE, YOUR IDEAS COMES ALIVE
-                    </h1>
-                  </div>
-
-                  {/* Stage 5 & 6: Iterative Video Workflows Bar (References / Extend / Edit Video / Color Grade) */}
-                  {inspectedGen && inspectedGen.outputs[0] && (
-                    <div className="rounded-2xl bg-[#121418] border border-white/10 p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="px-2 py-0.5 rounded bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-[10px] font-mono font-bold text-[#46ecd5] uppercase">
-                            STAGE 5 & 6 · SHOT INSPECTOR
-                          </span>
-                          <span className="text-xs font-bold text-white truncate">
-                            {inspectedGen.modelLabel} · {inspectedGen.prompt.slice(0, 75)}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleAddGenerationAsReference(inspectedGen.id)}
-                            className="px-3 py-1.5 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-1.5"
-                          >
-                            <Plus className="w-3.5 h-3.5 text-[#46ecd5]" />
-                            <span>Use as Reference ({allReferences.length}/50)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleExtendShot('forward')}
-                            className="px-3 py-1.5 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-1.5"
-                          >
-                            <ArrowRight className="w-3.5 h-3.5 text-[#46ecd5]" />
-                            <span>Extend Forward (+5s)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleExtendShot('backward')}
-                            className="px-3 py-1.5 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-1.5"
-                          >
-                            <ArrowLeft className="w-3.5 h-3.5 text-[#46ecd5]" />
-                            <span>Extend Backward</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setScenePrompt(inspectedGen.prompt);
-                              setActivePopover('camera');
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-1.5"
-                          >
-                            <Edit3 className="w-3.5 h-3.5 text-[#46ecd5]" />
-                            <span>Edit Video / Re-Direct</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeliverableIds((prev) =>
-                                prev.includes(inspectedGen.id)
-                                  ? prev
-                                  : [...prev, inspectedGen.id]
-                              );
-                              showToast('Marked shot as Approved Deliverable in project');
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-[#46ecd5]/20 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5] flex items-center gap-1.5"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Approve Deliverable</span>
-                          </button>
-
-                          <a
-                            href={inspectedGen.outputs[0].url}
-                            download={`spacix-shot-${inspectedGen.id}.mp4`}
-                            className="px-3 py-1.5 rounded-xl bg-[#46ecd5] text-zinc-950 text-xs font-bold flex items-center gap-1.5"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download</span>
-                          </a>
-                        </div>
-                      </div>
-
-                      {/* Stage 6 Finalize Color Grading Sliders */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-white/10 text-[11px]">
-                        <div>
-                          <div className="flex justify-between text-zinc-400 mb-1">
-                            <span>Contrast</span>
-                            <span className="font-mono text-white">{gradeContrast}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={75}
-                            max={135}
-                            value={gradeContrast}
-                            onChange={(e) => setGradeContrast(Number(e.target.value))}
-                            className="w-full accent-[#46ecd5]"
-                          />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-zinc-400 mb-1">
-                            <span>Color Saturation</span>
-                            <span className="font-mono text-white">{gradeSaturation}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={160}
-                            value={gradeSaturation}
-                            onChange={(e) => setGradeSaturation(Number(e.target.value))}
-                            className="w-full accent-[#46ecd5]"
-                          />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-zinc-400 mb-1">
-                            <span>Warmth / Tint</span>
-                            <span className="font-mono text-white">+{gradeWarmth}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={45}
-                            value={gradeWarmth}
-                            onChange={(e) => setGradeWarmth(Number(e.target.value))}
-                            className="w-full accent-[#46ecd5]"
-                          />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-zinc-400 mb-1">
-                            <span>Optical Halation</span>
-                            <span className="font-mono text-white">{gradeHalation}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={50}
-                            value={gradeHalation}
-                            onChange={(e) => setGradeHalation(Number(e.target.value))}
-                            className="w-full accent-[#46ecd5]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Generated Shots & Project Deliverables Strip */}
-                  {generations.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                            Production Dailies & Versions ({generations.length})
-                          </span>
-                          <div className="flex items-center gap-1 text-[11px]">
-                            {(['all', 'scenes', 'versions', 'deliverables'] as const).map(
-                              (tab) => (
-                                <button
-                                  key={tab}
-                                  type="button"
-                                  onClick={() => setActiveSubfolder(tab)}
-                                  className={`px-2 py-0.5 rounded capitalize ${
-                                    activeSubfolder === tab
-                                      ? 'bg-[#46ecd5]/20 text-[#46ecd5] font-bold'
-                                      : 'text-zinc-500 hover:text-zinc-300'
-                                  }`}
-                                >
-                                  {tab}
-                                </button>
-                              )
-                            )}
+                            ))}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-                        {generations
-                          .filter((g) => {
-                            if (sidebarTab === 'favorites') {
-                              return favoriteGenIds.includes(g.id);
-                            }
-                            if (activeSubfolder === 'deliverables') {
-                              return deliverableIds.includes(g.id);
-                            }
-                            return true;
-                          })
-                          .slice(0, 10)
-                          .map((gen) => {
-                            const out = gen.outputs[0];
-                            const isFav = favoriteGenIds.includes(gen.id);
-                            const isInspected = inspectedGen?.id === gen.id;
-                            return (
-                              <div
-                                key={gen.id}
-                                onClick={() => setInspectedGenId(gen.id)}
-                                className={`group cursor-pointer rounded-xl overflow-hidden bg-[#14161B] border transition-all ${
-                                  isInspected
-                                    ? 'border-[#46ecd5] ring-1 ring-[#46ecd5]/40'
-                                    : 'border-white/10 hover:border-white/25'
-                                }`}
-                              >
-                                <div className="aspect-video bg-black relative overflow-hidden">
-                                  {out ? (
-                                    out.kind === 'video' ? (
-                                      <video
-                                        src={out.url}
-                                        muted
-                                        loop
-                                        playsInline
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      <img
-                                        src={out.url}
-                                        alt={gen.prompt}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    )
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">
-                                      <Loader2 className="w-4 h-4 animate-spin text-[#46ecd5]" />
-                                    </div>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setFavoriteGenIds((prev) =>
-                                        prev.includes(gen.id)
-                                          ? prev.filter((id) => id !== gen.id)
-                                          : [...prev, gen.id]
-                                      );
-                                    }}
-                                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-zinc-300 hover:text-pink-400"
-                                  >
-                                    <Heart
-                                      className={`w-3 h-3 ${
-                                        isFav ? 'text-pink-400 fill-pink-400' : ''
-                                      }`}
-                                    />
-                                  </button>
-                                </div>
-                                <div className="p-2.5 space-y-1">
-                                  <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                                    <span>{gen.modelLabel}</span>
-                                    <span className="uppercase text-[#46ecd5]">
-                                      {gen.surface}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-zinc-200 line-clamp-1">
-                                    {gen.prompt}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ==============================================================
-                FLOATING DIRECTOR'S PANEL POPOVER MODALS (ABOVE COMMAND DOCK)
-                Matching Screenshots: Film setup, Camera, Color palette, Lighting
-                ============================================================== */}
-            {activePopover && (
-              <div className="px-4 sm:px-8 pb-3 max-w-[1060px] w-full mx-auto z-30">
-                {/* 1. FILM SETUP POPOVER MODAL (Genre / Era / Tempo) */}
-                {activePopover === 'film_setup' && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                      <span className="text-base font-bold text-white">Film setup</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFilmSetup({ genre: 'Auto', era: 'Auto', tempo: 'Auto' })
-                          }
-                          className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
-                        >
-                          Reset all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActivePopover(null)}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 min-h-[340px]">
-                      {/* Left Tabs: Genre, Era, Tempo */}
-                      <div className="sm:col-span-3 border-r border-white/10 p-3 space-y-1">
-                        {(
-                          [
-                            { id: 'genre', label: 'Genre', activeVal: filmSetup.genre },
-                            { id: 'era', label: 'Era', activeVal: filmSetup.era },
-                            { id: 'tempo', label: 'Tempo', activeVal: filmSetup.tempo },
-                          ] as const
-                        ).map((tab) => (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setFilmSetupTab(tab.id)}
-                            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                              filmSetupTab === tab.id
-                                ? 'bg-[#25272E] text-white'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            <span>{tab.label}</span>
-                            {tab.activeVal !== 'Auto' && (
-                              <span className="w-2 h-2 rounded-full bg-lime-400" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Right Content Area */}
-                      <div className="sm:col-span-9 p-6 flex flex-col justify-between">
-                        {filmSetupTab === 'genre' && (
-                          <>
-                            <div>
-                              <div className="text-sm font-bold text-white">Select genre</div>
-                              <div className="text-xs text-zinc-400">
-                                Story conventions the model should follow
-                              </div>
-                            </div>
-
-                            {/* Center Arched Preview Card */}
-                            <div className="my-4 flex items-center justify-center gap-4">
-                              {GENRE_PRESETS.map((g) => {
-                                const isSel =
-                                  (filmSetup.genre === 'Auto' && g.id === 'General') ||
-                                  filmSetup.genre === g.id;
-                                if (!isSel) return null;
-                                return (
-                                  <div
-                                    key={g.id}
-                                    className={`w-72 h-40 rounded-2xl border border-white/20 bg-gradient-to-br ${g.gradient} p-5 flex flex-col justify-end relative shadow-2xl`}
-                                  >
-                                    <span className="w-2 h-2 rounded-full bg-lime-400 absolute bottom-3 right-3" />
-                                    <div className="text-sm font-extrabold text-white">
-                                      {g.label}
-                                    </div>
-                                    <div className="text-[11px] text-zinc-300">
-                                      {g.subtitle}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {/* Carousel Controls + Quick Pills */}
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFilmSetup((prev) => ({
-                                      ...prev,
-                                      genre: cycleWheelOption(
-                                        GENRE_PRESETS,
-                                        prev.genre === 'Auto' ? 'General' : prev.genre,
-                                        -1
-                                      ),
-                                    }))
-                                  }
-                                  className="w-8 h-8 rounded-full bg-[#25272E] hover:bg-[#30333C] border border-white/10 flex items-center justify-center text-zinc-200"
-                                >
-                                  <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                <div className="px-6 py-1.5 rounded-full bg-[#25272E] border border-white/15 text-xs font-bold text-white min-w-[120px] text-center">
-                                  {filmSetup.genre === 'Auto' ? 'General' : filmSetup.genre}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFilmSetup((prev) => ({
-                                      ...prev,
-                                      genre: cycleWheelOption(
-                                        GENRE_PRESETS,
-                                        prev.genre === 'Auto' ? 'General' : prev.genre,
-                                        1
-                                      ),
-                                    }))
-                                  }
-                                  className="w-8 h-8 rounded-full bg-[#25272E] hover:bg-[#30333C] border border-white/10 flex items-center justify-center text-zinc-200"
-                                >
-                                  <ChevronRight className="w-4 h-4" />
-                                </button>
-                              </div>
-
-                              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                                {GENRE_PRESETS.map((g) => (
-                                  <button
-                                    key={g.id}
-                                    type="button"
-                                    onClick={() =>
-                                      setFilmSetup((prev) => ({ ...prev, genre: g.id }))
-                                    }
-                                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                                      filmSetup.genre === g.id
-                                        ? 'bg-lime-400 text-zinc-950 font-bold'
-                                        : 'bg-[#22242A] text-zinc-400 hover:text-white'
-                                    }`}
-                                  >
-                                    {g.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {filmSetupTab === 'era' && (
-                          <>
-                            <div>
-                              <div className="text-sm font-bold text-white">Select era</div>
-                              <div className="text-xs text-zinc-400">
-                                The period the film belongs to
-                              </div>
-                            </div>
-
-                            <div className="my-4 flex flex-col items-center gap-5">
-                              <div className="w-72 h-36 rounded-2xl border border-white/20 bg-gradient-to-tr from-indigo-500/40 via-amber-400/35 to-rose-500/40 p-5 flex flex-col justify-end shadow-2xl">
-                                <div className="text-xs font-mono uppercase text-lime-300">
-                                  OPTICAL PERIOD STOCK
-                                </div>
-                                <div className="text-base font-extrabold text-white">
-                                  {filmSetup.era}
-                                </div>
-                              </div>
-
-                              {/* Horizontal Era Tick Ruler (Matching Screenshot) */}
-                              <div className="w-full max-w-lg space-y-2">
-                                <div className="flex items-end justify-between px-4 h-7">
-                                  {Array.from({ length: 25 }).map((_, idx) => (
-                                    <div
-                                      key={idx}
-                                      className={`w-0.5 rounded-full ${
-                                        idx === 12
-                                          ? 'h-7 bg-lime-400'
-                                          : idx % 4 === 0
-                                          ? 'h-5 bg-zinc-500'
-                                          : 'h-3 bg-zinc-700'
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-
-                                <div className="flex items-center justify-center gap-3">
-                                  {ERA_PRESETS.map((era) => {
-                                    const active = filmSetup.era === era.id;
-                                    return (
-                                      <button
-                                        key={era.id}
-                                        type="button"
-                                        onClick={() =>
-                                          setFilmSetup((prev) => ({ ...prev, era: era.id }))
-                                        }
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                                          active
-                                            ? 'text-lime-400 text-base scale-110'
-                                            : 'text-zinc-500 hover:text-zinc-300'
-                                        }`}
-                                      >
-                                        {era.label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {filmSetupTab === 'tempo' && (
-                          <>
-                            <div>
-                              <div className="text-sm font-bold text-white">Select tempo</div>
-                              <div className="text-xs text-zinc-400">
-                                Pacing of the montage
-                              </div>
-                            </div>
-
-                            <div className="my-4 flex items-center justify-center">
-                              {TEMPO_PRESETS.map((t) => {
-                                if (t.id !== filmSetup.tempo) return null;
-                                return (
-                                  <div
-                                    key={t.id}
-                                    className="w-80 h-40 rounded-2xl border border-white/20 bg-gradient-to-br from-emerald-600/40 via-teal-900/50 to-zinc-950 p-4 flex flex-col justify-between shadow-2xl"
-                                  >
-                                    <div className="text-xs font-bold text-white">
-                                      {t.label} Pacing
-                                    </div>
-                                    <div className="space-y-2">
-                                      <div className="text-[11px] text-zinc-200">
-                                        {t.subtitle}
-                                      </div>
-                                      <div className="grid grid-cols-5 gap-1.5 pt-1">
-                                        {Array.from({ length: 5 }).map((_, idx) => (
-                                          <div
-                                            key={idx}
-                                            className={`h-1.5 rounded-full ${
-                                              idx < t.bars ? 'bg-lime-400' : 'bg-white/20'
-                                            }`}
-                                          />
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-center gap-2">
-                              {TEMPO_PRESETS.map((t) => (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={() =>
-                                    setFilmSetup((prev) => ({ ...prev, tempo: t.id }))
-                                  }
-                                  className={`px-4 py-1.5 rounded-full text-xs font-bold border ${
-                                    filmSetup.tempo === t.id
-                                      ? 'bg-[#282B33] border-white/30 text-white'
-                                      : 'bg-[#1F2127] border-white/5 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  {t.label}
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. CAMERA POPOVER MODAL (Setup 3-Drum Wheels + Movement Grid) */}
-                {activePopover === 'camera' && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                      <span className="text-base font-bold text-white">Camera</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCameraOptics({
-                              camera: 'Auto',
-                              lens: 'Auto',
-                              aperture: 'Auto',
-                              movements: [],
-                            })
-                          }
-                          className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
-                        >
-                          Reset all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActivePopover(null)}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 min-h-[360px]">
-                      {/* Left Tabs: Setup, Movement */}
-                      <div className="sm:col-span-3 border-r border-white/10 p-3 space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => setCameraModalTab('setup')}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                            cameraModalTab === 'setup'
-                              ? 'bg-[#25272E] text-white'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <span>Setup</span>
-                          {(cameraOptics.camera !== 'Auto' ||
-                            cameraOptics.lens !== 'Auto' ||
-                            cameraOptics.aperture !== 'Auto') && (
-                            <span className="w-2 h-2 rounded-full bg-lime-400" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCameraModalTab('movement')}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                            cameraModalTab === 'movement'
-                              ? 'bg-[#25272E] text-white'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <span>Movement</span>
-                          {cameraOptics.movements.length > 0 && (
-                            <span className="px-1.5 py-0.2 rounded-full bg-lime-400 text-zinc-950 text-[10px]">
-                              {cameraOptics.movements.length}
-                            </span>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Right Content: 3-Column Drum Wheels OR Camera Movement Grid */}
-                      <div className="sm:col-span-9 p-5">
-                        {cameraModalTab === 'setup' ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 h-full">
-                            {/* Column 1: CAMERA */}
-                            <div className="flex flex-col items-center justify-between py-2 border-r border-white/5">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
-                                CAMERA
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    camera: cycleWheelOption(CAMERA_BODIES, prev.camera, -1),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-
-                              <div className="w-full px-3 space-y-2.5">
-                                {CAMERA_BODIES.map((cam) => {
-                                  const active = cameraOptics.camera === cam.id;
-                                  return (
-                                    <button
-                                      key={cam.id}
-                                      type="button"
-                                      onClick={() =>
-                                        setCameraOptics((prev) => ({
-                                          ...prev,
-                                          camera: cam.id,
-                                        }))
-                                      }
-                                      className={`w-full py-3 px-4 rounded-full transition-all flex flex-col items-center text-center ${
-                                        active
-                                          ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                          : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
-                                      }`}
-                                    >
-                                      <Camera className="w-4 h-4 mb-1 opacity-80" />
-                                      <span className="text-xs font-bold">{cam.label}</span>
-                                      <span className="text-[10px] opacity-75">{cam.sub}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    camera: cycleWheelOption(CAMERA_BODIES, prev.camera, 1),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Column 2: LENS */}
-                            <div className="flex flex-col items-center justify-between py-2 border-r border-white/5">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
-                                LENS
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    lens: cycleWheelOption(LENS_OPTICS, prev.lens, -1),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-
-                              <div className="w-full px-3 space-y-2.5">
-                                {LENS_OPTICS.map((lens) => {
-                                  const active = cameraOptics.lens === lens.id;
-                                  return (
-                                    <button
-                                      key={lens.id}
-                                      type="button"
-                                      onClick={() =>
-                                        setCameraOptics((prev) => ({
-                                          ...prev,
-                                          lens: lens.id,
-                                        }))
-                                      }
-                                      className={`w-full py-3 px-4 rounded-full transition-all flex flex-col items-center text-center ${
-                                        active
-                                          ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                          : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
-                                      }`}
-                                    >
-                                      <Eye className="w-4 h-4 mb-1 opacity-80" />
-                                      <span className="text-xs font-bold">{lens.label}</span>
-                                      <span className="text-[10px] opacity-75">{lens.sub}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    lens: cycleWheelOption(LENS_OPTICS, prev.lens, 1),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Column 3: APERTURE */}
-                            <div className="flex flex-col items-center justify-between py-2">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
-                                APERTURE
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    aperture: cycleWheelOption(
-                                      APERTURE_STOPS,
-                                      prev.aperture,
-                                      -1
-                                    ),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-
-                              <div className="w-full px-3 space-y-2.5">
-                                {APERTURE_STOPS.map((ap) => {
-                                  const active = cameraOptics.aperture === ap.id;
-                                  return (
-                                    <button
-                                      key={ap.id}
-                                      type="button"
-                                      onClick={() =>
-                                        setCameraOptics((prev) => ({
-                                          ...prev,
-                                          aperture: ap.id,
-                                        }))
-                                      }
-                                      className={`w-full py-3 px-4 rounded-full transition-all flex flex-col items-center text-center ${
-                                        active
-                                          ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                          : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
-                                      }`}
-                                    >
-                                      <Sun className="w-4 h-4 mb-1 opacity-80" />
-                                      <span className="text-xs font-bold">{ap.label}</span>
-                                      <span className="text-[10px] opacity-75">{ap.sub}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCameraOptics((prev) => ({
-                                    ...prev,
-                                    aperture: cycleWheelOption(
-                                      APERTURE_STOPS,
-                                      prev.aperture,
-                                      1
-                                    ),
-                                  }))
-                                }
-                                className="p-1.5 rounded-full bg-[#23252C] text-zinc-400 hover:text-white"
-                              >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Camera Movement Tab (Matching Screenshot_20261109-161150) */
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <div className="text-sm font-bold text-white">
-                                  Direct a camera move
-                                </div>
-                                <div className="text-xs text-zinc-400">
-                                  Adds to the prompt box, or type{' '}
-                                  <span className="text-lime-400 font-mono">#</span> there.
-                                  Several per shot; order matters.
-                                </div>
-                              </div>
-                              <div className="relative">
-                                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                                <input
-                                  type="text"
-                                  value={movementSearch}
-                                  onChange={(e) => setMovementSearch(e.target.value)}
-                                  placeholder="Search moves..."
-                                  className="pl-8 pr-3 py-1.5 rounded-xl bg-[#22242B] border border-white/10 text-xs text-white"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-1">
-                              {CAMERA_MOVEMENTS.filter((m) =>
-                                !movementSearch.trim()
-                                  ? true
-                                  : m.label
-                                      .toLowerCase()
-                                      .includes(movementSearch.toLowerCase())
-                              ).map((move) => {
-                                const orderIdx = cameraOptics.movements.indexOf(move.label);
-                                const isSelected = orderIdx >= 0;
-                                return (
-                                  <button
-                                    key={move.id}
-                                    type="button"
-                                    onClick={() => toggleCameraMovement(move.label)}
-                                    className="group text-center space-y-1.5 focus:outline-none"
-                                  >
-                                    <div
-                                      className={`aspect-[4/3] rounded-2xl bg-gradient-to-br ${
-                                        move.gradient
-                                      } border transition-all p-3 flex flex-col justify-between relative overflow-hidden ${
-                                        isSelected
-                                          ? 'border-lime-400 ring-2 ring-lime-400/30'
-                                          : 'border-white/10 group-hover:border-white/30'
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className="px-1.5 py-0.5 rounded bg-black/50 text-[10px] font-mono text-lime-300">
-                                          #{move.label.replace(/\s+/g, '')}
-                                        </span>
-                                        {isSelected && (
-                                          <span className="w-5 h-5 rounded-full bg-lime-400 text-zinc-950 text-[10px] font-extrabold flex items-center justify-center">
-                                            {orderIdx + 1}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="text-[11px] text-zinc-200 text-left">
-                                        {move.desc}
-                                      </div>
-                                    </div>
-                                    <div className="text-xs font-semibold text-white">
-                                      {move.label}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. COLOR PALETTE POPOVER MODAL (Matching Screenshot_20261109-161236) */}
-                {activePopover === 'color_palette' && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                      <div>
-                        <div className="text-base font-bold text-white">Color palette</div>
-                        <div className="text-xs text-zinc-400">
-                          Palette the color grade should follow
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={paletteSearch}
-                          onChange={(e) => setPaletteSearch(e.target.value)}
-                          placeholder="Filter palettes..."
-                          className="px-3 py-1.5 rounded-xl bg-[#23252C] border border-white/10 text-xs text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPaletteId('Auto')}
-                          className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
-                        >
-                          Reset all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActivePopover(null)}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 max-h-80 overflow-y-auto pr-1">
-                      {/* + New Palette Creator Card */}
-                      <div className="rounded-2xl bg-[#22242A] border border-white/10 p-3 flex flex-col justify-between space-y-2">
-                        <div className="text-xs font-bold text-white">New palette</div>
-                        <input
-                          type="text"
-                          value={newPaletteName}
-                          onChange={(e) => setNewPaletteName(e.target.value)}
-                          placeholder="e.g. Lagos Midnight Cyan"
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-[#16181D] border border-white/10 text-xs text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!newPaletteName.trim()) return;
-                            const id = newPaletteName.trim();
-                            setCustomPalettes((prev) => [
-                              ...prev,
-                              {
-                                id,
-                                name: id,
-                                description: 'Custom production color palette',
-                                promptTokens: `${id} cinema color grade palette`,
-                                swatches: [
-                                  '#090d16',
-                                  '#0e7490',
-                                  '#06b6d4',
-                                  '#46ecd5',
-                                  '#f59e0b',
-                                  '#f43f5e',
-                                  '#f8fafc',
-                                ],
-                                previewGradient: 'from-cyan-500/50 via-amber-500/40 to-zinc-950',
-                              },
-                            ]);
-                            setSelectedPaletteId(id);
-                            setNewPaletteName('');
-                          }}
-                          className="w-full py-1.5 rounded-xl bg-[#2E313A] hover:bg-[#383C47] text-xs font-bold text-white flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Palette</span>
-                        </button>
-                      </div>
-
-                      {allPalettes
-                        .filter((p) =>
-                          !paletteSearch.trim()
-                            ? true
-                            : p.name.toLowerCase().includes(paletteSearch.toLowerCase())
-                        )
-                        .map((pal) => {
-                          const active = selectedPaletteId === pal.id;
-                          return (
-                            <button
-                              key={pal.id}
-                              type="button"
-                              onClick={() => setSelectedPaletteId(pal.id)}
-                              className="group text-center space-y-1.5 focus:outline-none"
-                            >
-                              <div
-                                className={`rounded-2xl overflow-hidden border transition-all ${
-                                  active
-                                    ? 'border-white ring-2 ring-white/40'
-                                    : 'border-white/10 group-hover:border-white/30'
-                                }`}
-                              >
-                                <div
-                                  className={`h-24 bg-gradient-to-br ${pal.previewGradient} p-2.5 flex items-end text-left`}
-                                >
-                                  <span className="text-[10px] text-zinc-200 line-clamp-2 drop-shadow">
-                                    {pal.description}
-                                  </span>
-                                </div>
-                                {/* 7-Color Swatch Strip along bottom of card */}
-                                <div className="grid grid-cols-7 h-4">
-                                  {pal.swatches.map((hex, idx) => (
-                                    <span
-                                      key={idx}
-                                      style={{ backgroundColor: hex }}
-                                      className="w-full h-full"
-                                    />
-                                  ))}
-                                </div>
-                              </div>
-                              <div
-                                className={`text-xs font-semibold truncate ${
-                                  active ? 'text-white font-bold' : 'text-zinc-400'
-                                }`}
-                              >
-                                {pal.name}
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. LIGHTING POPOVER MODAL (Matching Screenshot_20261109-161329) */}
-                {activePopover === 'lighting' && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                      <div>
-                        <div className="text-base font-bold text-white">Lighting</div>
-                        <div className="text-xs text-zinc-400">
-                          Pick a scheme or place your own lights
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={lightingSearch}
-                          onChange={(e) => setLightingSearch(e.target.value)}
-                          placeholder="Filter lighting..."
-                          className="px-3 py-1.5 rounded-xl bg-[#23252C] border border-white/10 text-xs text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLightingId('Auto')}
-                          className="px-3.5 py-1.5 rounded-full bg-[#25272D] hover:bg-[#2E3138] text-xs font-semibold text-zinc-200"
-                        >
-                          Reset all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActivePopover(null)}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-h-80 overflow-y-auto pr-1">
-                      {/* + New Lighting Preset Card */}
-                      <div className="rounded-2xl bg-[#22242A] border border-white/10 p-3.5 flex flex-col justify-between space-y-2">
-                        <div className="text-xs font-bold text-white">New lighting preset</div>
-                        <input
-                          type="text"
-                          value={newLightingName}
-                          onChange={(e) => setNewLightingName(e.target.value)}
-                          placeholder="e.g. Sodium Vapor Street Rim"
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-[#16181D] border border-white/10 text-xs text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!newLightingName.trim()) return;
-                            const id = newLightingName.trim();
-                            setCustomLighting((prev) => [
-                              ...prev,
-                              {
-                                id,
-                                name: id,
-                                description: 'Custom studio lighting rig',
-                                promptTokens: `${id} cinema lighting setup`,
-                                previewGradient: 'from-amber-500/45 via-cyan-900/45 to-black',
-                              },
-                            ]);
-                            setSelectedLightingId(id);
-                            setNewLightingName('');
-                          }}
-                          className="w-full py-1.5 rounded-xl bg-[#2E313A] hover:bg-[#383C47] text-xs font-bold text-white flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Save Lighting Preset</span>
-                        </button>
-                      </div>
-
-                      {allLighting
-                        .filter((l) =>
-                          !lightingSearch.trim()
-                            ? true
-                            : l.name.toLowerCase().includes(lightingSearch.toLowerCase())
-                        )
-                        .map((light) => {
-                          const active = selectedLightingId === light.id;
-                          return (
-                            <button
-                              key={light.id}
-                              type="button"
-                              onClick={() => setSelectedLightingId(light.id)}
-                              className="group text-center space-y-1.5 focus:outline-none"
-                            >
-                              <div
-                                className={`h-28 rounded-2xl bg-gradient-to-br ${
-                                  light.previewGradient
-                                } border p-3.5 flex flex-col justify-end text-left transition-all ${
-                                  active
-                                    ? 'border-white ring-2 ring-white/40'
-                                    : 'border-white/10 group-hover:border-white/30'
-                                }`}
-                              >
-                                <div className="text-[11px] text-zinc-200 line-clamp-2">
-                                  {light.description}
-                                </div>
-                              </div>
-                              <div
-                                className={`text-xs font-semibold ${
-                                  active ? 'text-white font-bold' : 'text-zinc-300'
-                                }`}
-                              >
-                                {light.name}
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. REFERENCES (0/50) & @ ELEMENTS POPOVER MODAL */}
-                {(activePopover === 'references' || activePopover === 'at_elements') && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                      <div>
-                        <div className="text-base font-bold text-white">
-                          Visual References & @Elements ({allReferences.length}/50)
-                        </div>
-                        <div className="text-xs text-zinc-400">
-                          Combine reusable Characters, Locations, Props, Wardrobes, Photos & Video references for continuity
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          ref={refUploadInputRef}
-                          type="file"
-                          accept="image/*,video/*"
-                          onChange={handleUploadCustomReference}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => refUploadInputRef.current?.click()}
-                          className="px-3.5 py-1.5 rounded-full bg-[#46ecd5] text-zinc-950 text-xs font-bold flex items-center gap-1"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload Photo / Video Ref</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActivePopover(null)}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Active Reference Rack */}
-                    {allReferences.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-white/10">
-                        {allReferences.map((r) => (
-                          <div
-                            key={r.id}
-                            className="px-3 py-1.5 rounded-xl bg-[#23262E] border border-[#46ecd5]/40 text-xs flex items-center gap-2"
-                          >
-                            <span className="font-bold text-[#46ecd5]">{r.label}</span>
-                            <span className="text-[10px] text-zinc-400">{r.sublabel}</span>
-                            {r.id.startsWith('ref_gen_') || r.id.startsWith('ref_upl_') ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCustomRefs((prev) =>
-                                    prev.filter((item) => item.id !== r.id)
-                                  )
-                                }
-                                className="text-zinc-400 hover:text-rose-400"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            ) : null}
-                          </div>
-                        ))}
                       </div>
                     )}
 
-                    {/* Quick Select Saved Characters, Locations, Props */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-bold uppercase text-zinc-400">
-                          @Characters ({characters.length})
-                        </div>
-                        {characters.map((c) => {
-                          const active = activeContinuity.characterIds.includes(c.id);
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() =>
-                                insertElementToken(`@${c.name.toUpperCase()}`, c.id)
-                              }
-                              className={`w-full p-2 rounded-xl border text-left text-xs flex items-center justify-between ${
-                                active
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
-                                  : 'bg-[#202228] border-white/5 text-zinc-300'
-                              }`}
-                            >
-                              <span>@{c.name}</span>
-                              <span className="text-[10px] text-[#46ecd5]">{c.identityId}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-bold uppercase text-zinc-400">
-                          @Locations ({locations.length})
-                        </div>
-                        {locations.map((l) => {
-                          const active = activeContinuity.locationId === l.id;
-                          return (
-                            <button
-                              key={l.id}
-                              type="button"
-                              onClick={() =>
-                                insertElementToken(`@${l.name.toUpperCase()}`, undefined, l.id)
-                              }
-                              className={`w-full p-2 rounded-xl border text-left text-xs flex items-center justify-between ${
-                                active
-                                  ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
-                                  : 'bg-[#202228] border-white/5 text-zinc-300'
-                              }`}
-                            >
-                              <span>@{l.name}</span>
-                              <span className="text-[10px] text-zinc-400">{l.timeOfDay}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-bold uppercase text-zinc-400">
-                          Props & Wardrobes ({propsList.length + wardrobes.length})
-                        </div>
-                        {propsList.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() =>
-                              insertElementToken(
-                                `[PROP: ${p.name}]`,
-                                undefined,
-                                undefined,
-                                p.id
-                              )
-                            }
-                            className="w-full p-2 rounded-xl bg-[#202228] border border-white/5 text-left text-xs text-zinc-300 flex items-center justify-between"
-                          >
-                            <span>{p.name}</span>
-                            <span className="text-[10px] text-zinc-500">{p.category}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 6. MULTI-MODEL ENGINE SELECTOR POPOVER */}
-                {activePopover === 'models' && (
-                  <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-5 space-y-3">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                      <div>
-                        <div className="text-sm font-bold text-white">
-                          Select {dockSurface === 'video' ? 'Cinema Video' : 'Cinema Image'} Engine
-                        </div>
-                        <div className="text-xs text-zinc-400">
-                          Camera & optics settings remain independent of the underlying generation model
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setActivePopover(null)}
-                        className="p-1 text-zinc-400 hover:text-white"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto">
-                      {(dockSurface === 'video' ? videoModels : imageModels).map((m) => {
-                        const isSel = activeModel?.id === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              if (dockSurface === 'video') setSelectedVideoModelId(m.id);
-                              else setSelectedImageModelId(m.id);
-                              setActivePopover(null);
-                            }}
-                            className={`p-3 rounded-2xl border text-left transition-all ${
-                              isSel
-                                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
-                                : 'bg-[#22242B] border-white/10 text-zinc-300 hover:border-white/25'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-white">{m.label}</span>
-                              <span className="text-[10px] font-mono text-[#46ecd5]">
-                                {Math.max(5, Math.round(m.baseHfUsd * 200))} TK
-                              </span>
+                    {/* 6. INTELLIGENT CAPABILITY-ROUTED MODEL SELECTOR POPOVER */}
+                    {activePopover === 'models' && (
+                      <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] p-5 space-y-3">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                          <div>
+                            <div className="text-sm font-bold text-white">
+                              Compatible Models for {activeToolSpec.label} (
+                              {dockSurface.toUpperCase()})
                             </div>
-                            <div className="text-[11px] text-zinc-400 mt-1 line-clamp-1">
-                              {m.bestFor || m.family}
+                            <div className="text-xs text-zinc-400">
+                              Automatically filtered so {dockSurface} tasks only route to verified{' '}
+                              {dockSurface}-capable engines
                             </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActivePopover(null)}
+                            className="p-1 text-zinc-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
                           </button>
-                        );
-                      })}
-                    </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto">
+                          {compatibleModels.map((m) => {
+                            const isSel = activeModel?.id === m.id;
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => {
+                                  if (m.surface === 'video') setSelectedVideoModelId(m.id);
+                                  else if (m.surface === 'audio') setSelectedAudioModelId(m.id);
+                                  else setSelectedImageModelId(m.id);
+                                  setDockSurface(m.surface);
+                                  setActivePopover(null);
+                                }}
+                                className={`p-3 rounded-2xl border text-left transition-all ${
+                                  isSel
+                                    ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                                    : 'bg-[#22242B] border-white/10 text-zinc-300 hover:border-white/25'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white">{m.label}</span>
+                                  <span className="text-[10px] font-mono text-[#46ecd5]">
+                                    {calculateTokenCost(m.id, {
+                                      resolution,
+                                      ...(m.surface !== 'image'
+                                        ? { duration: durationSec }
+                                        : {}),
+                                    })}{' '}
+                                    TK
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-zinc-400 mt-1 line-clamp-1">
+                                  {m.bestFor || m.family}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+                </DialogContent>
+              </Dialog>
 
-            {/* ==============================================================
-                HIGGSFIELD CINEMA STUDIO 4.0 FLOATING COMMAND DOCK
-                Exact match for Video Mode & Image Mode screenshots
-                ============================================================== */}
-            <div className="px-3 sm:px-8 pb-5 pt-2 max-w-[1080px] w-full mx-auto sticky bottom-0 z-20">
-              <div className="flex items-stretch gap-2.5">
-                {/* Left Vertical Image / Video Surface Switcher Pill */}
-                <div className="rounded-3xl bg-[#16171B] border border-white/10 p-1.5 flex flex-col justify-between shrink-0 shadow-2xl">
-                  <button
-                    type="button"
-                    onClick={() => setDockSurface('image')}
-                    className={`px-3 py-3 rounded-2xl flex flex-col items-center gap-1 text-[11px] font-bold transition-all ${
-                      dockSurface === 'image'
-                        ? 'bg-[#262830] text-white shadow'
-                        : 'text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    <span>Image</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDockSurface('video')}
-                    className={`px-3 py-3 rounded-2xl flex flex-col items-center gap-1 text-[11px] font-bold transition-all ${
-                      dockSurface === 'video'
-                        ? 'bg-[#262830] text-white shadow'
-                        : 'text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>Video</span>
-                  </button>
-                </div>
+              {/* ============================================================
+                  UNIVERSAL FLOATING GENERATION COMPOSER (BOTTOM CENTRE)
+                  Dynamic surface & model-capability routing across Image, Video & Audio
+                  ============================================================ */}
+              <div className="px-2 sm:px-8 pb-3 sm:pb-6 pt-2 max-w-[1040px] w-full mx-auto sticky bottom-0 z-20">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-2.5">
+                  {/* Left Vertical Image / Video / Audio Mode Selector Pill */}
+                  <div className="rounded-2xl sm:rounded-3xl bg-[#15161A] border border-white/10 p-1 sm:p-1.5 flex flex-row sm:flex-col justify-center sm:justify-between gap-1 shrink-0 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDockSurface('image');
+                        if (activeToolSpec.targetSurface !== 'image') {
+                          setActiveToolId('image_creation');
+                        }
+                      }}
+                      className={`flex-1 sm:flex-initial px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl flex flex-row sm:flex-col items-center justify-center gap-1.5 sm:gap-1 text-[11px] font-bold transition-all ${
+                        dockSurface === 'image'
+                          ? 'bg-[#25272F] text-white shadow'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span>Image</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDockSurface('video');
+                        if (activeToolSpec.targetSurface !== 'video') {
+                          setActiveToolId('video_creation');
+                        }
+                      }}
+                      className={`flex-1 sm:flex-initial px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl flex flex-row sm:flex-col items-center justify-center gap-1.5 sm:gap-1 text-[11px] font-bold transition-all ${
+                        dockSurface === 'video'
+                          ? 'bg-[#25272F] text-white shadow'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <Video className="w-4 h-4" />
+                      <span>Video</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDockSurface('audio');
+                        if (activeToolSpec.targetSurface !== 'audio') {
+                          setActiveToolId('voice_creation');
+                          setActiveCategory('media_generation');
+                        }
+                      }}
+                      className={`flex-1 sm:flex-initial px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl flex flex-row sm:flex-col items-center justify-center gap-1.5 sm:gap-1 text-[11px] font-bold transition-all ${
+                        dockSurface === 'audio'
+                          ? 'bg-[#25272F] text-[#46ecd5] shadow'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <Mic className="w-4 h-4" />
+                      <span>Audio</span>
+                    </button>
+                  </div>
 
-                {/* Main Command Dock Container */}
-                {dockSurface === 'video' ? (
-                  /* VIDEO MODE DOCK (Matching Here__Your_Ideas_comes_Alive.png) */
-                  <div className="flex-1 rounded-3xl bg-[#16171B] border border-white/15 p-3 sm:p-4 space-y-3 shadow-[0_20px_70px_rgba(0,0,0,0.85)]">
-                    {/* Top Row: 5 Visual Director's Panel Trigger Cards */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {/* Universal Floating Composer Box with Magic UI BorderBeam */}
+                  <div className="relative flex-1 min-w-0 rounded-2xl sm:rounded-3xl bg-[#15161A] border border-white/12 p-2.5 sm:p-3.5 space-y-2.5 sm:space-y-3 shadow-[0_24px_70px_rgba(0,0,0,0.9)] overflow-hidden">
+                    <BorderBeam />
+                    {/* Compact Top Control Row: References, Film Setup, Camera, Color Palette, Lighting */}
+                    <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-5 gap-2 pb-0.5 sm:pb-0">
                       {/* 1. References 0/50 */}
                       <button
                         type="button"
@@ -3165,10 +4521,10 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                             activePopover === 'references' ? null : 'references'
                           )
                         }
-                        className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                           activePopover === 'references'
-                            ? 'bg-[#252830] border-white/30'
-                            : 'bg-[#1E2026] border-white/5 hover:border-white/20'
+                            ? 'bg-[#24272F] border-white/25'
+                            : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
                         <span className="w-8 h-8 rounded-xl bg-[#141519] border border-white/10 flex items-center justify-center shrink-0">
@@ -3182,7 +4538,7 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                         </div>
                       </button>
 
-                      {/* 2. Film setup */}
+                      {/* 2. Film setup / Studio setup */}
                       <button
                         type="button"
                         onClick={() =>
@@ -3190,17 +4546,19 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                             activePopover === 'film_setup' ? null : 'film_setup'
                           )
                         }
-                        className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                           activePopover === 'film_setup'
-                            ? 'bg-[#252830] border-white/30'
-                            : 'bg-[#1E2026] border-white/5 hover:border-white/20'
+                            ? 'bg-[#24272F] border-white/25'
+                            : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-stone-400/30 to-zinc-800 border border-white/15 flex items-center justify-center shrink-0">
-                          <Film className="w-4 h-4 text-zinc-200" />
+                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-stone-300/40 via-stone-500/30 to-zinc-800 border border-white/15 flex items-center justify-center shrink-0">
+                          <Film className="w-4 h-4 text-zinc-100" />
                         </span>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-zinc-400">Film setup</div>
+                          <div className="text-[10px] text-zinc-400 truncate">
+                            Film setup
+                          </div>
                           <div className="text-xs font-bold text-white truncate">
                             {filmSetupSummary}
                           </div>
@@ -3213,17 +4571,19 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                         onClick={() =>
                           setActivePopover(activePopover === 'camera' ? null : 'camera')
                         }
-                        className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                           activePopover === 'camera'
-                            ? 'bg-[#252830] border-white/30'
-                            : 'bg-[#1E2026] border-white/5 hover:border-white/20'
+                            ? 'bg-[#24272F] border-white/25'
+                            : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500/30 to-indigo-950 border border-white/15 flex items-center justify-center shrink-0">
+                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500/35 to-indigo-950 border border-white/15 flex items-center justify-center shrink-0">
                           <Camera className="w-4 h-4 text-sky-300" />
                         </span>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-zinc-400">Camera</div>
+                          <div className="text-[10px] text-zinc-400 truncate">
+                            Camera
+                          </div>
                           <div className="text-xs font-bold text-white truncate">
                             {cameraSummary}
                           </div>
@@ -3238,10 +4598,10 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                             activePopover === 'color_palette' ? null : 'color_palette'
                           )
                         }
-                        className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                           activePopover === 'color_palette'
-                            ? 'bg-[#252830] border-white/30'
-                            : 'bg-[#1E2026] border-white/5 hover:border-white/20'
+                            ? 'bg-[#24272F] border-white/25'
+                            : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
                         <span
@@ -3263,10 +4623,10 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                         onClick={() =>
                           setActivePopover(activePopover === 'lighting' ? null : 'lighting')
                         }
-                        className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                           activePopover === 'lighting'
-                            ? 'bg-[#252830] border-white/30'
-                            : 'bg-[#1E2026] border-white/5 hover:border-white/20'
+                            ? 'bg-[#24272F] border-white/25'
+                            : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
                         <span
@@ -3283,131 +4643,180 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Middle Scene Prompt Box */}
-                    <div className="relative">
+                    {/* Large Prompt Input Area */}
+                    <div className="relative pt-0.5">
                       <textarea
                         rows={2}
                         value={scenePrompt}
                         onChange={(e) => setScenePrompt(e.target.value)}
-                        placeholder="Describe your scene - use @ to add characters & locations, or # for camera moves"
-                        className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none resize-none px-1"
+                        placeholder={activeToolSpec.promptPlaceholder}
+                        className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none resize-none px-1.5"
                       />
                     </div>
 
-                    {/* Bottom Controls Row inside Dock */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
+                    {/* Bottom Toolbar inside Composer (Contextually Adapts to Image / Video / Audio Tool) */}
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2 pt-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {/* + Upload Reference */}
-                        <button
-                          type="button"
-                          onClick={() => refUploadInputRef.current?.click()}
-                          title="Upload Reference Photo or Video"
-                          className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => refUploadInputRef.current?.click()}
+                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Upload Reference Photo or Video</TooltipContent>
+                        </Tooltip>
 
                         {/* @ Add Character / Location Element */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActivePopover(
-                              activePopover === 'at_elements' ? null : 'at_elements'
-                            )
-                          }
-                          title="Insert @Character, @Location or Prop"
-                          className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 font-mono text-xs font-bold flex items-center justify-center"
-                        >
-                          @
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActivePopover(
+                                  activePopover === 'at_elements' ? null : 'at_elements'
+                                )
+                              }
+                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 font-mono text-xs font-bold flex items-center justify-center transition-colors"
+                            >
+                              @
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Insert @Character, @Location or Prop</TooltipContent>
+                        </Tooltip>
 
-                        {/* Emotion Performance Selector */}
-                        <select
-                          value={selectedEmotion}
-                          onChange={(e) => setSelectedEmotion(e.target.value)}
-                          title="Character Emotional Performance"
-                          className="px-2.5 py-1 rounded-full bg-[#22242B] border border-white/5 text-[11px] font-semibold text-zinc-200"
-                        >
-                          {EMOTION_DIRECTIONS.map((em) => (
-                            <option key={em} value={em}>
-                              Emotion: {em}
-                            </option>
-                          ))}
-                        </select>
+                        {/* [⚃] Quick Element / Film Setup Button */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActivePopover(
+                                  activePopover === 'film_setup' ? null : 'film_setup'
+                                )
+                              }
+                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center transition-colors"
+                            >
+                              <Maximize2 className="w-3 h-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Open Film & Continuity Setup</TooltipContent>
+                        </Tooltip>
 
-                        {/* Model Selector Pill ("Cinema Studio 4.0 >") */}
+                        {/* Capability-Routed Model Selector Pill */}
                         <button
                           type="button"
                           onClick={() =>
                             setActivePopover(activePopover === 'models' ? null : 'models')
                           }
-                          className="px-3 py-1 rounded-full bg-[#22242B] hover:bg-[#2B2E37] border border-white/10 text-[11px] font-bold text-white flex items-center gap-1.5"
+                          className="px-3 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] border border-white/5 text-[11px] font-bold text-white flex items-center gap-1.5"
                         >
-                          <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#46ecd5] shrink-0" />
                           <span>{activeModel?.label || 'Cinema Studio 4.0'}</span>
                           <ChevronRight className="w-3 h-3 text-zinc-400" />
                         </button>
 
-                        {/* Resolution Pill */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setResolution((prev) =>
-                              prev === '1080p' ? '2K' : prev === '2K' ? '4K' : '1080p'
-                            )
-                          }
-                          className="px-2.5 py-1 rounded-full bg-[#22242B] text-[11px] font-semibold text-zinc-200"
-                        >
-                          {resolution}
-                        </button>
+                        {/* Contextual Settings: Show Resolution & Aspect Ratio only for Image & Video */}
+                        {dockSurface !== 'audio' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setResolution((prev) =>
+                                  prev === '1080p' ? '2K' : prev === '2K' ? '4K' : '1080p'
+                                )
+                              }
+                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <Diamond className="w-3 h-3 text-zinc-400" />
+                              <span>{resolution}</span>
+                            </button>
 
-                        {/* Aspect Ratio Pill */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setAspectRatio((prev) =>
-                              prev === '16:9'
-                                ? '21:9'
-                                : prev === '21:9'
-                                ? '9:16'
-                                : prev === '9:16'
-                                ? '1:1'
-                                : '16:9'
-                            )
-                          }
-                          className="px-2.5 py-1 rounded-full bg-[#22242B] text-[11px] font-semibold text-zinc-200"
-                        >
-                          {aspectRatio}
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAspectRatio((prev) =>
+                                  prev === '16:9'
+                                    ? '21:9'
+                                    : prev === '21:9'
+                                    ? '9:16'
+                                    : prev === '9:16'
+                                    ? '1:1'
+                                    : '16:9'
+                                )
+                              }
+                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <RectangleHorizontal className="w-3 h-3 text-zinc-400" />
+                              <span>{aspectRatio}</span>
+                            </button>
+                          </>
+                        )}
 
-                        {/* Duration Pill */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDurationSec((prev) => (prev === 5 ? 8 : prev === 8 ? 10 : 5))
-                          }
-                          className="px-2.5 py-1 rounded-full bg-[#22242B] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                        >
-                          <Clock className="w-3 h-3 text-zinc-400" />
-                          <span>{durationSec}s</span>
-                        </button>
+                        {/* Contextual Settings: Duration & Audio Toggle for Video */}
+                        {dockSurface === 'video' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDurationSec((prev) => (prev === 5 ? 8 : prev === 8 ? 10 : 5))
+                              }
+                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <Clock className="w-3 h-3 text-zinc-400" />
+                              <span>{durationSec}s</span>
+                            </button>
 
-                        {/* Audio Toggle Pill */}
-                        <button
-                          type="button"
-                          onClick={() => setSoundEnabled((v) => !v)}
-                          className="px-2.5 py-1 rounded-full bg-[#22242B] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                        >
-                          {soundEnabled ? (
-                            <Volume2 className="w-3 h-3 text-[#46ecd5]" />
-                          ) : (
-                            <VolumeX className="w-3 h-3 text-zinc-500" />
-                          )}
-                          <span>{soundEnabled ? 'On' : 'Off'}</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => setSoundEnabled((v) => !v)}
+                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              {soundEnabled ? (
+                                <Volume2 className="w-3 h-3 text-zinc-300" />
+                              ) : (
+                                <VolumeX className="w-3 h-3 text-zinc-500" />
+                              )}
+                              <span>{soundEnabled ? 'On' : 'Off'}</span>
+                            </button>
+                          </>
+                        )}
 
-                        {/* Batch Stepper (- 1/4 +) */}
-                        <div className="px-2.5 py-1 rounded-full bg-[#22242B] text-[11px] font-mono-tabular text-zinc-200 flex items-center gap-2">
+                        {/* Contextual Settings: Voice Persona (Radix Select) & Audio Duration for Audio / Voice / Music */}
+                        {dockSurface === 'audio' && (
+                          <>
+                            {activeToolId !== 'music_sfx' && (
+                              <Select value={voicePersona} onValueChange={(v) => setVoicePersona(v)}>
+                                <SelectTrigger className="h-7 w-40 rounded-full bg-[#22242B] border-white/5 text-[11px] px-2.5 py-1">
+                                  <SelectValue placeholder="Voice Persona" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="noir_narrator">Voice: Noir Narrator</SelectItem>
+                                  <SelectItem value="warm_heroine">Voice: Warm Heroine</SelectItem>
+                                  <SelectItem value="trailer_baritone">Voice: Trailer Baritone</SelectItem>
+                                  <SelectItem value="documentary_clear">Voice: Documentary</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDurationSec((prev) => (prev === 5 ? 10 : prev === 10 ? 30 : 5))
+                              }
+                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <Clock className="w-3 h-3 text-zinc-400" />
+                              <span>{durationSec}s</span>
+                            </button>
+                          </>
+                        )}
+
+                        {/* Output Quantity Stepper ("- 1/4 +") */}
+                        <div className="px-2.5 py-1.5 rounded-full bg-[#22242B] text-[11px] font-mono-tabular text-zinc-200 flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setBatchSize((b) => Math.max(1, b - 1))}
@@ -3426,259 +4835,218 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Cyan GENERATE Button */}
-                      <button
+                      {/* Cyan Magic UI ShimmerButton GENERATE - {cost}TK */}
+                      <ShimmerButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => handleGenerateShot()}
-                        className="px-5 py-2 rounded-full bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider shadow-[0_0_25px_rgba(70,236,213,0.4)] disabled:opacity-50 flex items-center gap-1.5"
+                        className="w-full sm:w-auto justify-center shrink-0"
                       >
                         {isSubmitting ? (
                           <>
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>DIRECTING...</span>
+                            <span>GENERATING...</span>
                           </>
                         ) : (
                           <span>GENERATE - {estimatedCredits}TK</span>
                         )}
-                      </button>
+                      </ShimmerButton>
                     </div>
                   </div>
-                ) : (
-                  /* IMAGE MODE DOCK (Matching Screenshot_20261109-161623_Quetta_c063e9db.jpg) */
-                  <div className="flex-1 rounded-3xl bg-[#16171B] border border-white/15 p-3 sm:p-4 flex flex-col sm:flex-row items-stretch justify-between gap-3 shadow-[0_20px_70px_rgba(0,0,0,0.85)]">
-                    {/* Left: Prompt Input + Model / Aspect / Resolution Pills */}
-                    <div className="flex-1 flex flex-col justify-between space-y-3">
-                      <textarea
-                        rows={2}
-                        value={scenePrompt}
-                        onChange={(e) => setScenePrompt(e.target.value)}
-                        placeholder="Describe what you want to create..."
-                        className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none resize-none px-1"
-                      />
-
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => refUploadInputRef.current?.click()}
-                          className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActivePopover(activePopover === 'models' ? null : 'models')
-                          }
-                          className="px-3 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-xs font-bold text-white flex items-center gap-1.5"
-                        >
-                          <span className="text-lime-400 font-extrabold">~</span>
-                          <span>{activeModel?.label || 'Higgsfield Soul Cinema'}</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setAspectRatio((prev) =>
-                              prev === '16:9' ? '21:9' : prev === '21:9' ? '9:16' : '16:9'
-                            )
-                          }
-                          className="px-3 py-1.5 rounded-full bg-[#22242B] text-xs font-semibold text-zinc-200"
-                        >
-                          {aspectRatio}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setResolution((prev) => (prev === '2K' ? '4K' : '2K'))
-                          }
-                          className="px-3 py-1.5 rounded-full bg-[#22242B] text-xs font-semibold text-zinc-200 lowercase"
-                        >
-                          {resolution}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Right: CHARACTER Card + Camera Card + Generate Button */}
-                    <div className="flex items-stretch gap-2.5 shrink-0">
-                      {/* CHARACTER Card */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActivePopover(
-                            activePopover === 'at_elements' ? null : 'at_elements'
-                          )
-                        }
-                        className="w-28 rounded-2xl bg-gradient-to-b from-[#2A2C34] to-[#1D1F25] border border-white/10 hover:border-white/30 p-2.5 flex flex-col justify-between text-left transition-all"
-                      >
-                        <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
-                          <Plus className="w-3.5 h-3.5 text-zinc-200" />
-                        </span>
-                        <div>
-                          <div className="text-[11px] font-extrabold uppercase tracking-wider text-white">
-                            CHARACTER
-                          </div>
-                          {activeContinuity.characterIds[0] && (
-                            <div className="text-[10px] text-[#46ecd5] truncate">
-                              {
-                                characters.find(
-                                  (c) => c.id === activeContinuity.characterIds[0]
-                                )?.name
-                              }
-                            </div>
-                          )}
-                        </div>
-                      </button>
-
-                      {/* Camera Card ("Camera / Lens · Auto") */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActivePopover(activePopover === 'camera' ? null : 'camera')
-                        }
-                        className="w-36 rounded-2xl bg-gradient-to-b from-[#2A2C34] to-[#1D1F25] border border-white/10 hover:border-white/30 p-2.5 flex flex-col justify-between text-left transition-all"
-                      >
-                        <div className="flex justify-end">
-                          <span className="w-7 h-7 rounded-full bg-black/60 border border-white/15 flex items-center justify-center">
-                            <Camera className="w-3.5 h-3.5 text-sky-400" />
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-white">Camera</div>
-                          <div className="text-[10px] text-zinc-400 truncate">
-                            Lens · {cameraOptics.lens}
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Generate Button */}
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => handleGenerateShot()}
-                        className="px-5 rounded-2xl bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider flex flex-col items-center justify-center shadow-[0_0_25px_rgba(70,236,213,0.4)] disabled:opacity-50"
-                      >
-                        <span>{isSubmitting ? '...' : 'GENERATE'}</span>
-                        <span className="text-[10px] font-mono opacity-80">
-                          {estimatedCredits}TK
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </main>
-
-          {/* ================================================================
-              D. AI DIRECTOR RIGHT DRAWER (SCREENPLAY-TO-SHOT BREAKDOWN)
-              ================================================================ */}
-          {aiDirectorOpen && (
-            <aside className="w-80 sm:w-96 shrink-0 bg-[#121317] border-l border-white/10 p-4 flex flex-col justify-between overflow-y-auto z-20 space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Wand2 className="w-4 h-4 text-[#46ecd5]" />
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-white">
-                        AI Director Assistant
-                      </div>
-                      <div className="text-[10px] text-zinc-400">
-                        Prepares shots & camera settings; you control generation
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAiDirectorOpen(false)}
-                    className="p-1 text-zinc-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Scene Input to Break Down into Shots */}
-                <div className="space-y-2 text-xs">
-                  <label className="block text-zinc-300 font-semibold">
-                    Scene Description or Screenplay Beat
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={aiDirectorInput}
-                    onChange={(e) => setAiDirectorInput(e.target.value)}
-                    placeholder="e.g. A king enters his palace and discovers that his throne room is empty..."
-                    className="w-full p-2.5 rounded-xl bg-[#0B0C0F] border border-white/10 text-white text-xs"
-                  />
-                  <button
-                    type="button"
-                    disabled={aiDirectorBusy}
-                    onClick={handleRunAIDirectorBreakdown}
-                    className="w-full py-2 rounded-xl bg-[#46ecd5] text-zinc-950 font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>
-                      {aiDirectorBusy
-                        ? 'Breaking Scene into Shots...'
-                        : 'Break Scene into Directed Shot List'}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Shot List Cards */}
-                <div className="space-y-2.5">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                    Suggested Shot Coverage ({aiShotList.length} Shots)
-                  </div>
-                  {aiShotList.map((shot) => (
-                    <div
-                      key={shot.shotNumber}
-                      className="p-3 rounded-xl bg-[#181A20] border border-white/10 space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono-tabular font-bold text-[#46ecd5]">
-                          SHOT {shot.shotNumber} · {shot.camera}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-white/5 text-[10px] text-zinc-300">
-                          #{shot.movement}
-                        </span>
-                      </div>
-                      <p className="text-zinc-200 text-[11px] leading-relaxed">
-                        {shot.action}
-                      </p>
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] text-zinc-400">
-                          Light: {shot.lighting} · {shot.emotion}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => applyAIShotToDirectorPanel(shot)}
-                          className="px-2.5 py-1 rounded-lg bg-[#46ecd5]/20 hover:bg-[#46ecd5] text-[#46ecd5] hover:text-zinc-950 font-bold text-[11px] transition-all"
-                        >
-                          Load into Director Panel
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-white/10 text-[11px] text-zinc-400">
-                Want to edit the full multi-scene screenplay and multi-track timeline?{' '}
-                <button
-                  type="button"
-                  onClick={() => setWorkingMode('production')}
-                  className="text-[#46ecd5] font-bold hover:underline"
-                >
-                  Switch to Production Mode →
-                </button>
-              </div>
-            </aside>
+            </>
           )}
-        </div>
-      )}
+        </main>
+
+        {/* ================================================================
+            3. AI DIRECTOR RIGHT DRAWER (SCREENPLAY-TO-SHOT BREAKDOWN)
+            ================================================================ */}
+        <AnimatePresence>
+          {aiDirectorOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setAiDirectorOpen(false)}
+                className="fixed inset-0 bg-black/75 z-40 xl:hidden"
+              />
+              <motion.aside
+                initial={{ x: 24, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 24, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed xl:static inset-y-0 right-0 w-full max-w-md xl:w-96 shrink-0 bg-[#121317] border-l border-white/10 p-4 flex flex-col justify-between overflow-y-auto z-50 xl:z-20 space-y-4 shadow-2xl"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Wand2 className="w-4 h-4 text-[#46ecd5]" />
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-wider text-white">
+                          AI Director Assistant
+                        </div>
+                        <div className="text-[10px] text-zinc-400">
+                          Prepares shots & camera settings; you control generation
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setAiDirectorOpen(false)}
+                      className="h-7 w-7 text-zinc-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <label className="block text-zinc-300 font-semibold">
+                      Scene Description or Screenplay Beat
+                    </label>
+                    <Textarea
+                      rows={3}
+                      value={aiDirectorInput}
+                      onChange={(e) => setAiDirectorInput(e.target.value)}
+                      placeholder="e.g. A king enters his palace and discovers that his throne room is empty..."
+                    />
+                    <ShimmerButton
+                      type="button"
+                      disabled={aiDirectorBusy}
+                      onClick={handleRunAIDirectorBreakdown}
+                      className="w-full justify-center rounded-xl py-2"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        {aiDirectorBusy
+                          ? 'Breaking Scene into Shots...'
+                          : 'Break Scene into Directed Shot List'}
+                      </span>
+                    </ShimmerButton>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                      Suggested Shot Coverage ({aiShotList.length} Shots)
+                    </div>
+                    {aiShotList.map((shot) => (
+                      <SpotlightCard
+                        key={shot.shotNumber}
+                        className="p-3 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono-tabular font-bold text-[#46ecd5]">
+                            SHOT {shot.shotNumber} · {shot.camera}
+                          </span>
+                          <Badge variant="outline">#{shot.movement}</Badge>
+                        </div>
+                        <p className="text-zinc-200 text-[11px] leading-relaxed">
+                          {shot.action}
+                        </p>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] text-zinc-400">
+                            Light: {shot.lighting} · {shot.emotion}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="accent"
+                            size="xs"
+                            onClick={() => {
+                              applyAIShotToDirectorPanel(shot);
+                              if (window.innerWidth < 1280) setAiDirectorOpen(false);
+                            }}
+                          >
+                            Load into Composer
+                          </Button>
+                        </div>
+                      </SpotlightCard>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-white/10 text-[11px] text-zinc-400">
+                  Need the full {studioConfig.vaultButtonLabel}?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiDirectorOpen(false);
+                      setWorkingMode('production');
+                    }}
+                    className="text-[#46ecd5] font-bold hover:underline"
+                  >
+                    Open {studioConfig.vaultButtonLabel} →
+                  </button>
+                </div>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* ================================================================
+            4. CMDK COMMAND PALETTE DIALOG (⌘K) — TOOLS, MODES & ENGINES
+            ================================================================ */}
+        <CommandDialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
+          <CommandInput placeholder="Search Cinema Studio tools, workflows, or engines (⌘K)..." />
+          <CommandList>
+            <CommandEmpty>No matching Cinema Studio tools or engines found.</CommandEmpty>
+            <CommandGroup heading="Workflows & Studio Modes">
+              <CommandItem
+                onSelect={() => {
+                  setWorkingMode('auto_production');
+                  setCommandPaletteOpen(false);
+                }}
+              >
+                <Sparkles className="w-4 h-4 text-[#46ecd5]" />
+                <span>Automatic Production (4-Stage Film Pipeline)</span>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setWorkingMode('director');
+                  setCommandPaletteOpen(false);
+                }}
+              >
+                <Clapperboard className="w-4 h-4 text-[#46ecd5]" />
+                <span>Cinema Studio Director Workspace</span>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setWorkingMode('production');
+                  setCommandPaletteOpen(false);
+                }}
+              >
+                <Layers className="w-4 h-4 text-[#46ecd5]" />
+                <span>Multi-Track Timeline & Vault</span>
+              </CommandItem>
+            </CommandGroup>
+            <CommandSeparator />
+            {CINEMA_TOOL_CATEGORIES.map((cat) => (
+              <CommandGroup key={cat.id} heading={cat.label}>
+                {CINEMA_TOOL_LIST.filter((t) => t.category === cat.id).map((tool) => (
+                  <CommandItem
+                    key={tool.id}
+                    onSelect={() => {
+                      handleSelectCinemaTool(tool.id);
+                      setCommandPaletteOpen(false);
+                      toast.success(`Activated ${tool.label}`);
+                    }}
+                  >
+                    <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
+                    <div className="flex-1 flex items-center justify-between">
+                      <span>{tool.label}</span>
+                      <span className="text-[10px] font-mono uppercase text-zinc-500">
+                        {tool.targetSurface}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </CommandDialog>
+      </div>
     </div>
   );
 };

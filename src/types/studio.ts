@@ -89,18 +89,6 @@ export interface ModelRoleSpec {
   required?: boolean;
 }
 
-export type LipSyncCapability =
-  | 'native_audio_lipsync'
-  | 'video_lipsync_postprocess'
-  | 'none';
-
-export type VideoInputMode =
-  | 'text-to-video'
-  | 'image-to-video'
-  | 'reference-to-video'
-  | 'video-to-video'
-  | 'audio-to-video';
-
 export interface ModelEntry {
   id: string;
   surface: Surface;
@@ -116,8 +104,6 @@ export interface ModelEntry {
   docsUrl: string;
   modes: string[];
   roles: ModelRoleSpec[];
-  lipSyncCapability?: LipSyncCapability;
-  videoInputModes?: VideoInputMode[];
   requirePrompt: boolean;
   supportsEnhancePrompt: boolean;
   settings: SettingDefinition[];
@@ -729,82 +715,6 @@ export interface TimelineAssemblyTrackSet {
   }>;
 }
 
-export type MusicVideoGenerationMode = 'lip_sync' | 'b_roll';
-
-export type MusicVideoLipSyncPipeline = 'native_audio' | 'two_stage';
-
-export type MusicVideoBRollPreset =
-  | 'establishing'
-  | 'dance_choreography'
-  | 'slow_motion'
-  | 'artistic_cutaway'
-  | 'cinematic_closeup'
-  | 'lifestyle_story'
-  | 'transition_insert';
-
-export interface MusicVideoAudioTrack {
-  id: string;
-  title: string;
-  sourceType: 'upload' | 'url';
-  sourceUrl: string;
-  originalUrl?: string;
-  contentType: string;
-  durationSec: number;
-  waveform: number[];
-  bytes?: number;
-}
-
-export interface MusicVideoScene {
-  id: string;
-  title: string;
-  order: number;
-  mode: MusicVideoGenerationMode;
-  lipSyncPipeline: MusicVideoLipSyncPipeline;
-  characterId: string | null;
-  wardrobeId: string | null;
-  sceneSource: 'generate' | 'upload';
-  scenePrompt: string;
-  environmentPrompt: string;
-  cameraAngle: string;
-  cameraMovement: string;
-  lightingStyle: string;
-  visualStyle: string;
-  // Performance / Lip-sync direction
-  performanceDirection: string;
-  facialExpression: string;
-  gesturesAndBody: string;
-  // B-Roll direction
-  bRollPreset: MusicVideoBRollPreset;
-  bRollMotionPrompt: string;
-  // Audio segment mapping (non-destructive)
-  audioStartSec: number;
-  audioEndSec: number;
-  // Output settings
-  aspectRatio: string;
-  resolution: string;
-  durationSec: number;
-  sceneImageModelId: string;
-  animationModelId: string;
-  lipSyncModelId: string;
-  modelSettings: Record<string, string | number | boolean>;
-  // Generated / uploaded assets
-  referenceImageUrl?: string;
-  referenceImageGenerationId?: string;
-  stage1VideoUrl?: string;
-  stage1GenerationId?: string;
-  finalVideoUrl?: string;
-  finalVideoGenerationId?: string;
-  status: 'draft' | 'generating_image' | 'generating_video' | 'generating_lipsync' | 'ready' | 'error';
-  errorMessage?: string;
-}
-
-export interface MusicVideoProjectData {
-  audioTrack: MusicVideoAudioTrack | null;
-  defaultAspectRatio: string;
-  scenes: MusicVideoScene[];
-  updatedAt: string;
-}
-
 export interface CinemaProductionProject {
   id: string;
   userId: string;
@@ -819,7 +729,6 @@ export interface CinemaProductionProject {
   locationIds: string[];
   musicTrackUrl?: string;
   musicBpm?: number;
-  musicVideoData?: MusicVideoProjectData;
   scenes: ProductionScene[];
   canvasNodes: CanvasWorkflowNode[];
   timelineTracks: TimelineAssemblyTrackSet;

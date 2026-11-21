@@ -112,12 +112,13 @@ const MOTION_VIDEO_MODEL_IDS = [
   'hailuo-03-director',
 ];
 
-// Genuine audio-driven lip sync models (native image+audio & video+audio post-process)
+// Lip sync & speech-driven character performance video models
 const LIP_SYNC_MODEL_IDS = [
-  'omnihuman-1-5',
-  'sync-lipsync-v2',
-  'kling-lipsync-audio',
-  'latentsync-v1',
+  'seedance-2-5',
+  'kling-3-0-pro',
+  'wan-3-0-prime',
+  'veo-3-1',
+  'ltx-video-2',
 ];
 
 // Voice creation & Speech/Dialogue TTS models
@@ -360,8 +361,8 @@ export const CINEMA_TOOLS: Record<CinemaToolId, CinemaToolSpec> = {
     shortLabel: 'Lip Sync',
     description: 'Synchronize spoken dialogue and facial expressions onto character video shots.',
     targetSurface: 'video',
-    defaultModelId: 'omnihuman-1-5',
-    defaultMode: 'Audio Lip Sync',
+    defaultModelId: 'seedance-2-5',
+    defaultMode: 'Create Video',
     compatibleModelIds: LIP_SYNC_MODEL_IDS,
     promptPlaceholder:
       'Describe character close-up performance and spoken line — use @ to lock speaking character...',
@@ -580,130 +581,3 @@ export function resolveCompatibleModel(
   const defaultMatch = compatible.find((m) => m.id === spec.defaultModelId);
   return defaultMatch || compatible[0] || allModels[0];
 }
-
-// ============================================================================
-// MUSIC VIDEO PRODUCTION — CAPABILITY-ACCURATE MODEL SELECTORS
-// ============================================================================
-
-export function getModelLipSyncCapability(
-  model: ModelEntry | undefined
-): 'native_audio_lipsync' | 'video_lipsync_postprocess' | 'none' {
-  if (!model) return 'none';
-  if (model.lipSyncCapability) return model.lipSyncCapability;
-  const hasAudioSlot = model.roles.some((r) => r.kind === 'audio');
-  const hasVideoSlot = model.roles.some((r) => r.kind === 'video');
-  const hasImageSlot = model.roles.some((r) => r.kind === 'image');
-  if (model.surface === 'video' && hasAudioSlot) {
-    return hasImageSlot && !hasVideoSlot
-      ? 'native_audio_lipsync'
-      : 'video_lipsync_postprocess';
-  }
-  return 'none';
-}
-
-export function getModelCapabilityBadgeLabel(model: ModelEntry): {
-  label: string;
-  shortLabel: string;
-  tier: 'native_lipsync' | 'postprocess_lipsync' | 'video_only' | 'image';
-} {
-  if (model.surface === 'image') {
-    return { label: 'Scene Image Generation', shortLabel: 'Image Model', tier: 'image' };
-  }
-  const cap = getModelLipSyncCapability(model);
-  if (cap === 'native_audio_lipsync') {
-    return {
-      label: 'Native Audio-Driven Lip Sync (Image + Audio)',
-      shortLabel: 'Native Lip Sync',
-      tier: 'native_lipsync',
-    };
-  }
-  if (cap === 'video_lipsync_postprocess') {
-    return {
-      label: 'Dedicated Lip-Sync Pass (Video + Audio)',
-      shortLabel: 'Lip-Sync Pass',
-      tier: 'postprocess_lipsync',
-    };
-  }
-  return {
-    label: 'Video Animation Only (No Audio Lip Sync)',
-    shortLabel: 'Video Only',
-    tier: 'video_only',
-  };
-}
-
-/** Image models suitable for generating performers, wardrobes, and music-video scenes */
-export function getMusicVideoSceneImageModels(
-  allModels: ModelEntry[] = MODEL_CATALOG
-): ModelEntry[] {
-  return allModels.filter((m) => m.surface === 'image');
-}
-
-/** Models that directly animate a performer still image with trimmed audio into lip-synced video */
-export function getNativeAudioLipSyncModels(
-  allModels: ModelEntry[] = MODEL_CATALOG
-): ModelEntry[] {
-  return allModels.filter(
-    (m) => m.surface === 'video' && getModelLipSyncCapability(m) === 'native_audio_lipsync'
-  );
-}
-
-/** Models that synchronize an animated video clip with a trimmed audio track (Stage 2 of Two-Stage) */
-export function getPostProcessLipSyncModels(
-  allModels: ModelEntry[] = MODEL_CATALOG
-): ModelEntry[] {
-  return allModels.filter(
-    (m) => m.surface === 'video' && getModelLipSyncCapability(m) === 'video_lipsync_postprocess'
-  );
-}
-
-/** Video models for B-Roll or Stage 1 animation (excludes audio-only lip-sync post-processors) */
-export function getMusicVideoBRollModels(
-  allModels: ModelEntry[] = MODEL_CATALOG,
-  hasReferenceImage = false
-): ModelEntry[] {
-  const candidates = allModels.filter(
-    (m) => m.surface === 'video' && getModelLipSyncCapability(m) === 'none'
-  );
-  if (!hasReferenceImage) {
-    // Exclude models that strictly require a start+end image when no reference image is attached
-    return candidates.filter((m) => {
-      const requiredImages = m.roles.filter((r) => r.kind === 'image' && r.required).length;
-      return requiredImages <= 1;
-    });
-  }
-  // When user has a single scene reference image, prioritize models that support image-to-video (`start` or `reference`)
-  return candidates.filter((m) => {
-    const requiredImages = m.roles.filter((r) => r.kind === 'image' && r.required).length;
-    const acceptsImage = m.roles.some((r) => r.kind === 'image');
-    return acceptsImage && requiredImages <= 1;
-  });
-}
-
-export function getSupportedAspectRatios(model: ModelEntry | undefined): { value: string; label: string }[] {
-  const setting = model?.settings.find((s) => s.key === 'aspect_ratio' && s.type === 'enum');
-  if (setting && setting.type === 'enum') {
-    return setting.options;
-  }
-  return [
-    { value: '16:9', label: '16:9 Landscape' },
-    { value: '9:16', label: '9:16 Portrait' },
-    { value: '1:1', label: '1:1 Square' },
-  ];
-}
-
-export function getSupportedResolutions(model: ModelEntry | undefined): { value: string; label: string }[] {
-  const setting = model?.settings.find((s) => s.key === 'resolution' && s.type === 'enum');
-  if (setting && setting.type === 'enum') {
-    return setting.options;
-  }
-  return [];
-}
-
-export function getSupportedDurations(model: ModelEntry | undefined): { value: string; label: string }[] {
-  const setting = model?.settings.find((s) => s.key === 'duration' && s.type === 'enum');
-  if (setting && setting.type === 'enum') {
-    return setting.options;
-  }
-  return [];
-}
-

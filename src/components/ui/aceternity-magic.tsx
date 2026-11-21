@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 
 // ============================================================================
-// 1. ACETERNITY UI — INTERACTIVE RADIAL SPOTLIGHT CARD (MagicAI Cosmic Edition)
+// 1. ACETERNITY UI — INTERACTIVE RADIAL SPOTLIGHT CARD
 // ============================================================================
 export interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
   spotlightColor?: string;
@@ -12,7 +12,7 @@ export interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement>
 export const SpotlightCard: React.FC<SpotlightCardProps> = ({
   children,
   className,
-  spotlightColor = 'rgba(99, 102, 241, 0.16)',
+  spotlightColor = 'rgba(70, 236, 213, 0.14)',
   ...props
 }) => {
   const divRef = useRef<HTMLDivElement>(null);
@@ -32,7 +32,7 @@ export const SpotlightCard: React.FC<SpotlightCardProps> = ({
       onMouseEnter={() => setOpacity(1)}
       onMouseLeave={() => setOpacity(0)}
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0B0F19]/95 transition-all duration-200 hover:border-indigo-500/45 shadow-[0_12px_40px_rgba(0,0,0,0.55)]',
+        'relative overflow-hidden rounded-2xl border border-white/10 bg-[#12141A]/95 transition-colors duration-300 hover:border-[#46ecd5]/40',
         className
       )}
       {...props}
@@ -41,7 +41,7 @@ export const SpotlightCard: React.FC<SpotlightCardProps> = ({
         className="pointer-events-none absolute -inset-px transition-opacity duration-300"
         style={{
           opacity,
-          background: `radial-gradient(520px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 45%)`,
+          background: `radial-gradient(480px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 45%)`,
         }}
       />
       <div className="relative z-10 h-full">{children}</div>
@@ -60,8 +60,8 @@ export interface BorderBeamProps {
 
 export const BorderBeam: React.FC<BorderBeamProps> = ({
   className,
-  colorFrom = '#6366F1',
-  colorTo = '#22D3EE',
+  colorFrom = '#46ecd5',
+  colorTo = '#0ea5e9',
 }) => {
   return (
     <div
@@ -71,18 +71,18 @@ export const BorderBeam: React.FC<BorderBeamProps> = ({
       )}
     >
       <div
-        className="absolute -inset-[150%] animate-border-beam opacity-45"
+        className="absolute -inset-[150%] animate-border-beam opacity-35"
         style={{
-          background: `conic-gradient(from 0deg, transparent 0 305deg, ${colorFrom} 338deg, ${colorTo} 360deg)`,
+          background: `conic-gradient(from 0deg, transparent 0 310deg, ${colorFrom} 340deg, ${colorTo} 360deg)`,
         }}
       />
-      <div className="absolute inset-[1px] rounded-[inherit] bg-[#0B0F19]" />
+      <div className="absolute inset-[1px] rounded-[inherit] bg-[#14161C]" />
     </div>
   );
 };
 
 // ============================================================================
-// 3. ACETERNITY / MOTION PRIMITIVES — SPRING SLIDING SEGMENTED TABS
+// 3. ACETERNITY / MOTION PRIMITIVES — SPRING SLIDING PILL TABS
 // ============================================================================
 export interface AnimatedPillTabItem<T extends string = string> {
   id?: T;
@@ -120,7 +120,7 @@ export function AnimatedPillTabs<T extends string = string>({
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1 rounded-xl bg-[#0D121F] p-1 border border-white/[0.08]',
+        'inline-flex items-center gap-1 rounded-xl bg-[#111319] p-1 border border-white/[0.07]',
         className
       )}
     >
@@ -134,16 +134,16 @@ export function AnimatedPillTabs<T extends string = string>({
             type="button"
             onClick={() => onChange(itemId)}
             className={cn(
-              'relative inline-flex items-center gap-1.5 rounded-lg font-semibold transition-colors whitespace-nowrap select-none cursor-pointer z-10',
-              size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-xs',
-              isActive ? 'text-white' : 'text-slate-400 hover:text-white'
+              'relative inline-flex items-center gap-1.5 rounded-lg font-bold transition-colors whitespace-nowrap select-none cursor-pointer z-10',
+              size === 'sm' ? 'px-2.5 py-1 text-[11px]' : 'px-3.5 py-1.5 text-xs',
+              isActive ? 'text-zinc-950' : 'text-zinc-400 hover:text-white'
             )}
           >
             {isActive && (
               <motion.span
                 layoutId={effectiveLayoutId}
                 transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                className="absolute inset-0 -z-10 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 shadow-[0_0_24px_rgba(99,102,241,0.4)]"
+                className="absolute inset-0 -z-10 rounded-lg bg-[#46ecd5] shadow-[0_0_20px_rgba(70,236,213,0.35)]"
               />
             )}
             {item.icon}
@@ -153,8 +153,8 @@ export function AnimatedPillTabs<T extends string = string>({
                 className={cn(
                   'px-1.5 py-0.2 rounded text-[10px] font-mono-tabular',
                   isActive
-                    ? 'bg-white/20 text-white'
-                    : 'bg-white/5 text-slate-400'
+                    ? 'bg-zinc-950/20 text-zinc-950'
+                    : 'bg-white/5 text-zinc-400'
                 )}
               >
                 {badgeValue}
@@ -168,7 +168,7 @@ export function AnimatedPillTabs<T extends string = string>({
 }
 
 // ============================================================================
-// 4. MAGIC UI — SHIMMER GENERATE CTA BUTTON (Cosmic Indigo -> Cyan Gradient)
+// 4. MAGIC UI — SHIMMER GENERATE CTA BUTTON
 // ============================================================================
 export interface ShimmerButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -185,12 +185,12 @@ export const ShimmerButton: React.FC<ShimmerButtonProps> = ({
       whileHover={{ scale: 1.015 }}
       whileTap={{ scale: 0.985 }}
       className={cn(
-        'relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-500 px-5 py-2.5 text-xs font-semibold tracking-wide text-white shadow-[0_8px_30px_rgba(99,102,241,0.42)] transition-all hover:brightness-110 disabled:opacity-50 cursor-pointer whitespace-nowrap',
+        'relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-[#46ecd5] px-5 py-2 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-[0_0_28px_rgba(70,236,213,0.38)] transition-all hover:brightness-110 disabled:opacity-50 cursor-pointer',
         className
       )}
       {...(props as any)}
     >
-      <span className="relative z-10 flex items-center gap-2">{children}</span>
+      <span className="relative z-10 flex items-center gap-1.5">{children}</span>
     </motion.button>
   );
 };

@@ -3,18 +3,15 @@ import {
   Check,
   Copy,
   Download,
-  ExternalLink,
   Film,
   Flag,
   Globe,
-  Mail,
   Music,
   Search,
   Sliders,
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import {
   ApiProviderId,
@@ -23,8 +20,6 @@ import {
   ModelEntry,
   Surface,
 } from '../types/studio';
-import { priceFor } from '../billing/price';
-import { STUDIO_PLANS, TOPUP_PACKS } from '../billing/plans';
 import { useRuns } from '../lib/useRuns';
 import {
   ApiProviderBadge,
@@ -32,9 +27,27 @@ import {
   SpacixLogo,
 } from './ProviderBrandIcon';
 import { AuthFormCard } from './AuthPage';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Slider,
+  Switch,
+} from './ui/primitives';
+import {
+  AnimatedPillTabs,
+  BorderBeam,
+  ShimmerButton,
+  SpotlightCard,
+} from './ui/aceternity-magic';
 
 // ============================================================================
-// 1. MODEL PICKER MODAL (Grouped by Surface & Family)
+// 1. MODEL PICKER MODAL (Radix Dialog + AnimatedPillTabs + SpotlightCard)
 // ============================================================================
 export const ModelPickerModal: React.FC<{
   open: boolean;
@@ -50,11 +63,9 @@ export const ModelPickerModal: React.FC<{
   selectedModelId,
   onSelectModel,
 }) => {
-  const { models } = useRuns();
+  const { models, calculateTokenCost } = useRuns();
   const [activeSurface, setActiveSurface] = useState<Surface>(surface);
   const [query, setQuery] = useState('');
-
-  if (!open) return null;
 
   const filtered = models
     .filter((m) => m.surface === activeSurface)
@@ -69,62 +80,41 @@ export const ModelPickerModal: React.FC<{
     );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-5xl max-h-[88vh] flex flex-col bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-5xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
             <SpacixLogo size="sm" />
             <span className="text-white/20">·</span>
             <div>
-              <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white">
-                Select Production Model
-              </h2>
-              <p className="text-xs text-zinc-400">
+              <DialogTitle>Select Production Model</DialogTitle>
+              <DialogDescription>
                 Choose cinema video, optical still, and studio audio architectures
-              </p>
+              </DialogDescription>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close model picker"
-            className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        </DialogHeader>
 
         <div className="flex flex-col gap-3 px-6 py-3 bg-[#151519] border-b border-white/10">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg border border-white/5">
-              {(['video', 'image', 'audio'] as Surface[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setActiveSurface(s)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                    activeSurface === s
-                      ? 'bg-[#46ecd5] text-zinc-950'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {s} Models
-                </button>
-              ))}
-            </div>
+            <AnimatedPillTabs
+              layoutGroupId="model-picker-surface-tabs"
+              value={activeSurface}
+              onChange={(v) => setActiveSurface(v as Surface)}
+              items={(['video', 'image', 'audio'] as Surface[]).map((s) => ({
+                value: s,
+                label: `${s.toUpperCase()} MODELS`,
+              }))}
+            />
 
             <div className="relative flex-1 min-w-[220px] max-w-xs">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search Nano Banana, Seedance, Kling, Flux, Grok..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-900 border border-white/10 rounded-lg text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-9 h-8 text-xs"
               />
             </div>
           </div>
@@ -134,22 +124,23 @@ export const ModelPickerModal: React.FC<{
           {filtered.map((model) => {
             const defaultSettings: Record<string, string | number | boolean> = {};
             for (const s of model.settings) defaultSettings[s.key] = s.defaultValue;
-            const startingCost = priceFor(model.id, defaultSettings, []);
+            const startingCost = calculateTokenCost(model.id, defaultSettings, []);
             const isSelected = model.id === selectedModelId;
 
             return (
-              <div
+              <SpotlightCard
                 key={model.id}
                 onClick={() => {
                   onSelectModel(model);
                   onClose();
                 }}
-                className={`cursor-pointer text-left p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                className={`cursor-pointer text-left p-4 transition-all flex flex-col justify-between gap-3 ${
                   isSelected
                     ? 'bg-zinc-900/90 border-[#46ecd5]'
                     : 'bg-[#18181C]/70 border-white/10 hover:border-white/25 hover:bg-[#18181C]'
                 }`}
               >
+                {isSelected && <BorderBeam />}
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
@@ -166,9 +157,9 @@ export const ModelPickerModal: React.FC<{
                         </>
                       )}
                     </div>
-                    <span className="font-mono-tabular text-xs font-semibold text-zinc-200">
+                    <Badge variant="default" className="font-mono-tabular">
                       from ✦ {startingCost}
-                    </span>
+                    </Badge>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -189,17 +180,17 @@ export const ModelPickerModal: React.FC<{
                     </span>
                   </div>
                 </div>
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 // ============================================================================
-// 2. SETTINGS DIALOG (Renders enum -> Select, range -> Slider, boolean -> Switch)
+// 2. SETTINGS DIALOG (Radix Dialog + Radix Slider + Radix Switch)
 // ============================================================================
 export const SettingsDialog: React.FC<{
   open: boolean;
@@ -209,32 +200,18 @@ export const SettingsDialog: React.FC<{
   onChangeSetting: (key: string, value: string | number | boolean) => void;
   onResetDefaults: () => void;
 }> = ({ open, onClose, model, settings, onChangeSetting, onResetDefaults }) => {
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <Sliders className="w-4 h-4 text-[#46ecd5]" />
-            <h2 className="font-display text-xl font-bold uppercase tracking-wide text-white">
-              {model.label} Parameters
-            </h2>
+            <DialogTitle>{model.label} Parameters</DialogTitle>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close settings dialog"
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+          <DialogDescription>
+            Adjust optical, motion, and sampling controls for {model.label}
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {model.settings.map((def) => {
@@ -245,22 +222,20 @@ export const SettingsDialog: React.FC<{
                 <div key={def.key} className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <label className="font-medium text-zinc-200">{def.label}</label>
-                    <span className="font-mono-tabular text-zinc-400">{String(val)}</span>
+                    <Badge variant="outline" className="font-mono-tabular">{String(val)}</Badge>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {def.options.map((opt) => (
-                      <button
+                      <Button
                         key={opt.value}
                         type="button"
+                        variant={String(val) === opt.value ? 'cyanGhost' : 'secondary'}
+                        size="sm"
                         onClick={() => onChangeSetting(def.key, opt.value)}
-                        className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors text-left truncate ${
-                          String(val) === opt.value
-                            ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
-                            : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
-                        }`}
+                        className="justify-start truncate"
                       >
                         {opt.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -269,22 +244,20 @@ export const SettingsDialog: React.FC<{
 
             if (def.type === 'range') {
               return (
-                <div key={def.key} className="space-y-2">
+                <div key={def.key} className="space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <label className="font-medium text-zinc-200">{def.label}</label>
-                    <span className="font-mono-tabular text-[#46ecd5]">
+                    <Badge variant="default" className="font-mono-tabular">
                       {Number(val)}
                       {def.unit || ''}
-                    </span>
+                    </Badge>
                   </div>
-                  <input
-                    type="range"
+                  <Slider
                     min={def.min}
                     max={def.max}
                     step={def.step}
-                    value={Number(val)}
-                    onChange={(e) => onChangeSetting(def.key, Number(e.target.value))}
-                    className="w-full accent-[#46ecd5] bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
+                    value={[Number(val)]}
+                    onValueChange={(vals) => onChangeSetting(def.key, vals[0])}
                   />
                   <div className="flex justify-between text-[11px] font-mono-tabular text-zinc-500">
                     <span>{def.min}</span>
@@ -306,49 +279,39 @@ export const SettingsDialog: React.FC<{
                     <div className="text-[11px] text-zinc-500 mt-0.5">{def.description}</div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={Boolean(val)}
-                  onClick={() => onChangeSetting(def.key, !val)}
-                  className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
-                    val ? 'bg-[#46ecd5] justify-end' : 'bg-zinc-800 justify-start'
-                  }`}
-                >
-                  <span
-                    className={`w-5 h-5 rounded-full transition-transform ${
-                      val ? 'bg-zinc-950' : 'bg-zinc-400'
-                    }`}
-                  />
-                </button>
+                <Switch
+                  checked={Boolean(val)}
+                  onCheckedChange={(checked) => onChangeSetting(def.key, checked)}
+                />
               </div>
             );
           })}
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 bg-[#151519] border-t border-white/10">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onResetDefaults}
-            className="text-xs text-zinc-400 hover:text-white transition-colors"
           >
             Reset to Model Defaults
-          </button>
-          <button
+          </Button>
+          <ShimmerButton
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
+            className="px-4 py-2 text-xs"
           >
             Apply Parameters
-          </button>
+          </ShimmerButton>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 // ============================================================================
-// 3. ASSET LIBRARY MODAL (Uploads + Generated Library Picker for Media Slots)
+// 3. ASSET LIBRARY MODAL (Radix Dialog + AnimatedPillTabs)
 // ============================================================================
 export const AssetLibraryModal: React.FC<{
   open: boolean;
@@ -360,8 +323,6 @@ export const AssetLibraryModal: React.FC<{
   const { uploads, generations, uploadReferenceFile } = useRuns();
   const [tab, setTab] = useState<'uploads' | 'generations'>('uploads');
   const [uploading, setUploading] = useState(false);
-
-  if (!open) return null;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -395,55 +356,27 @@ export const AssetLibraryModal: React.FC<{
   );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-3xl bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[82vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <div>
-            <h2 className="font-display text-xl font-bold uppercase tracking-wide text-white">
-              Select {targetRole.toUpperCase()} ({targetKind})
-            </h2>
-            <p className="text-xs text-zinc-400">
-              Upload a reference file (JPEG, PNG, WebP, MP4, WAV) or pick from your SPACIX library
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close asset library"
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-3xl p-0 overflow-hidden flex flex-col max-h-[82vh]">
+        <DialogHeader className="px-6 py-4 border-b border-white/10">
+          <DialogTitle>
+            Select {targetRole.toUpperCase()} ({targetKind})
+          </DialogTitle>
+          <DialogDescription>
+            Upload a reference file (JPEG, PNG, WebP, MP4, WAV) or pick from your SPACIX library
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="flex items-center justify-between px-6 py-3 bg-[#151519] border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTab('uploads')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                tab === 'uploads'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Uploads ({uploads.length})
-            </button>
-            <button
-              onClick={() => setTab('generations')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                tab === 'generations'
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              SPACIX Generations ({completedGenerations.length})
-            </button>
-          </div>
+          <AnimatedPillTabs
+            layoutGroupId="asset-library-modal-tabs"
+            value={tab}
+            onChange={(v) => setTab(v as 'uploads' | 'generations')}
+            items={[
+              { value: 'uploads', label: 'Uploads', count: uploads.length },
+              { value: 'generations', label: 'SPACIX Generations', count: completedGenerations.length },
+            ]}
+          />
 
           <label className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/15 text-white rounded-lg cursor-pointer transition-colors">
             <Upload className="w-3.5 h-3.5 text-[#46ecd5]" />
@@ -460,7 +393,7 @@ export const AssetLibraryModal: React.FC<{
         <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-4">
           {tab === 'uploads' &&
             uploads.map((u) => (
-              <button
+              <SpotlightCard
                 key={u.id}
                 onClick={() => {
                   onSelectMedia({
@@ -471,7 +404,7 @@ export const AssetLibraryModal: React.FC<{
                   });
                   onClose();
                 }}
-                className="group text-left bg-[#18181C] border border-white/10 hover:border-[#46ecd5] rounded-xl overflow-hidden transition-all"
+                className="group cursor-pointer text-left p-0 overflow-hidden transition-all"
               >
                 <div className="aspect-video bg-zinc-900 relative overflow-hidden">
                   <img
@@ -487,7 +420,7 @@ export const AssetLibraryModal: React.FC<{
                     {u.kind.toUpperCase()} · {Math.round(u.bytes / 1024)} KB
                   </div>
                 </div>
-              </button>
+              </SpotlightCard>
             ))}
 
           {tab === 'generations' &&
@@ -495,7 +428,7 @@ export const AssetLibraryModal: React.FC<{
               const out = g.outputs[0];
               if (!out) return null;
               return (
-                <button
+                <SpotlightCard
                   key={g.id}
                   onClick={() => {
                     onSelectMedia({
@@ -506,7 +439,7 @@ export const AssetLibraryModal: React.FC<{
                     });
                     onClose();
                   }}
-                  className="group text-left bg-[#18181C] border border-white/10 hover:border-[#46ecd5] rounded-xl overflow-hidden transition-all"
+                  className="group cursor-pointer text-left p-0 overflow-hidden transition-all"
                 >
                   <div className="aspect-video bg-zinc-900 relative overflow-hidden flex items-center justify-center">
                     {out.kind === 'audio' ? (
@@ -524,17 +457,17 @@ export const AssetLibraryModal: React.FC<{
                     <div className="text-xs font-medium text-white truncate">{g.prompt}</div>
                     <div className="text-[11px] text-zinc-500 mt-0.5">{g.modelLabel}</div>
                   </div>
-                </button>
+                </SpotlightCard>
               );
             })}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 // ============================================================================
-// 4. GENERATION DETAIL LIGHTBOX MODAL
+// 4. GENERATION DETAIL LIGHTBOX MODAL (Radix Dialog)
 // ============================================================================
 export const GenerationDetailModal: React.FC = () => {
   const {
@@ -576,14 +509,11 @@ export const GenerationDetailModal: React.FC = () => {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
-      onClick={() => setSelectedGeneration(null)}
+    <Dialog
+      open={Boolean(selectedGeneration)}
+      onOpenChange={(isOpen) => !isOpen && setSelectedGeneration(null)}
     >
-      <div
-        className="w-full max-w-5xl bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-12 max-h-[92vh] overflow-y-auto lg:overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <DialogContent className="max-w-5xl p-0 overflow-hidden grid grid-cols-1 lg:grid-cols-12 max-h-[92vh]">
         <div className="lg:col-span-8 bg-[#09090B] flex items-center justify-center p-3 sm:p-6 min-h-[240px] sm:min-h-[320px] relative">
           {out?.kind === 'audio' ? (
             <div className="w-full max-w-md p-6 rounded-xl bg-[#151519] border border-white/10 space-y-4">
@@ -623,40 +553,33 @@ export const GenerationDetailModal: React.FC = () => {
               />
             )
           ) : (
-            <div className="text-sm text-zinc-400"> Status: {gen.status.toUpperCase()}</div>
+            <div className="text-sm text-zinc-400">Status: {gen.status.toUpperCase()}</div>
           )}
         </div>
 
         <div className="lg:col-span-4 p-6 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-white/10 overflow-y-auto">
           <div className="space-y-5">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-xs text-zinc-400">
-                  <span>{gen.surface.toUpperCase()}</span>
-                  <span className="mx-1.5">·</span>
-                  <span className="font-mono-tabular text-[#46ecd5]">✦ {gen.cost} credits</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mt-0.5">{gen.modelLabel}</h3>
+            <div>
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                <Badge variant="outline">{gen.surface.toUpperCase()}</Badge>
+                <Badge variant="default" className="font-mono-tabular">✦ {gen.cost} credits</Badge>
               </div>
-              <button
-                onClick={() => setSelectedGeneration(null)}
-                aria-label="Close detail view"
-                className="p-1.5 text-zinc-400 hover:text-white rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <DialogTitle className="mt-2">{gen.modelLabel}</DialogTitle>
+              <DialogDescription className="sr-only">Generation details and actions</DialogDescription>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span>Prompt</span>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleCopyPrompt}
-                  className="inline-flex items-center gap-1 text-zinc-300 hover:text-[#46ecd5]"
+                  className="h-6 px-2 text-xs"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>Copy</span>
-                </button>
+                </Button>
               </div>
               <p className="text-xs text-zinc-200 bg-zinc-900/90 border border-white/10 rounded-lg p-3 leading-relaxed">
                 {gen.prompt}
@@ -727,255 +650,191 @@ export const GenerationDetailModal: React.FC = () => {
           </div>
 
           <div className="space-y-2.5 pt-6 border-t border-white/10 mt-6">
-            <button
+            <ShimmerButton
               onClick={() => reuseGenerationInDock(gen, false)}
-              className="w-full py-2.5 px-4 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 text-xs"
             >
               <Sparkles className="w-4 h-4" />
               <span>Reuse Prompt & Settings</span>
-            </button>
+            </ShimmerButton>
 
             {gen.surface === 'image' && out && (
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => reuseGenerationInDock(gen, true)}
-                className="w-full py-2 px-4 text-xs font-semibold bg-white/10 hover:bg-white/15 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full"
               >
                 <Film className="w-4 h-4 text-[#46ecd5]" />
                 <span>Animate Still in Video Studio</span>
-              </button>
+              </Button>
             )}
 
             <div className="grid grid-cols-2 gap-2">
               {out && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={(e) => downloadGeneration(gen, e)}
-                  className="py-2 px-3 text-xs font-medium bg-zinc-900 hover:bg-[#46ecd5] hover:text-zinc-950 border border-white/10 text-zinc-200 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download</span>
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => togglePublishGeneration(gen.id, !gen.isPublic)}
-                className="py-2 px-3 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 rounded-lg flex items-center justify-center gap-1.5"
               >
                 <Globe className="w-3.5 h-3.5 text-[#46ecd5]" />
                 <span>{gen.isPublic ? 'Unpublish' : 'Publish'}</span>
-              </button>
+              </Button>
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleReport}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1"
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 h-7 px-2"
               >
                 <Flag className="w-3 h-3" />
                 <span>Report content</span>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => deleteGeneration(gen.id)}
-                className="text-[11px] text-rose-400 hover:text-rose-300 inline-flex items-center gap-1"
+                className="text-[11px] text-rose-400 hover:text-rose-300 h-7 px-2"
               >
                 <Trash2 className="w-3 h-3" />
                 <span>Delete</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 // ============================================================================
-// 5. AUTHENTICATION MODAL (Real Database Login, Sign Up, Remember Me & Reset)
+// 5. AUTHENTICATION MODAL (Radix Dialog)
 // ============================================================================
 export const AuthMagicLinkModal: React.FC = () => {
   const { authModalOpen, setAuthModalOpen } = useRuns();
 
-  if (!authModalOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto"
-      onClick={() => setAuthModalOpen(false)}
-    >
-      <div
-        className="w-full max-w-md my-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open={authModalOpen} onOpenChange={setAuthModalOpen}>
+      <DialogContent className="max-w-md p-0 bg-transparent border-none shadow-none">
+        <DialogTitle className="sr-only">Sign In or Create Account</DialogTitle>
+        <DialogDescription className="sr-only">Authenticate with your SPACIX account</DialogDescription>
         <AuthFormCard isModal onClose={() => setAuthModalOpen(false)} />
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 // ============================================================================
-// 6. UPGRADE & TOP-UP CREDITS MODAL (Stripe Checkout Integration)
+// 6. UPGRADE & TOP-UP CREDITS MODAL (Radix Dialog + BorderBeam + ShimmerButton)
 // ============================================================================
 export const UpgradeCreditsModal: React.FC = () => {
-  const { upgradeModalOpen, setUpgradeModalOpen, user, checkoutPlanOrTopup } = useRuns();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
+  const { upgradeModalOpen, setUpgradeModalOpen, user, navigate, showToast } = useRuns();
+  const [notifyEmail, setNotifyEmail] = useState(user?.email || '');
+  const [notified, setNotified] = useState(false);
 
-  if (!upgradeModalOpen) return null;
+  const handleNotify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifyEmail.trim()) return;
+    setNotified(true);
+    showToast('You are on the priority list for SPACIX Pricing & Plans launch');
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={() => setUpgradeModalOpen(false)}
-    >
-      <div
-        className="w-full max-w-4xl bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[88vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
+      <DialogContent className="max-w-2xl p-0 overflow-hidden flex flex-col max-h-[88vh]">
+        <BorderBeam />
+        <DialogHeader className="px-6 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
             <SpacixLogo size="sm" />
             <span className="text-white/20">·</span>
             <div>
-              <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white">
-                Upgrade Plan or Add Top-Up Credits
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Current balance:{' '}
+              <DialogTitle>
+                Studio Plans &amp; Credit Packages — Coming Soon
+              </DialogTitle>
+              <DialogDescription>
+                Current wallet balance:{' '}
                 <span className="text-[#46ecd5] font-mono-tabular font-semibold">
-                  ✦ {user?.credits.total ?? 0} credits
-                </span>{' '}
-                ({user?.credits.subscription ?? 0} subscription · {user?.credits.topup ?? 0} non-expiring top-up)
-              </p>
+                  ✦ {user?.credits.total ?? 0} TK
+                </span>
+              </DialogDescription>
             </div>
           </div>
-          <button
-            onClick={() => setUpgradeModalOpen(false)}
-            aria-label="Close upgrade modal"
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        </DialogHeader>
 
-        <div className="p-6 overflow-y-auto space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
-              Instant Credit Top-Up Packs (Never Expire)
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-center">
+          <Badge variant="default" className="px-3.5 py-1.5 text-[11px] font-mono-tabular font-bold uppercase tracking-[0.2em]">
+            <span className="w-2 h-2 rounded-full bg-[#46ecd5] animate-pulse" />
+            <span>COMING SOON · OFFICIAL PRICING RELEASE</span>
+          </Badge>
+
+          <div className="space-y-3 max-w-xl mx-auto">
+            <h3 className="font-display text-2xl sm:text-3xl font-extrabold uppercase text-white">
+              Tailored Studio Plans &amp; Production Pricing Soon to Come
             </h3>
-            <span className="text-xs text-zinc-400">
-              Processed via Stripe Checkout · Instant ledger grant
-            </span>
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              We are finalizing transparent subscription plans and non-expiring production token packages designed for independent directors, commercial agencies, and virtual film studios. Official pricing tiers will be announced shortly.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {TOPUP_PACKS.map((pack) => (
-              <div
-                key={pack.id}
-                className="p-4 rounded-xl bg-[#18181C] border border-white/10 flex flex-col justify-between gap-4"
-              >
-                <div>
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span>{pack.name}</span>
-                    {pack.tag && <span className="text-[#46ecd5]">{pack.tag}</span>}
-                  </div>
-                  <div className="text-2xl font-bold font-mono-tabular text-white mt-1">
-                    ✦ {pack.credits.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-zinc-400 font-mono-tabular mt-0.5">
-                    ${pack.priceUsd} one-time payment
-                  </div>
-                </div>
-                <button
-                  onClick={() => checkoutPlanOrTopup({ kind: 'topup', topupId: pack.id })}
-                  className="w-full py-2 px-3 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
-                >
-                  Buy ✦ {pack.credits.toLocaleString()} (${pack.priceUsd})
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
-              SPACIX Subscriptions (Monthly Allowance Reset)
-            </h3>
-            <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg border border-white/10">
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  billingCycle === 'monthly' ? 'bg-white text-zinc-950' : 'text-zinc-400'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle('annual')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  billingCycle === 'annual' ? 'bg-[#46ecd5] text-zinc-950' : 'text-zinc-400'
-                }`}
-              >
-                Annual (20% OFF)
-              </button>
+          {notified ? (
+            <div className="py-3 px-4 rounded-xl bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5] flex items-center justify-center gap-2 max-w-md mx-auto">
+              <Check className="w-4 h-4" />
+              <span>Priority notification registered — we will notify you when pricing goes live.</span>
             </div>
-          </div>
+          ) : (
+            <form
+              onSubmit={handleNotify}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md mx-auto"
+            >
+              <Input
+                type="email"
+                required
+                value={notifyEmail}
+                onChange={(e) => setNotifyEmail(e.target.value)}
+                placeholder="Enter your email for pricing launch updates..."
+                className="flex-1 h-10 bg-[#090A0D]"
+              />
+              <ShimmerButton
+                type="submit"
+                className="px-5 py-2.5 text-xs shrink-0"
+              >
+                Notify Me
+              </ShimmerButton>
+            </form>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {STUDIO_PLANS.filter((p) => p.id !== 'free').map((plan) => {
-              const price = billingCycle === 'annual' ? plan.annualMonthlyUsd : plan.monthlyUsd;
-              const isCurrent = user?.plan === plan.id;
-              return (
-                <div
-                  key={plan.id}
-                  className={`p-4 rounded-xl border flex flex-col justify-between gap-4 ${
-                    plan.id === 'plus'
-                      ? 'bg-zinc-900/90 border-[#46ecd5]'
-                      : 'bg-[#18181C] border-white/10'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span>{plan.name}</span>
-                      {plan.badge && <span className="text-[#46ecd5] font-semibold">{plan.badge}</span>}
-                    </div>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-2xl font-bold font-mono-tabular text-white">
-                        ${price}
-                      </span>
-                      <span className="text-xs text-zinc-400">/ month</span>
-                    </div>
-                    <div className="text-xs font-mono-tabular text-[#46ecd5] mt-1">
-                      ✦ {plan.monthlyCredits.toLocaleString()} credits / mo
-                    </div>
-                    <ul className="mt-3 space-y-1.5 text-xs text-zinc-400">
-                      {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-[#46ecd5] shrink-0 mt-0.5" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      checkoutPlanOrTopup({
-                        kind: 'subscription',
-                        planId: plan.id,
-                        billingCycle,
-                      })
-                    }
-                    className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                      isCurrent
-                        ? 'bg-white/10 text-white hover:bg-white/15'
-                        : 'bg-[#46ecd5] text-zinc-950 hover:brightness-105'
-                    }`}
-                  >
-                    {isCurrent ? 'Reset / Renew Allowance' : `Switch to ${plan.name}`}
-                  </button>
-                </div>
-              );
-            })}
+          <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setUpgradeModalOpen(false);
+                navigate('pricing');
+              }}
+            >
+              View Full Coming Soon Pricing Page →
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setUpgradeModalOpen(false)}
+            >
+              Continue in Studio
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -606,9 +606,7 @@ function resolve_runware_model_air(string $surface, string $rawIdentifier): stri
         if (
             strpos($lower, 'klingai:') === 0 ||
             strpos($lower, 'bytedance:') === 0 ||
-            strpos($lower, 'alibaba:') === 0 ||
-            strpos($lower, 'sync:') === 0 ||
-            strpos($lower, 'runware:') === 0
+            strpos($lower, 'alibaba:') === 0
         ) {
             return $id;
         }
@@ -621,172 +619,6 @@ function resolve_runware_model_air(string $surface, string $rawIdentifier): stri
         return 'auto';
     }
     return 'auto';
-}
-
-function get_merged_catalog_models(PDO $pdo): array {
-    $stored = kv_get($pdo, 'catalogModels', []);
-    if (!is_array($stored)) {
-        $stored = [];
-    }
-    $seedPath = __DIR__ . '/seed_data.json';
-    if (!is_file($seedPath)) {
-        return $stored;
-    }
-    static $seedModelsCache = null;
-    if ($seedModelsCache === null) {
-        $rawSeed = @file_get_contents($seedPath);
-        $decodedSeed = is_string($rawSeed) ? json_decode($rawSeed, true) : null;
-        $seedModelsCache = is_array($decodedSeed['catalogModels'] ?? null) ? $decodedSeed['catalogModels'] : [];
-    }
-    if (empty($seedModelsCache)) {
-        return $stored;
-    }
-
-    $byId = [];
-    foreach ($stored as $idx => $m) {
-        if (is_array($m) && !empty($m['id'])) {
-            $byId[$m['id']] = $idx;
-        }
-    }
-
-    $changed = false;
-    foreach ($seedModelsCache as $sm) {
-        if (!is_array($sm) || empty($sm['id'])) {
-            continue;
-        }
-        $sid = $sm['id'];
-        if (!isset($byId[$sid])) {
-            $stored[] = $sm;
-            $byId[$sid] = count($stored) - 1;
-            $changed = true;
-        } else {
-            $idx = $byId[$sid];
-            if (isset($sm['lipSyncCapability']) && !isset($stored[$idx]['lipSyncCapability'])) {
-                $stored[$idx]['lipSyncCapability'] = $sm['lipSyncCapability'];
-                $changed = true;
-            }
-            if (isset($sm['videoInputModes']) && !isset($stored[$idx]['videoInputModes'])) {
-                $stored[$idx]['videoInputModes'] = $sm['videoInputModes'];
-                $changed = true;
-            }
-        }
-    }
-
-    if ($changed) {
-        kv_set($pdo, 'catalogModels', array_values($stored));
-    }
-    return $stored;
-}
-
-function spacix_is_public_ip(string $ip): bool {
-    return filter_var(
-        $ip,
-        FILTER_VALIDATE_IP,
-        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
-    ) !== false;
-}
-
-function spacix_validate_external_audio_url(string $rawUrl): array {
-    $trimmed = trim($rawUrl);
-    if ($trimmed === '' || strlen($trimmed) > 2048) {
-        return ['ok' => false, 'error' => 'Please provide a valid direct audio URL.'];
-    }
-    $parts = @parse_url($trimmed);
-    if (!is_array($parts)) {
-        return ['ok' => false, 'error' => 'Invalid URL format.'];
-    }
-    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-    if ($scheme !== 'https' && $scheme !== 'http') {
-        return ['ok' => false, 'error' => 'Only HTTP and HTTPS audio URLs are supported.'];
-    }
-    if (!empty($parts['user']) || !empty($parts['pass'])) {
-        return ['ok' => false, 'error' => 'URLs with embedded credentials are not supported.'];
-    }
-    $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
-    if (
-        $host === '' ||
-        $host === 'localhost' ||
-        str_ends_with($host, '.localhost') ||
-        str_ends_with($host, '.local') ||
-        str_ends_with($host, '.internal')
-    ) {
-        return ['ok' => false, 'error' => 'Local or internal hostnames are not permitted.'];
-    }
-
-    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-        if (!spacix_is_public_ip($host)) {
-            return ['ok' => false, 'error' => 'Private or reserved IP addresses are not permitted.'];
-        }
-        return ['ok' => true, 'url' => $trimmed, 'host' => $host, 'ips' => [$host]];
-    }
-
-    $ips = [];
-    $v4 = @gethostbynamel($host);
-    if (is_array($v4)) {
-        $ips = array_merge($ips, $v4);
-    }
-    if (function_exists('dns_get_record')) {
-        $aaaa = @dns_get_record($host, DNS_AAAA);
-        if (is_array($aaaa)) {
-            foreach ($aaaa as $rec) {
-                if (!empty($rec['ipv6'])) {
-                    $ips[] = $rec['ipv6'];
-                }
-            }
-        }
-    }
-    $ips = array_values(array_unique($ips));
-    if (empty($ips)) {
-        return ['ok' => false, 'error' => 'Could not resolve the audio host. Verify the direct audio link is reachable.'];
-    }
-    foreach ($ips as $ip) {
-        if (!spacix_is_public_ip($ip)) {
-            return ['ok' => false, 'error' => 'This URL resolves to a restricted network address and cannot be imported.'];
-        }
-    }
-    return ['ok' => true, 'url' => $trimmed, 'host' => $host, 'ips' => $ips];
-}
-
-function spacix_detect_audio_magic_mime(string $bytes, string $contentTypeHint = ''): ?string {
-    $len = strlen($bytes);
-    if ($len < 12) {
-        return null;
-    }
-    $head4 = substr($bytes, 0, 4);
-    $head3 = substr($bytes, 0, 3);
-    $b0 = ord($bytes[0]);
-    $b1 = ord($bytes[1]);
-
-    if ($head4 === 'RIFF' && substr($bytes, 8, 4) === 'WAVE') {
-        return 'audio/wav';
-    }
-    if ($head3 === 'ID3' || ($b0 === 0xFF && ($b1 & 0xE0) === 0xE0)) {
-        return ($b0 === 0xFF && ($b1 & 0xF6) === 0xF0) ? 'audio/aac' : 'audio/mpeg';
-    }
-    if ($head4 === 'OggS') {
-        return 'audio/ogg';
-    }
-    if ($head4 === 'fLaC') {
-        return 'audio/flac';
-    }
-    if (substr($bytes, 4, 4) === 'ftyp') {
-        $brand = substr($bytes, 8, 4);
-        if (in_array($brand, ['M4A ', 'M4B ', 'mp42', 'isom', 'iso2', 'qt  '], true)) {
-            return 'audio/mp4';
-        }
-    }
-    if ($head4 === "\x1A\x45\xDF\xA3") {
-        return 'audio/webm';
-    }
-    $cleanHint = strtolower(trim(explode(';', $contentTypeHint)[0] ?? ''));
-    if (in_array($cleanHint, ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/ogg', 'audio/webm', 'audio/flac', 'audio/x-flac'], true)) {
-        $prefixTrim = ltrim(substr($bytes, 0, 64));
-        if (strpos($prefixTrim, '<') === 0 || strpos($prefixTrim, '{') === 0) {
-            return null;
-        }
-        return $cleanHint === 'audio/mp3' ? 'audio/mpeg' : $cleanHint;
-    }
-    return null;
 }
 
 function compute_runware_dimensions(string $surface, array $settings): array {
@@ -1186,7 +1018,7 @@ if ($path === '/api/catalog' && $method === 'GET') {
         }
     }
 
-    $catalogModels = get_merged_catalog_models($pdo);
+    $catalogModels = kv_get($pdo, 'catalogModels', []);
     $modelOverrides = get_all_model_pricing($pdo);
 
     $models = [];
@@ -1243,12 +1075,6 @@ if ($path === '/api/catalog' && $method === 'GET') {
             'previewGradient' => $m['previewGradient'],
             'previewAccent' => $m['previewAccent'],
         ];
-        if (!empty($m['lipSyncCapability'])) {
-            $item['lipSyncCapability'] = $m['lipSyncCapability'];
-        }
-        if (!empty($m['videoInputModes']) && is_array($m['videoInputModes'])) {
-            $item['videoInputModes'] = $m['videoInputModes'];
-        }
         if ($isAdmin) {
             $item['defaultApiProvider'] = $defaultApiProvider;
             $item['supportedProviders'] = $filteredSpecs;
@@ -1350,7 +1176,7 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
     $presetId = !empty($reqBody['presetId']) ? (string) $reqBody['presetId'] : null;
     $requestedProvider = (string) ($reqBody['apiProvider'] ?? '');
 
-    $catalogModels = get_merged_catalog_models($pdo);
+    $catalogModels = kv_get($pdo, 'catalogModels', []);
     $model = null;
     foreach ($catalogModels as $cm) {
         if (($cm['id'] ?? '') === $modelId) {
@@ -1512,18 +1338,6 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
             if ($resolvedModel !== 'auto') {
                 $task['width'] = $dims['width'];
                 $task['height'] = $dims['height'];
-            }
-            $frameInput = (string) ($media['imageUrl'] ?? $media['characterUrl'] ?? '');
-            if ($frameInput !== '' && (strpos($frameInput, 'http://') === 0 || strpos($frameInput, 'https://') === 0 || strpos($frameInput, 'data:image/') === 0)) {
-                $task['frameImages'] = [['inputImage' => $frameInput, 'frame' => 'first']];
-            }
-            $audioInput = (string) ($media['audioUrl'] ?? '');
-            if ($audioInput !== '' && (strpos($audioInput, 'http://') === 0 || strpos($audioInput, 'https://') === 0 || strpos($audioInput, 'data:audio/') === 0)) {
-                $task['inputAudios'] = [$audioInput];
-            }
-            $videoInput = (string) ($media['videoUrl'] ?? '');
-            if ($videoInput !== '' && (strpos($videoInput, 'http://') === 0 || strpos($videoInput, 'https://') === 0)) {
-                $task['referenceVideos'] = [$videoInput];
             }
         } else {
             $safeW = min(2048, max(512, (int) round($dims['width'] / 64) * 64)) ?: 1024;
@@ -1750,26 +1564,10 @@ if ($path === '/api/uploads' && $method === 'GET') {
 if ($path === '/api/upload' && $method === 'POST') {
     $user = get_session_user($pdo);
     if (!$user) json_response(['error' => 'Sign in to upload reference files.'], 401);
-    $allowedUploadTypes = [
-        'image/png', 'image/jpeg', 'image/webp', 'image/gif',
-        'video/mp4', 'video/webm',
-        'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
-        'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac',
-        'audio/ogg', 'audio/webm', 'audio/flac', 'audio/x-flac',
-    ];
-    $contentType = strtolower(trim((string) ($reqBody['contentType'] ?? 'image/png')));
-    if (!in_array($contentType, $allowedUploadTypes, true)) {
-        json_response(['error' => 'Unsupported file type. Upload a supported image, video, or audio file.'], 400);
-    }
-    $label = substr(trim((string) ($reqBody['label'] ?? 'Reference Asset')), 0, 120) ?: 'Reference Asset';
+    $contentType = (string) ($reqBody['contentType'] ?? 'image/png');
+    $label = (string) ($reqBody['label'] ?? 'Reference Asset');
     $bytes = (int) ($reqBody['bytes'] ?? 1024);
-    if ($bytes < 0 || $bytes > 25 * 1024 * 1024) {
-        json_response(['error' => 'Uploaded file exceeds the 25 MB maximum size limit.'], 413);
-    }
     $dataUrl = (string) ($reqBody['dataUrl'] ?? '');
-    if ($dataUrl !== '' && strlen($dataUrl) > 34 * 1024 * 1024) {
-        json_response(['error' => 'Encoded file payload exceeds the maximum allowed size.'], 413);
-    }
     $kind = strpos($contentType, 'video/') === 0 ? 'video' : (strpos($contentType, 'audio/') === 0 ? 'audio' : 'image');
     $id = 'upl_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 5);
     $record = [
@@ -1789,128 +1587,6 @@ if ($path === '/api/upload' && $method === 'POST') {
         'upload_url' => $record['publicUrl'],
         'public_url' => $record['publicUrl'],
         'upload_headers' => ['Content-Type' => $contentType],
-    ]);
-}
-
-if ($path === '/api/audio/import-url' && $method === 'POST') {
-    $user = get_session_user($pdo);
-    if (!$user) {
-        json_response(['error' => 'Sign in to import audio from a URL.'], 401);
-    }
-    $rawUrl = trim((string) ($reqBody['url'] ?? ''));
-    $customLabel = trim((string) ($reqBody['label'] ?? ''));
-
-    $currentUrl = $rawUrl;
-    $maxRedirects = 3;
-    $maxBytes = 20 * 1024 * 1024;
-    $audioBytes = '';
-    $responseContentType = '';
-    $finalStatus = 0;
-
-    for ($hop = 0; $hop <= $maxRedirects; $hop++) {
-        $check = spacix_validate_external_audio_url($currentUrl);
-        if (empty($check['ok'])) {
-            json_response(['error' => $check['error'] ?? 'Invalid audio URL.'], 400);
-        }
-
-        $buffer = '';
-        $overflow = false;
-        $respHeaders = [];
-
-        $ch = curl_init($currentUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 20,
-            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-            CURLOPT_USERAGENT => 'SPACIX-Studio-AudioImporter/1.0',
-            CURLOPT_HTTPHEADER => ['Accept: audio/*, application/octet-stream;q=0.5'],
-            CURLOPT_HEADERFUNCTION => function ($ch, $headerLine) use (&$respHeaders) {
-                $len = strlen($headerLine);
-                $parts = explode(':', $headerLine, 2);
-                if (count($parts) === 2) {
-                    $respHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
-                }
-                return $len;
-            },
-            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$buffer, &$overflow, $maxBytes) {
-                if (strlen($buffer) + strlen($chunk) > $maxBytes) {
-                    $overflow = true;
-                    return 0;
-                }
-                $buffer .= $chunk;
-                return strlen($chunk);
-            },
-        ]);
-        $ok = curl_exec($ch);
-        $finalStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
-
-        if ($overflow) {
-            json_response(['error' => 'Audio file exceeds the 20 MB import limit. Trim or compress the file and try again.'], 413);
-        }
-
-        if ($finalStatus >= 300 && $finalStatus < 400 && !empty($respHeaders['location'])) {
-            if ($hop === $maxRedirects) {
-                json_response(['error' => 'Too many redirects while fetching the audio URL.'], 400);
-            }
-            $loc = $respHeaders['location'];
-            if (strpos($loc, 'http://') !== 0 && strpos($loc, 'https://') !== 0) {
-                $baseParts = parse_url($currentUrl);
-                $origin = ($baseParts['scheme'] ?? 'https') . '://' . ($baseParts['host'] ?? '') . (!empty($baseParts['port']) ? ':' . $baseParts['port'] : '');
-                $loc = strpos($loc, '/') === 0 ? ($origin . $loc) : ($origin . '/' . ltrim($loc, '/'));
-            }
-            $currentUrl = $loc;
-            continue;
-        }
-
-        if (!$ok && $finalStatus === 0) {
-            json_response(['error' => 'Could not download audio from this URL. Verify the file is publicly accessible (' . ($curlErr ?: 'network error') . ').'], 502);
-        }
-
-        $audioBytes = $buffer;
-        $responseContentType = $respHeaders['content-type'] ?? '';
-        break;
-    }
-
-    if ($finalStatus < 200 || $finalStatus >= 300) {
-        json_response(['error' => "Remote audio host returned HTTP {$finalStatus}. Provide a direct downloadable audio file URL (MP3, WAV, M4A, OGG, FLAC)."], 422);
-    }
-
-    $detectedMime = spacix_detect_audio_magic_mime($audioBytes, $responseContentType);
-    if ($detectedMime === null) {
-        json_response(['error' => 'This URL did not return a supported audio file. Streaming web pages cannot be imported—use a direct MP3, WAV, M4A, AAC, OGG, or FLAC file link.'], 415);
-    }
-
-    $urlPath = (string) (parse_url($currentUrl, PHP_URL_PATH) ?? '');
-    $baseName = basename($urlPath);
-    $title = substr($customLabel !== '' ? $customLabel : ($baseName !== '' && $baseName !== '/' ? urldecode($baseName) : 'Imported Audio Track'), 0, 120);
-    $dataUrl = 'data:' . $detectedMime . ';base64,' . base64_encode($audioBytes);
-    $byteLen = strlen($audioBytes);
-
-    $id = 'upl_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 5);
-    $record = [
-        'id' => $id,
-        'userId' => $user['id'],
-        'kind' => 'audio',
-        'label' => $title,
-        'publicUrl' => $dataUrl,
-        'contentType' => $detectedMime,
-        'bytes' => $byteLen,
-        'createdAt' => gmdate('c'),
-    ];
-    $stmt = $pdo->prepare('INSERT INTO `spacix_uploads` (`id`, `user_id`, `kind`, `label`, `created_at`, `payload_json`) VALUES (?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$id, $user['id'], 'audio', $title, $record['createdAt'], json_encode($record, JSON_UNESCAPED_SLASHES)]);
-
-    json_response([
-        'ok' => true,
-        'upload' => $record,
-        'public_url' => $dataUrl,
-        'contentType' => $detectedMime,
-        'bytes' => $byteLen,
-        'title' => $title,
     ]);
 }
 
@@ -3184,20 +2860,8 @@ if (preg_match('#^/api/continuity/(characters|wardrobes|props|locations|motion|c
     $list = kv_get($pdo, $spec['kv'], []);
     if (!is_array($list)) $list = [];
 
-    $isAdmin = ($user['role'] ?? 'user') === 'admin';
-
     if ($method === 'DELETE' || (($reqBody['_method'] ?? '') === 'DELETE')) {
         $targetId = (string) $itemIdParam;
-        $found = null;
-        foreach ($list as $it) {
-            if (($it['id'] ?? '') === $targetId) {
-                $found = $it;
-                break;
-            }
-        }
-        if ($found && !$isAdmin && ($found['userId'] ?? '') !== $user['id']) {
-            json_response(['error' => 'You do not have permission to delete this production asset.'], 403);
-        }
         $list = array_values(array_filter($list, fn($it) => ($it['id'] ?? '') !== $targetId));
         kv_set($pdo, $spec['kv'], $list);
         json_response(['ok' => true]);
@@ -3214,9 +2878,6 @@ if (preg_match('#^/api/continuity/(characters|wardrobes|props|locations|motion|c
                 $existing = $it;
                 break;
             }
-        }
-        if ($existingIdx >= 0 && !$isAdmin && ($existing['userId'] ?? '') !== $user['id']) {
-            json_response(['error' => 'You do not have permission to modify this production asset.'], 403);
         }
         $merged = array_merge($existing, $reqBody);
         unset($merged['_method']);

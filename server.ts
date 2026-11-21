@@ -1,6 +1,4 @@
 import express, { Request, Response } from 'express';
-import dns from 'dns';
-import net from 'net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -214,7 +212,7 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '35mb' }));
+  app.use(express.json({ limit: '15mb' }));
 
   // Support POST-tunneling for PATCH & DELETE so reverse proxies / iframe gateways never block non-POST mutations
   app.use((req, res, next) => {
@@ -1203,126 +1201,9 @@ async function startServer() {
     'image/gif',
     'image/svg+xml',
     'video/mp4',
-    'video/webm',
     'audio/wav',
-    'audio/x-wav',
     'audio/mpeg',
-    'audio/mp3',
-    'audio/mp4',
-    'audio/m4a',
-    'audio/x-m4a',
-    'audio/aac',
-    'audio/ogg',
-    'audio/webm',
-    'audio/flac',
-    'audio/x-flac',
   ]);
-
-  const ALLOWED_AUDIO_IMPORT_TYPES = new Set([
-    'audio/wav',
-    'audio/x-wav',
-    'audio/wave',
-    'audio/mpeg',
-    'audio/mp3',
-    'audio/mp4',
-    'audio/m4a',
-    'audio/x-m4a',
-    'audio/aac',
-    'audio/ogg',
-    'application/ogg',
-    'audio/webm',
-    'audio/flac',
-    'audio/x-flac',
-  ]);
-
-  function isPrivateOrReservedIp(ip: string): boolean {
-    const clean = ip.toLowerCase().trim();
-    if (clean.startsWith('::ffff:')) {
-      return isPrivateOrReservedIp(clean.slice(7));
-    }
-    const family = net.isIP(clean);
-    if (family === 4) {
-      const parts = clean.split('.').map((n) => Number(n));
-      if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
-      const [a, b] = parts;
-      if (a === 0 || a === 10 || a === 127) return true;
-      if (a === 169 && b === 254) return true; // link-local / cloud metadata
-      if (a === 172 && b >= 16 && b <= 31) return true;
-      if (a === 192 && b === 168) return true;
-      if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-      if (a >= 224) return true; // multicast & reserved
-      return false;
-    }
-    if (family === 6) {
-      if (clean === '::' || clean === '::1') return true;
-      if (clean.startsWith('fc') || clean.startsWith('fd')) return true; // unique local
-      if (clean.startsWith('fe8') || clean.startsWith('fe9') || clean.startsWith('fea') || clean.startsWith('feb')) {
-        return true; // link-local
-      }
-      if (clean.startsWith('ff')) return true; // multicast
-      return false;
-    }
-    return true;
-  }
-
-  async function assertPublicHttpAudioUrl(rawUrl: string): Promise<URL> {
-    if (!rawUrl || rawUrl.length > 2048) {
-      throw new Error('Please provide a valid audio URL.');
-    }
-    let parsed: URL;
-    try {
-      parsed = new URL(rawUrl);
-    } catch {
-      throw new Error('Invalid URL format. Enter a complete https:// audio URL.');
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('Only http:// and https:// audio URLs are supported.');
-    }
-    if (parsed.username || parsed.password) {
-      throw new Error('Audio URLs must not contain embedded credentials.');
-    }
-    const host = parsed.hostname.toLowerCase();
-    if (
-      !host ||
-      host === 'localhost' ||
-      host.endsWith('.localhost') ||
-      host.endsWith('.local') ||
-      host.endsWith('.internal')
-    ) {
-      throw new Error('Local or private network URLs cannot be imported.');
-    }
-    if (net.isIP(host)) {
-      if (isPrivateOrReservedIp(host)) {
-        throw new Error('Private or restricted IP addresses cannot be imported.');
-      }
-      return parsed;
-    }
-    const records = await dns.promises.lookup(host, { all: true }).catch(() => []);
-    if (!records.length) {
-      throw new Error('Could not resolve audio host. Check that the URL is publicly accessible.');
-    }
-    for (const rec of records) {
-      if (isPrivateOrReservedIp(rec.address)) {
-        throw new Error('The target host resolves to a restricted network address.');
-      }
-    }
-    return parsed;
-  }
-
-  function detectAudioMimeFromBuffer(buf: Buffer, fallbackExt: string): string | null {
-    if (buf.length < 12) return null;
-    const head4 = buf.subarray(0, 4).toString('ascii');
-    const head3 = buf.subarray(0, 3).toString('ascii');
-    const ftyp = buf.subarray(4, 8).toString('ascii');
-    if (head4 === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WAVE') return 'audio/wav';
-    if (head3 === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
-    if (head4 === 'OggS') return 'audio/ogg';
-    if (head4 === 'fLaC') return 'audio/flac';
-    if (ftyp === 'ftyp') return 'audio/mp4';
-    if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'audio/webm';
-    if (fallbackExt === '.aac' && buf[0] === 0xff && (buf[1] & 0xf0) === 0xf0) return 'audio/aac';
-    return null;
-  }
 
   app.get('/api/uploads', (req: Request, res: Response) => {
     const user = getSessionUser(req);
@@ -1336,155 +1217,6 @@ async function startServer() {
     res.json({ uploads });
   });
 
-  app.post('/api/audio/import-url', async (req: Request, res: Response) => {
-    const user = getSessionUser(req);
-    if (!user) {
-      res.status(401).json({ error: 'Sign in to import audio tracks.' });
-      return;
-    }
-    if (!db.checkRateLimit(`audio-import:${user.id}`, 15, 60_000)) {
-      res.status(429).json({ error: 'Audio import rate limit reached. Please wait a moment.' });
-      return;
-    }
-
-    const rawUrl = String(req.body?.url || '').trim();
-    const requestedLabel = String(req.body?.label || '').trim();
-
-    try {
-      let currentUrl = await assertPublicHttpAudioUrl(rawUrl);
-      let response: globalThis.Response | null = null;
-      const MAX_REDIRECTS = 3;
-
-      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-        const resHop = await fetch(currentUrl.toString(), {
-          method: 'GET',
-          redirect: 'manual',
-          headers: {
-            Accept: 'audio/*, application/ogg;q=0.9, */*;q=0.1',
-            'User-Agent': 'SPACIX-AudioImporter/1.0',
-          },
-          signal: AbortSignal.timeout(15_000),
-        });
-
-        if (resHop.status >= 300 && resHop.status < 400) {
-          const location = resHop.headers.get('location');
-          if (!location || hop === MAX_REDIRECTS) {
-            throw new Error('Audio URL redirected too many times or had an invalid redirect target.');
-          }
-          const nextUrl = new URL(location, currentUrl);
-          currentUrl = await assertPublicHttpAudioUrl(nextUrl.toString());
-          continue;
-        }
-        response = resHop;
-        break;
-      }
-
-      if (!response || !response.ok) {
-        res.status(400).json({
-          error: `Unable to retrieve audio from URL (HTTP ${response?.status || 'error'}). Verify the file is publicly accessible.`,
-        });
-        return;
-      }
-
-      const MAX_BYTES = 20 * 1024 * 1024; // 20 MB cap
-      const contentLengthHeader = Number(response.headers.get('content-length') || 0);
-      if (contentLengthHeader > MAX_BYTES) {
-        res.status(400).json({
-          error: 'Audio file exceeds the 20 MB direct URL import limit. Upload a compressed MP3/M4A file instead.',
-        });
-        return;
-      }
-
-      const rawContentType = String(response.headers.get('content-type') || '')
-        .split(';')[0]
-        .trim()
-        .toLowerCase();
-
-      const chunks: Buffer[] = [];
-      let totalBytes = 0;
-      const reader = response.body?.getReader();
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            totalBytes += value.byteLength;
-            if (totalBytes > MAX_BYTES) {
-              reader.cancel().catch(() => {});
-              res.status(400).json({
-                error: 'Audio stream exceeded 20 MB limit.',
-              });
-              return;
-            }
-            chunks.push(Buffer.from(value));
-          }
-        }
-      } else {
-        const ab = await response.arrayBuffer();
-        if (ab.byteLength > MAX_BYTES) {
-          res.status(400).json({ error: 'Audio file exceeds 20 MB limit.' });
-          return;
-        }
-        totalBytes = ab.byteLength;
-        chunks.push(Buffer.from(ab));
-      }
-
-      const buffer = Buffer.concat(chunks);
-      const extMatch = currentUrl.pathname.toLowerCase().match(/\.(mp3|wav|m4a|ogg|flac|aac|webm)$/);
-      const detectedMime = detectAudioMimeFromBuffer(buffer, extMatch ? `.${extMatch[1]}` : '');
-
-      let finalContentType = ALLOWED_AUDIO_IMPORT_TYPES.has(rawContentType)
-        ? rawContentType === 'application/ogg'
-          ? 'audio/ogg'
-          : rawContentType
-        : '';
-
-      if (!finalContentType && detectedMime) {
-        finalContentType = detectedMime;
-      }
-
-      if (!finalContentType || !detectedMime) {
-        res.status(400).json({
-          error:
-            'The URL did not return a supported audio file (MP3, WAV, M4A, OGG, FLAC, AAC, WebM). Direct links to web pages or streaming players are not supported.',
-        });
-        return;
-      }
-
-      const pathBase = decodeURIComponent(currentUrl.pathname.split('/').pop() || '')
-        .replace(/[^a-zA-Z0-9._\-\s]/g, '')
-        .trim();
-      const title = requestedLabel || pathBase || 'Imported Music Track';
-      const dataUrl = `data:${finalContentType};base64,${buffer.toString('base64')}`;
-
-      const id = `upl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const record = {
-        id,
-        userId: user.id,
-        kind: 'audio' as MediaKind,
-        label: title.slice(0, 120),
-        publicUrl: dataUrl,
-        contentType: finalContentType,
-        bytes: totalBytes,
-        createdAt: new Date().toISOString(),
-      };
-      db.uploads.set(id, record);
-
-      res.json({
-        ok: true,
-        upload: record,
-        public_url: dataUrl,
-        contentType: finalContentType,
-        bytes: totalBytes,
-        title: record.label,
-      });
-    } catch (err) {
-      res.status(400).json({
-        error: err instanceof Error ? err.message : 'Failed to import audio from URL.',
-      });
-    }
-  });
-
   app.post('/api/upload', async (req: Request, res: Response) => {
     const user = getSessionUser(req);
     if (!user) {
@@ -1492,17 +1224,15 @@ async function startServer() {
       return;
     }
 
-    if (!db.checkRateLimit(`upload:${user.id}`, 35, 60_000)) {
+    if (!db.checkRateLimit(`upload:${user.id}`, 25, 60_000)) {
       res.status(429).json({ error: 'Upload rate limit exceeded. Try again in a moment.' });
       return;
     }
 
     const { contentType, label, bytes = 1024, dataUrl } = req.body || {};
-    const normalizedType = String(contentType || '').split(';')[0].trim().toLowerCase();
-    if (!ALLOWED_UPLOAD_TYPES.has(normalizedType)) {
+    if (!ALLOWED_UPLOAD_TYPES.has(String(contentType))) {
       res.status(400).json({
-        error:
-          'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, WebM, MP3, WAV, M4A, OGG, AAC, FLAC.',
+        error: 'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, WAV.',
       });
       return;
     }
@@ -1512,10 +1242,10 @@ async function startServer() {
       return;
     }
 
-    const signed = await createSignedUploadUrl(normalizedType);
-    const kind: MediaKind = normalizedType.startsWith('video/')
+    const signed = await createSignedUploadUrl(String(contentType));
+    const kind: MediaKind = String(contentType).startsWith('video/')
       ? 'video'
-      : normalizedType.startsWith('audio/')
+      : String(contentType).startsWith('audio/')
       ? 'audio'
       : 'image';
 
@@ -1528,7 +1258,7 @@ async function startServer() {
       kind,
       label: String(label || `Reference ${kind}`),
       publicUrl: storedUrl,
-      contentType: normalizedType,
+      contentType: String(contentType),
       bytes: Number(bytes || 1024),
       createdAt: new Date().toISOString(),
     };
@@ -2009,10 +1739,6 @@ async function startServer() {
     const now = new Date().toISOString();
     const id = body.id ? String(body.id) : `cin_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const existing = db.cinemaProjects.get(id);
-    if (existing && existing.userId !== user.id) {
-      res.status(403).json({ error: 'You do not have permission to edit this production.' });
-      return;
-    }
 
     const record = {
       id,
@@ -2030,10 +1756,6 @@ async function startServer() {
       locationIds: Array.isArray(body.locationIds) ? body.locationIds : existing?.locationIds || [],
       musicTrackUrl: body.musicTrackUrl ?? existing?.musicTrackUrl,
       musicBpm: body.musicBpm ? Number(body.musicBpm) : existing?.musicBpm,
-      musicVideoData:
-        body.musicVideoData && typeof body.musicVideoData === 'object'
-          ? body.musicVideoData
-          : existing?.musicVideoData,
       scenes: Array.isArray(body.scenes) ? body.scenes : existing?.scenes || [],
       canvasNodes: Array.isArray(body.canvasNodes) ? body.canvasNodes : existing?.canvasNodes || [],
       timelineTracks:
@@ -2057,11 +1779,6 @@ async function startServer() {
     const user = getSessionUser(req);
     if (!user) {
       res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-    const existing = db.cinemaProjects.get(req.params.id);
-    if (existing && existing.userId !== user.id) {
-      res.status(403).json({ error: 'Forbidden' });
       return;
     }
     db.cinemaProjects.delete(req.params.id);

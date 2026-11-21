@@ -54,6 +54,8 @@ import {
   ProviderBrandIcon,
   SpacixLogo,
 } from './ProviderBrandIcon';
+import { Badge, Button } from './ui/primitives';
+import { AnimatedPillTabs, BorderBeam, SpotlightCard } from './ui/aceternity-magic';
 
 type AdminTabId =
   | 'providers'
@@ -545,9 +547,25 @@ export const AdminDashboardView: React.FC = () => {
     patch: Partial<AdminModelOverrideRow>,
     msg?: string
   ) => {
-    setModelOverrides((prev) =>
-      prev.map((m) => (m.modelId === modelId ? { ...m, ...patch } : m))
-    );
+    setModelOverrides((prev) => {
+      const exists = prev.some((m) => m.modelId === modelId);
+      if (exists) {
+        return prev.map((m) => (m.modelId === modelId ? { ...m, ...patch } : m));
+      }
+      const catModel = MODEL_CATALOG.find((m) => m.id === modelId);
+      return [
+        ...prev,
+        {
+          modelId,
+          enabled: true,
+          baseHfUsd: catModel?.baseHfUsd ?? 0.05,
+          preferredProvider: catModel?.defaultApiProvider || 'runware',
+          allowedProviders: ['runware', 'fal', 'higgsfield', 'muapi'],
+          customEndpoint: catModel?.restPaths.default || '',
+          ...patch,
+        },
+      ];
+    });
     try {
       const res = await fetch(`/api/admin/models/${modelId}`, {
         method: 'POST',
@@ -555,14 +573,14 @@ export const AdminDashboardView: React.FC = () => {
         body: JSON.stringify({ ...patch, _method: 'PATCH' }),
       });
       if (res.ok) {
-        showToast(msg || `Updated ${modelId} routing configuration`);
+        showToast(msg || `Updated ${modelId} routing & token cost`);
         await loadAdminOverview();
         await refreshAll();
       } else {
-        showToast(msg || `Updated ${modelId} routing configuration`);
+        showToast(msg || `Updated ${modelId} routing & token cost`);
       }
     } catch {
-      showToast(msg || `Updated ${modelId} routing configuration`);
+      showToast(msg || `Updated ${modelId} routing & token cost`);
     }
   };
 
@@ -907,15 +925,16 @@ export const AdminDashboardView: React.FC = () => {
           signupBonusCredits: Number(billingConfig.signupBonusCredits),
           plans,
           topups,
+          modelPricing: modelOverrides,
         }),
       });
       if (res.ok) {
-        showToast('Saved global credit economics, subscription plans & top-up packs');
+        showToast('Saved global token costs, credit economics, subscription plans & top-up packs');
         await loadAdminOverview();
         await refreshAll();
       }
     } catch {
-      showToast('Saved global credit economics, subscription plans & top-up packs');
+      showToast('Saved global token costs, credit economics, subscription plans & top-up packs');
     }
   };
 
@@ -1173,37 +1192,39 @@ export const AdminDashboardView: React.FC = () => {
       {/* =================================================================== */}
       {/* TOP COMMAND HEADER & KPI METRICS                                    */}
       {/* =================================================================== */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-[#111114] border border-white/10 space-y-5 sm:space-y-6">
+      <SpotlightCard className="p-4 sm:p-6 rounded-2xl bg-[#111114] border border-white/10 space-y-5 sm:space-y-6 relative">
+        <BorderBeam />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
             <SpacixLogo size="md" />
             <div className="h-8 w-px bg-white/10 hidden sm:block" />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] sm:text-[11px] font-mono-tabular uppercase tracking-widest text-[#46ecd5] break-words">
+                <Badge variant="default" className="font-mono-tabular uppercase tracking-widest">
                   ENTERPRISE CONTROL PLANE · RBAC: {currentAdmin.adminSubRole?.toUpperCase() || 'SUPER_ADMIN'}
-                </span>
+                </Badge>
               </div>
-              <h1 className="font-display text-2xl sm:text-4xl font-black uppercase tracking-wide text-white break-words">
+              <h1 className="font-display text-2xl sm:text-4xl font-black uppercase tracking-wide text-white break-words mt-1">
                 SPACIX Admin Operations Center
               </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={loadAdminOverview}
-              className="px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-2 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#46ecd5] ${loading ? 'animate-spin' : ''}`} />
               <span>Sync State</span>
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Active API Gateways</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-[#46ecd5] mt-0.5">
               {enabledProvidersCount} / 4 Online
@@ -1211,9 +1232,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               fal · Higgsfield · Muapi · Runware
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Enabled Catalog Models</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {enabledModelsCount} / {MODEL_CATALOG.length}
@@ -1221,9 +1242,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               Multi-provider routed
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Registered Accounts</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {users.length} Users
@@ -1231,9 +1252,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {users.filter((u) => u.plan !== 'free').length} Paid Subscribers
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Circulating Wallet Credits</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-[#46ecd5] mt-0.5">
               ✦ {totalPlatformCredits.toLocaleString()}
@@ -1241,9 +1262,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               Markup {billingConfig.creditMarkup}x · ${billingConfig.creditUsdValue}/cr
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Total Studio Runs</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {generations.length} Runs
@@ -1251,9 +1272,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {generations.filter((g) => g.isPublic).length} Public in Community
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Support & Trust Queue</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-amber-400 mt-0.5">
               {openTicketsCount} Open Tickets
@@ -1261,41 +1282,24 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {teamMembers.length} Active Team Admins
             </div>
-          </div>
+          </SpotlightCard>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-white/10">
-          {ADMIN_TABS.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all ${
-                  active
-                    ? 'bg-[#46ecd5] text-zinc-950 shadow-lg shadow-[#46ecd5]/15'
-                    : 'bg-[#16161B] text-zinc-400 hover:text-white border border-white/5'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tab.badge !== undefined && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono-tabular ${
-                      active
-                        ? 'bg-zinc-950/20 text-zinc-950 font-extrabold'
-                        : 'bg-white/10 text-zinc-300'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="pt-2 border-t border-white/10">
+          <AnimatedPillTabs
+            layoutGroupId="admin-dashboard-tabs"
+            value={activeTab}
+            onChange={(v) => setActiveTab(v as AdminTabId)}
+            items={ADMIN_TABS.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              badge: tab.badge,
+            }))}
+          />
         </div>
-      </div>
+      </SpotlightCard>
 
       {/* =================================================================== */}
       {/* TAB 1: PROVIDER API KEYS LIST (ADD, EDIT, DELETE, ENABLE/DISABLE)   */}
@@ -2042,6 +2046,7 @@ export const AdminDashboardView: React.FC = () => {
                     <th className="py-3.5 px-4 font-semibold">Primary API Provider</th>
                     <th className="py-3.5 px-4 font-semibold">Allowed Gateways</th>
                     <th className="py-3.5 px-4 font-semibold">Endpoint Path</th>
+                    <th className="py-3.5 px-4 font-semibold">Generation Tokens (TK)</th>
                     <th className="py-3.5 px-4 font-semibold">Base USD / Unit</th>
                   </tr>
                 </thead>
@@ -2177,6 +2182,7 @@ export const AdminDashboardView: React.FC = () => {
 
                           <td className="py-3.5 px-4">
                             <input
+                              key={`ep_${model.id}_${ov.customEndpoint || model.restPaths.default}`}
                               type="text"
                               defaultValue={ov.customEndpoint || model.restPaths.default}
                               onBlur={(e) => {
@@ -2188,17 +2194,66 @@ export const AdminDashboardView: React.FC = () => {
                                   );
                                 }
                               }}
-                              className="w-48 px-2.5 py-1 bg-zinc-900 border border-white/10 rounded text-[11px] font-mono-tabular text-zinc-200 focus:border-[#46ecd5] focus:outline-none"
+                              className="w-44 px-2.5 py-1 bg-zinc-900 border border-white/10 rounded text-[11px] font-mono-tabular text-zinc-200 focus:border-[#46ecd5] focus:outline-none"
                             />
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            {(() => {
+                              const unitMult = model.billingUnit === 'per_second' ? 5 : 1;
+                              const markup = Math.max(0.1, Number(billingConfig.creditMarkup || 2));
+                              const credUsd = Math.max(
+                                0.0001,
+                                Number(billingConfig.creditUsdValue || 0.01)
+                              );
+                              const currentTokens = Math.max(
+                                1,
+                                Math.ceil((ov.baseHfUsd * unitMult * markup) / credUsd)
+                              );
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    key={`tk_${model.id}_${currentTokens}`}
+                                    type="number"
+                                    step="1"
+                                    min="1"
+                                    defaultValue={currentTokens}
+                                    onBlur={(e) => {
+                                      const nextTk = Math.max(1, Math.round(Number(e.target.value)));
+                                      if (nextTk !== currentTokens) {
+                                        const computedUsd = Number(
+                                          ((nextTk * credUsd) / (unitMult * markup)).toFixed(4)
+                                        );
+                                        handleUpdateModelRouting(
+                                          model.id,
+                                          { baseHfUsd: Math.max(0.0005, computedUsd) },
+                                          `Updated ${model.label} generation cost to ${nextTk} TK`
+                                        );
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    className="w-20 px-2 py-1 bg-zinc-900 border border-[#46ecd5]/40 rounded text-xs font-mono-tabular text-[#46ecd5] font-extrabold focus:border-[#46ecd5] focus:outline-none"
+                                  />
+                                  <span className="text-[10px] font-mono-tabular text-zinc-400">
+                                    TK{model.billingUnit === 'per_second' ? ' / 5s' : ''}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
 
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-1.5">
                               <span className="text-zinc-500 font-mono-tabular">$</span>
                               <input
+                                key={`usd_${model.id}_${ov.baseHfUsd}`}
                                 type="number"
                                 step="0.005"
-                                min="0.001"
+                                min="0.0005"
                                 defaultValue={ov.baseHfUsd}
                                 onBlur={(e) => {
                                   const val = Number(e.target.value);
@@ -2206,11 +2261,16 @@ export const AdminDashboardView: React.FC = () => {
                                     handleUpdateModelRouting(
                                       model.id,
                                       { baseHfUsd: val },
-                                      `Updated ${model.label} base cost to $${val.toFixed(3)}`
+                                      `Updated ${model.label} base cost to $${val.toFixed(4)}`
                                     );
                                   }
                                 }}
-                                className="w-20 px-2 py-1 bg-zinc-900 border border-white/10 rounded text-xs font-mono-tabular text-[#46ecd5] font-bold focus:border-[#46ecd5] focus:outline-none"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                className="w-20 px-2 py-1 bg-zinc-900 border border-white/10 rounded text-xs font-mono-tabular text-zinc-200 font-bold focus:border-[#46ecd5] focus:outline-none"
                               />
                             </div>
                           </td>
@@ -3511,6 +3571,87 @@ export const AdminDashboardView: React.FC = () => {
               <p className="text-[11px] text-zinc-500 mt-1">
                 Granted automatically on first passwordless sign-in
               </p>
+            </div>
+          </div>
+
+          {/* Per-Model Generation Token Costs (TK) Editor */}
+          <div className="p-6 rounded-2xl bg-[#111114] border border-white/10 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-display text-xl font-bold uppercase text-white">
+                  Per-Model Generation Token Costs (`TK` per Run)
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Directly customize the Token (`TK`) cost charged on the Studio `GENERATE` button for each Video, Image, and Audio model.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono-tabular text-[#46ecd5]">
+                Auto-saves on change or via "Save All Pricing &amp; Billing Rules"
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
+              {MODEL_CATALOG.map((model) => {
+                const ov = modelOverrides.find((o) => o.modelId === model.id) || {
+                  modelId: model.id,
+                  enabled: true,
+                  baseHfUsd: model.baseHfUsd,
+                  preferredProvider: model.defaultApiProvider || 'runware',
+                  allowedProviders: ['runware', 'fal', 'higgsfield', 'muapi'] as ApiProviderId[],
+                  customEndpoint: model.restPaths.default,
+                };
+                const unitMult = model.billingUnit === 'per_second' ? 5 : 1;
+                const markup = Math.max(0.1, Number(billingConfig.creditMarkup || 2));
+                const credUsd = Math.max(0.0001, Number(billingConfig.creditUsdValue || 0.01));
+                const currentTokens = Math.max(
+                  1,
+                  Math.ceil((ov.baseHfUsd * unitMult * markup) / credUsd)
+                );
+
+                return (
+                  <div
+                    key={model.id}
+                    className="p-3.5 rounded-xl bg-[#16181E] border border-white/10 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-white truncate">{model.label}</div>
+                      <div className="text-[10px] font-mono-tabular text-zinc-400">
+                        {model.surface.toUpperCase()} ·{' '}
+                        {model.billingUnit === 'per_second' ? '5s base shot' : 'per output'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        key={`billing_tk_${model.id}_${currentTokens}`}
+                        type="number"
+                        min="1"
+                        step="1"
+                        defaultValue={currentTokens}
+                        onBlur={(e) => {
+                          const nextTk = Math.max(1, Math.round(Number(e.target.value)));
+                          if (nextTk !== currentTokens) {
+                            const computedUsd = Number(
+                              ((nextTk * credUsd) / (unitMult * markup)).toFixed(4)
+                            );
+                            handleUpdateModelRouting(
+                              model.id,
+                              { baseHfUsd: Math.max(0.0005, computedUsd) },
+                              `Set ${model.label} token cost to ${nextTk} TK`
+                            );
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        className="w-20 px-2.5 py-1.5 bg-zinc-900 border border-[#46ecd5]/40 rounded-lg text-right font-mono-tabular font-extrabold text-[#46ecd5] focus:outline-none focus:border-[#46ecd5]"
+                      />
+                      <span className="font-mono-tabular font-bold text-zinc-300">TK</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
