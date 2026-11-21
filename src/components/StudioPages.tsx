@@ -35,6 +35,9 @@ import {
   ContinuityStudioBar,
   SPACI6X_STUDIOS,
 } from './ContinuityStudiosView';
+import { HiggsfieldCinemaStudio } from './HiggsfieldCinemaStudio';
+import { Badge, Button } from './ui/primitives';
+import { BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
 
 // ============================================================================
 // 1. EXPLORE / HOME PAGE (`/`)
@@ -53,65 +56,65 @@ export const ExplorePage: React.FC = () => {
     locations,
     motionTemplates,
     cinemaProjects,
+    calculateTokenCost,
   } = useRuns();
 
   const featuredModels = models.slice(0, 6);
 
   return (
     <div className="space-y-16 pb-16">
-      <ContinuityStudioBar />
       {/* Full-bleed Quanta Hero with radial teal glow + dot field */}
-      <section className="relative border-b border-white/10 quanta-dot-bg overflow-hidden py-10 sm:py-16 -mt-16">
+      <section className="relative border-b border-white/10 quanta-dot-bg overflow-hidden py-10 sm:py-16">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(70,236,213,0.18),transparent_62%)] pointer-events-none" />
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="min-w-0 lg:col-span-7 space-y-6">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <SpacixLogo size="md" />
               <span className="text-white/20 hidden sm:inline">·</span>
-              <span className="text-[11px] sm:text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
-                CHARACTER & PRODUCTION CONTINUITY FILMMAKING SUITE
-              </span>
+              <Badge variant="default" className="font-mono uppercase tracking-widest">
+                UNIFIED AI FILM PRODUCTION ENVIRONMENT
+              </Badge>
             </div>
             <h1 className="font-display text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tight text-white leading-[0.95] break-words">
-              PERSISTENT CHARACTERS & 12 PRODUCTION STUDIOS
+              ONE UNIFIED CINEMA STUDIO FOR COMPLETE FILMMAKING
             </h1>
             <p className="text-sm sm:text-base text-zinc-300 max-w-xl leading-relaxed">
-              Create permanent character identities with locked faces, multilingual voices, outfits, props, and filming locations once—and reuse them seamlessly across Cinema Studio, Motion Control, Storyboard, Lip Sync, Marketing, Canvas, and Timeline Assembly.
+              Direct complete films inside one streamlined workspace. Create persistent characters, locations, wardrobes, and props; generate cinema video, photography, voice dialogue, lip sync, and scores; or run the 4-Stage Automatic Production pipeline from idea to finished cut.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
+              <ShimmerButton
                 onClick={() => navigate('cinema')}
-                className="px-6 py-3 text-xs sm:text-sm font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all flex items-center gap-2 shadow-lg shadow-[#46ecd5]/20"
+                className="px-6 py-3 rounded-xl text-xs sm:text-sm"
               >
                 <Film className="w-4 h-4" />
-                <span>Open Cinema Studio</span>
-              </button>
-              <button
-                onClick={() => navigate('character')}
-                className="px-5 py-3 text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-xl transition-colors flex items-center gap-2"
+                <span>Enter Cinema Studio</span>
+              </ShimmerButton>
+              <Button
+                variant="accent"
+                size="lg"
+                onClick={() => navigate('cinema', { mode: 'automatic' })}
               >
-                <span>Character Identity Studio</span>
-              </button>
-              <button
-                onClick={() => navigate('motion')}
-                className="px-5 py-3 text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-xl transition-colors flex items-center gap-2"
+                <span>Launch Automatic Production (4-Stage)</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => navigate('cinema', { tab: 'elements' })}
               >
-                <span>Motion Control Studio</span>
-              </button>
-              <button
-                onClick={() => navigate('video', { model: 'seedance-2-5' })}
-                className="px-4 py-3 text-xs sm:text-sm font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10 rounded-xl transition-colors flex items-center gap-2"
-              >
-                <span>Raw Model Docks</span>
-              </button>
+                <span>
+                  My Elements (
+                  {characters.length + locations.length + wardrobes.length + propsList.length})
+                </span>
+              </Button>
             </div>
           </div>
 
-          {/* Right Hero Featured Preset Preview Card */}
+          {/* Right Hero Featured Preset Preview Card with Magic UI BorderBeam */}
           <div className="min-w-0 lg:col-span-5">
             {presets[0] && (
-              <div className="rounded-xl bg-[#111114] border border-white/15 overflow-hidden shadow-2xl">
+              <SpotlightCard className="overflow-hidden shadow-2xl">
+                <BorderBeam />
                 <div className="aspect-video bg-zinc-950 relative overflow-hidden">
                   <img
                     src={presets[0].previewSvgDataUrl}
@@ -123,90 +126,118 @@ export const ExplorePage: React.FC = () => {
                   <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-mono-tabular text-[#46ecd5]">
-                        FEATURED CAMERA RIG · {presets[0].category.toUpperCase()}
+                        CINEMA STUDIO 4.0 · {presets[0].category.toUpperCase()}
                       </div>
                       <h2 className="font-display text-2xl font-bold uppercase text-white">
                         {presets[0].title}
                       </h2>
                     </div>
-                    <button
-                      onClick={() => applyPresetToDock(presets[0])}
-                      className="px-3.5 py-2 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all shrink-0"
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => navigate('cinema')}
+                      className="shrink-0"
                     >
-                      Use Effect
-                    </button>
+                      Direct in Studio
+                    </Button>
                   </div>
                 </div>
                 <div className="p-4 flex items-center justify-between text-xs text-zinc-400">
                   <span className="truncate">{presets[0].promptTemplate}</span>
-                  <span className="font-mono-tabular text-zinc-300 shrink-0 ml-3">
-                    SPACIX DoP v2
-                  </span>
+                  <Badge variant="outline" className="font-mono shrink-0 ml-3">
+                    Cinema Studio
+                  </Badge>
                 </div>
-              </div>
+              </SpotlightCard>
             )}
           </div>
         </div>
       </section>
 
-      {/* 12 SPACI6X INTERCONNECTED PRODUCTION STUDIOS */}
+      {/* UNIFIED CINEMA STUDIO CAPABILITIES OVERVIEW */}
       <section className="max-w-[1440px] mx-auto px-4 sm:px-6 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
-              UNIFIED PRODUCTION ASSET BUS
+              ALL CREATION TOOLS INSIDE ONE WORKSPACE
             </div>
             <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-white mt-0.5">
-              00. SPACI6X 12 Production Studios
+              00. Inside Cinema Studio
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-              Every character, voice, wardrobe, prop, location, and motion rig is saved permanently to the database and travels with you across all 12 studios.
+              Production Elements, Media Generation, Film Production, and 4-Stage Automatic Film Creation—unified in a single studio environment.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular">
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Characters: <strong className="text-[#46ecd5]">{characters.length}</strong>
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Wardrobes: <strong className="text-[#46ecd5]">{wardrobes.length}</strong>
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Props: <strong className="text-[#46ecd5]">{propsList.length}</strong>
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Locations: <strong className="text-[#46ecd5]">{locations.length}</strong>
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Motion Rigs: <strong className="text-[#46ecd5]">{motionTemplates.length}</strong>
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
-              Productions: <strong className="text-[#46ecd5]">{cinemaProjects.length}</strong>
-            </span>
+            <Badge variant="secondary">
+              Characters: <strong className="text-[#46ecd5] ml-1">{characters.length}</strong>
+            </Badge>
+            <Badge variant="secondary">
+              Locations: <strong className="text-[#46ecd5] ml-1">{locations.length}</strong>
+            </Badge>
+            <Badge variant="secondary">
+              Wardrobes: <strong className="text-[#46ecd5] ml-1">{wardrobes.length}</strong>
+            </Badge>
+            <Badge variant="secondary">
+              Props: <strong className="text-[#46ecd5] ml-1">{propsList.length}</strong>
+            </Badge>
+            <Badge variant="secondary">
+              Projects: <strong className="text-[#46ecd5] ml-1">{cinemaProjects.length}</strong>
+            </Badge>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {SPACI6X_STUDIOS.map((st, idx) => (
-            <button
-              key={st.id}
-              onClick={() => navigate(st.id)}
-              className="group p-4 rounded-xl bg-[#111114] hover:bg-[#15151A] border border-white/10 hover:border-[#46ecd5]/60 text-left flex flex-col justify-between gap-3 transition-all"
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              badge: '01 · PRODUCTION ELEMENTS',
+              title: 'Characters, Sets, Wardrobes & Props',
+              desc: 'Create permanent character facial identities, INT./EXT. locations, outfits, props, and up to 50 visual references per shot.',
+              action: () =>
+                navigate('cinema', {
+                  category: 'production_elements',
+                  tool: 'character_identity',
+                }),
+            },
+            {
+              badge: '02 · MEDIA GENERATION',
+              title: 'Image, Video, Voice, Lip Sync & Music',
+              desc: 'Intelligent model-capability routing automatically connects each creative task to the right image, video, speech, or music engine.',
+              action: () =>
+                navigate('cinema', { category: 'media_generation', tool: 'video_creation' }),
+            },
+            {
+              badge: '03 · FILM PRODUCTION',
+              title: 'Screenplay, Storyboard & Sequencing',
+              desc: 'Write scripts, break down scenes, plan camera angles and lighting schemes, and assemble multi-track sequences.',
+              action: () =>
+                navigate('cinema', { category: 'film_production', tool: 'storyboard_planning' }),
+            },
+            {
+              badge: '04 · AUTOMATIC PRODUCTION',
+              title: '4-Stage Guided Film Creation',
+              desc: 'Go from raw idea to approved screenplay, extracted production assets, continuity storyboard frames, and animated video clips.',
+              action: () => navigate('cinema', { mode: 'automatic' }),
+            },
+          ].map((card) => (
+            <SpotlightCard
+              key={card.badge}
+              onClick={card.action}
+              className="group cursor-pointer p-5 hover:border-[#46ecd5]/60 text-left flex flex-col justify-between gap-4 transition-all"
             >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] font-mono-tabular text-zinc-400">
-                  <span>STUDIO {String(idx + 1).padStart(2, '0')}</span>
-                  <span className="text-[#46ecd5] group-hover:translate-x-0.5 transition-transform">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-mono-tabular text-[#46ecd5]">
+                  <span>{card.badge}</span>
+                  <span className="group-hover:translate-x-0.5 transition-transform">
                     OPEN →
                   </span>
                 </div>
                 <h3 className="font-display text-xl font-bold uppercase tracking-wide text-white group-hover:text-[#46ecd5] transition-colors">
-                  {st.label}
+                  {card.title}
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  {st.responsibility}
-                </p>
+                <p className="text-xs text-zinc-400 leading-relaxed">{card.desc}</p>
               </div>
-            </button>
+            </SpotlightCard>
           ))}
         </div>
       </section>
@@ -237,7 +268,7 @@ export const ExplorePage: React.FC = () => {
           {featuredModels.map((model) => {
             const defaultSettings: Record<string, string | number | boolean> = {};
             for (const s of model.settings) defaultSettings[s.key] = s.defaultValue;
-            const cost = priceFor(model.id, defaultSettings, []);
+            const cost = calculateTokenCost(model.id, defaultSettings, []);
 
             return (
               <div
@@ -408,9 +439,10 @@ export const EffectsPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#09090B]">
-      <ContinuityStudioBar activeStudio="effects" />
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <HiggsfieldCinemaStudio
+      studioId="effects"
+      renderStudioVault={() => (
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl font-extrabold uppercase tracking-wide text-white">
@@ -547,7 +579,8 @@ export const EffectsPage: React.FC = () => {
         })}
       </div>
       </div>
-    </div>
+      )}
+    />
   );
 };
 
@@ -1366,178 +1399,169 @@ export const AssetsLibraryPage: React.FC = () => {
 // 5. PRICING PAGE (`/pricing`)
 // ============================================================================
 export const PricingPage: React.FC = () => {
-  const { user, plans, topups, checkoutPlanOrTopup } = useRuns();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
+  const { user, navigate, showToast } = useRuns();
+  const [notifyEmail, setNotifyEmail] = useState(user?.email || '');
+  const [notified, setNotified] = useState(false);
+
+  const upcomingTiers = [
+    {
+      name: 'Creator Access',
+      subtitle: 'For independent filmmakers & visual storytellers',
+      highlights: [
+        'Full access to all 12 SPACIX Production Studios',
+        'Persistent Character, Wardrobe, Prop & Location continuity locks',
+        'Standard 1080p & 2K Cinema Studio 4.0 generation queue',
+      ],
+    },
+    {
+      name: 'Pro Director',
+      subtitle: 'For high-volume directors, commercial creators & editors',
+      badge: 'MOST POPULAR',
+      highlights: [
+        'Priority multi-model GPU routing for Video, Image & Audio',
+        '4K optical mastering, up to 50 visual references per shot',
+        'Multilingual Voice Cloning, Lip Sync & Motion Control rigs',
+      ],
+    },
+    {
+      name: 'Studio & Enterprise',
+      subtitle: 'For production houses, agencies & collaborative teams',
+      highlights: [
+        'Shared studio asset vaults & multi-seat project continuity',
+        'Dedicated high-concurrency rendering & custom LUT pipelines',
+        'Rollover production credit pools & priority technical desk',
+      ],
+    },
+  ];
+
+  const handleNotifySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifyEmail.trim()) return;
+    setNotified(true);
+    showToast('You are on the priority list for SPACIX Pricing & Plans launch');
+  };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-12 space-y-14">
-      <div className="text-center max-w-2xl mx-auto space-y-4">
-        <div className="flex justify-center">
-          <SpacixLogo size="md" />
-        </div>
-        <div className="text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
-          TRANSPARENT CREDIT METERING · STRIPE BILLING
-        </div>
-        <h1 className="font-display text-3xl sm:text-5xl font-black uppercase tracking-wide text-white">
-          SPACIX PLANS & PRODUCTION CREDITS
-        </h1>
-        <p className="text-sm text-zinc-400">
-          Subscription credits reset each billing cycle. Top-up packs never expire and are spent only after your monthly allowance is exhausted.
-        </p>
+    <div className="min-h-[calc(100vh-5rem)] flex flex-col justify-center max-w-[1240px] mx-auto px-4 sm:px-6 py-12 sm:py-20 space-y-14">
+      {/* Hero Coming Soon Section */}
+      <div className="relative rounded-3xl bg-gradient-to-b from-[#14161D] to-[#0D0E12] border border-white/10 p-8 sm:p-14 text-center overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.85)]">
+        <div className="max-w-3xl mx-auto space-y-6 relative z-10">
+          <div className="flex justify-center">
+            <SpacixLogo size="md" />
+          </div>
 
-        <div className="inline-flex items-center gap-1 p-1 bg-[#111114] border border-white/10 rounded-xl">
-          <button
-            onClick={() => setBillingCycle('monthly')}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
-              billingCycle === 'monthly'
-                ? 'bg-white text-zinc-950'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Monthly Billing
-          </button>
-          <button
-            onClick={() => setBillingCycle('annual')}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
-              billingCycle === 'annual'
-                ? 'bg-[#46ecd5] text-zinc-950'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Annual Billing · Save 20%
-          </button>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#46ecd5]/10 border border-[#46ecd5]/30 text-[11px] font-mono-tabular font-bold uppercase tracking-[0.2em] text-[#46ecd5]">
+            <span className="w-2 h-2 rounded-full bg-[#46ecd5] animate-pulse" />
+            <span>COMING SOON · OFFICIAL PRICING RELEASE</span>
+          </div>
+
+          <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-wide text-white leading-tight">
+            Tailored Studio Plans &amp; Production Pricing Coming Soon
+          </h1>
+
+          <p className="text-sm sm:text-base text-zinc-300 leading-relaxed max-w-2xl mx-auto">
+            We are finalizing transparent, creator-first subscription plans and non-expiring production credit packages designed for solo directors, commercial agencies, and full-scale virtual film studios. During our current rollout phase, you can continue exploring and directing across all 12 SPACIX Studios seamlessly.
+          </p>
+
+          {/* Early Notification & Direct Studio Action */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-xl mx-auto">
+            {notified ? (
+              <div className="w-full py-3 px-5 rounded-xl bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5] flex items-center justify-center gap-2">
+                <Check className="w-4 h-4" />
+                <span>Priority notification registered — we will notify you as soon as plans go live.</span>
+              </div>
+            ) : (
+              <form
+                onSubmit={handleNotifySubmit}
+                className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+              >
+                <input
+                  type="email"
+                  required
+                  value={notifyEmail}
+                  onChange={(e) => setNotifyEmail(e.target.value)}
+                  placeholder="Enter your email for pricing launch updates..."
+                  className="flex-1 px-4 py-3 rounded-xl bg-[#090A0D] border border-white/15 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5]"
+                />
+                <button
+                  type="submit"
+                  className="px-5 py-3 rounded-xl bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider transition-all shrink-0"
+                >
+                  Notify Me
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-zinc-400">
+            <button
+              type="button"
+              onClick={() => navigate('cinema')}
+              className="inline-flex items-center gap-1.5 text-[#46ecd5] font-bold hover:underline"
+            >
+              <span>Enter Cinema Studio 4.0</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <span>·</span>
+            <span>No credit card required during preview access</span>
+          </div>
         </div>
       </div>
 
-      {/* 4 Plan Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {plans.map((plan) => {
-          const price =
-            billingCycle === 'annual' ? plan.annualMonthlyUsd : plan.monthlyUsd;
-          const isCurrent = user?.plan === plan.id;
+      {/* Preview of Upcoming Architecture */}
+      <div className="space-y-6">
+        <div className="text-center space-y-1.5">
+          <div className="text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
+            WHAT TO EXPECT
+          </div>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold uppercase text-white">
+            Upcoming Membership &amp; Credit Architecture
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
+            Every tier is engineered around predictable per-shot token metering and full production continuity.
+          </p>
+        </div>
 
-          return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {upcomingTiers.map((tier) => (
             <div
-              key={plan.id}
-              className={`p-6 rounded-xl border flex flex-col justify-between gap-6 ${
-                plan.id === 'plus'
-                  ? 'bg-[#141418] border-[#46ecd5]'
-                  : 'bg-[#111114] border-white/10'
+              key={tier.name}
+              className={`p-6 rounded-2xl border flex flex-col justify-between gap-6 ${
+                tier.badge
+                  ? 'bg-[#14161C] border-[#46ecd5]/60 shadow-[0_12px_40px_rgba(70,236,213,0.08)]'
+                  : 'bg-[#111216] border-white/10'
               }`}
             >
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold uppercase tracking-wider text-zinc-300">
-                    {plan.name}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                    {tier.name}
                   </span>
-                  {plan.badge && (
-                    <span className="text-[#46ecd5] font-mono-tabular font-semibold">
-                      {plan.badge}
-                    </span>
-                  )}
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono-tabular font-semibold text-[#46ecd5]">
+                    {tier.badge || 'COMING SOON'}
+                  </span>
                 </div>
 
                 <div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-display text-5xl font-black font-mono-tabular text-white">
-                      ${price}
-                    </span>
-                    <span className="text-xs text-zinc-400">/ month</span>
+                  <div className="font-display text-2xl font-extrabold uppercase text-white">
+                    Pricing Soon to Come
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">{plan.audience}</p>
+                  <p className="text-xs text-zinc-400 mt-1">{tier.subtitle}</p>
                 </div>
 
-                <div className="p-3 rounded-lg bg-zinc-900 border border-white/5 space-y-1">
-                  <div className="font-mono-tabular text-sm font-bold text-[#46ecd5]">
-                    ✦ {plan.monthlyCredits.toLocaleString()} credits / mo
-                  </div>
-                  <div className="text-[11px] text-zinc-400 font-mono-tabular">
-                    Parallel: {plan.parallelLimits.video} video · {plan.parallelLimits.image} image · $1 = {plan.topupRatePerDollar} top-up credits
-                  </div>
-                </div>
-
-                <ul className="space-y-2.5 text-xs text-zinc-300">
-                  {plan.features.map((feat, idx) => (
+                <ul className="space-y-2.5 text-xs text-zinc-300 pt-2 border-t border-white/10">
+                  {tier.highlights.map((item, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <Check className="w-4 h-4 text-[#46ecd5] shrink-0 mt-0.5" />
-                      <span>{feat}</span>
+                      <span>{item}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {plan.id === 'free' ? (
-                <div className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500 border border-white/10 rounded-lg">
-                  Included on Signup
-                </div>
-              ) : (
-                <button
-                  onClick={() =>
-                    checkoutPlanOrTopup({
-                      kind: 'subscription',
-                      planId: plan.id,
-                      billingCycle,
-                    })
-                  }
-                  className={`w-full py-3 px-4 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                    isCurrent
-                      ? 'bg-white/15 text-white hover:bg-white/20'
-                      : 'bg-[#46ecd5] text-zinc-950 hover:brightness-105'
-                  }`}
-                >
-                  {isCurrent ? 'Current Plan (Reset Cycle)' : `Upgrade to ${plan.name}`}
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Top-up Credit Packs */}
-      <div className="p-8 rounded-xl bg-[#111114] border border-white/10 space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-3xl font-bold uppercase text-white">
-              One-Time Credit Top-Up Packs
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-              Never expire · Higher subscription tiers unlock bonus credits per dollar automatically
-            </p>
-          </div>
-          <div className="text-xs font-mono-tabular text-zinc-400">
-            Active Tier Bonus Rate:{' '}
-            <span className="text-[#46ecd5]">
-              $1 ={' '}
-              {plans.find((p) => p.id === (user?.plan || 'free'))
-                ?.topupRatePerDollar || 80}{' '}
-              credits
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {topups.map((pack) => (
-            <div
-              key={pack.id}
-              className="p-5 rounded-xl bg-[#16161A] border border-white/10 flex items-center justify-between gap-4"
-            >
-              <div>
-                <div className="text-xs text-zinc-400">{pack.name}</div>
-                <div className="text-2xl font-bold font-mono-tabular text-white mt-0.5">
-                  ✦ {pack.credits.toLocaleString()}
-                </div>
-                {pack.tag && (
-                  <div className="text-[11px] text-[#46ecd5] mt-0.5">{pack.tag}</div>
-                )}
+              <div className="py-2.5 px-4 rounded-xl bg-zinc-900/90 border border-white/10 text-center text-xs font-semibold text-zinc-400">
+                Launching Soon
               </div>
-              <button
-                onClick={() =>
-                  checkoutPlanOrTopup({ kind: 'topup', topupId: pack.id })
-                }
-                className="px-4 py-2.5 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all shrink-0"
-              >
-                Buy · ${pack.priceUsd}
-              </button>
             </div>
           ))}
         </div>

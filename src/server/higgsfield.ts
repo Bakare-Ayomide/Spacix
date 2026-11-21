@@ -451,14 +451,6 @@ export function buildRunwareTaskPayload(params: {
   }
 
   if (surface === 'video') {
-    const audioInput = typeof body.audio_url === 'string' && body.audio_url ? body.audio_url : undefined;
-    const videoInput = typeof body.video_url === 'string' && body.video_url ? body.video_url : undefined;
-    const imageInput =
-      typeof body.image_url === 'string' && body.image_url
-        ? body.image_url
-        : typeof body.start_image_url === 'string' && body.start_image_url
-        ? body.start_image_url
-        : undefined;
     return [
       {
         taskType: 'videoInference',
@@ -468,16 +460,6 @@ export function buildRunwareTaskPayload(params: {
         ...(resolvedModel === 'auto' ? {} : { width, height }),
         duration: Number(body.duration || 5),
         ...sharedFields,
-        ...(audioInput || videoInput || imageInput
-          ? {
-              inputs: {
-                ...(sharedFields.inputs || {}),
-                ...(imageInput && !sharedFields.inputs?.referenceImages
-                  ? { referenceImages: [imageInput] }
-                  : {}),
-              },
-            }
-          : {}),
       },
     ];
   }

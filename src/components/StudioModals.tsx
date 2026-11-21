@@ -50,7 +50,7 @@ export const ModelPickerModal: React.FC<{
   selectedModelId,
   onSelectModel,
 }) => {
-  const { models } = useRuns();
+  const { models, calculateTokenCost } = useRuns();
   const [activeSurface, setActiveSurface] = useState<Surface>(surface);
   const [query, setQuery] = useState('');
 
@@ -134,7 +134,7 @@ export const ModelPickerModal: React.FC<{
           {filtered.map((model) => {
             const defaultSettings: Record<string, string | number | boolean> = {};
             for (const s of model.settings) defaultSettings[s.key] = s.defaultValue;
-            const startingCost = priceFor(model.id, defaultSettings, []);
+            const startingCost = calculateTokenCost(model.id, defaultSettings, []);
             const isSelected = model.id === selectedModelId;
 
             return (
@@ -812,13 +812,21 @@ export const AuthMagicLinkModal: React.FC = () => {
 };
 
 // ============================================================================
-// 6. UPGRADE & TOP-UP CREDITS MODAL (Stripe Checkout Integration)
+// 6. UPGRADE & TOP-UP CREDITS MODAL (Coming Soon Release Presentation)
 // ============================================================================
 export const UpgradeCreditsModal: React.FC = () => {
-  const { upgradeModalOpen, setUpgradeModalOpen, user, checkoutPlanOrTopup } = useRuns();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
+  const { upgradeModalOpen, setUpgradeModalOpen, user, navigate, showToast } = useRuns();
+  const [notifyEmail, setNotifyEmail] = useState(user?.email || '');
+  const [notified, setNotified] = useState(false);
 
   if (!upgradeModalOpen) return null;
+
+  const handleNotify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifyEmail.trim()) return;
+    setNotified(true);
+    showToast('You are on the priority list for SPACIX Pricing & Plans launch');
+  };
 
   return (
     <div
@@ -826,7 +834,7 @@ export const UpgradeCreditsModal: React.FC = () => {
       onClick={() => setUpgradeModalOpen(false)}
     >
       <div
-        className="w-full max-w-4xl bg-[#111114] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[88vh] flex flex-col"
+        className="w-full max-w-2xl bg-[#111114] border border-white/10 rounded-2xl overflow-hidden shadow-2xl max-h-[88vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
@@ -835,14 +843,13 @@ export const UpgradeCreditsModal: React.FC = () => {
             <span className="text-white/20">·</span>
             <div>
               <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white">
-                Upgrade Plan or Add Top-Up Credits
+                Studio Plans &amp; Credit Packages — Coming Soon
               </h2>
               <p className="text-xs text-zinc-400">
-                Current balance:{' '}
+                Current wallet balance:{' '}
                 <span className="text-[#46ecd5] font-mono-tabular font-semibold">
-                  ✦ {user?.credits.total ?? 0} credits
-                </span>{' '}
-                ({user?.credits.subscription ?? 0} subscription · {user?.credits.topup ?? 0} non-expiring top-up)
+                  ✦ {user?.credits.total ?? 0} TK
+                </span>
               </p>
             </div>
           </div>
@@ -855,127 +862,70 @@ export const UpgradeCreditsModal: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
-              Instant Credit Top-Up Packs (Never Expire)
-            </h3>
-            <span className="text-xs text-zinc-400">
-              Processed via Stripe Checkout · Instant ledger grant
-            </span>
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#46ecd5]/10 border border-[#46ecd5]/30 text-[11px] font-mono-tabular font-bold uppercase tracking-[0.2em] text-[#46ecd5]">
+            <span className="w-2 h-2 rounded-full bg-[#46ecd5] animate-pulse" />
+            <span>COMING SOON · OFFICIAL PRICING RELEASE</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {TOPUP_PACKS.map((pack) => (
-              <div
-                key={pack.id}
-                className="p-4 rounded-xl bg-[#18181C] border border-white/10 flex flex-col justify-between gap-4"
-              >
-                <div>
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span>{pack.name}</span>
-                    {pack.tag && <span className="text-[#46ecd5]">{pack.tag}</span>}
-                  </div>
-                  <div className="text-2xl font-bold font-mono-tabular text-white mt-1">
-                    ✦ {pack.credits.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-zinc-400 font-mono-tabular mt-0.5">
-                    ${pack.priceUsd} one-time payment
-                  </div>
-                </div>
-                <button
-                  onClick={() => checkoutPlanOrTopup({ kind: 'topup', topupId: pack.id })}
-                  className="w-full py-2 px-3 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
-                >
-                  Buy ✦ {pack.credits.toLocaleString()} (${pack.priceUsd})
-                </button>
-              </div>
-            ))}
+          <div className="space-y-3 max-w-xl mx-auto">
+            <h3 className="font-display text-2xl sm:text-3xl font-extrabold uppercase text-white">
+              Tailored Studio Plans &amp; Production Pricing Soon to Come
+            </h3>
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              We are finalizing transparent subscription plans and non-expiring production token packages designed for independent directors, commercial agencies, and virtual film studios. Official pricing tiers will be announced shortly.
+            </p>
           </div>
 
-          <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
-              SPACIX Subscriptions (Monthly Allowance Reset)
-            </h3>
-            <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg border border-white/10">
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  billingCycle === 'monthly' ? 'bg-white text-zinc-950' : 'text-zinc-400'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle('annual')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  billingCycle === 'annual' ? 'bg-[#46ecd5] text-zinc-950' : 'text-zinc-400'
-                }`}
-              >
-                Annual (20% OFF)
-              </button>
+          {notified ? (
+            <div className="py-3 px-4 rounded-xl bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5] flex items-center justify-center gap-2 max-w-md mx-auto">
+              <Check className="w-4 h-4" />
+              <span>Priority notification registered — we will notify you when pricing goes live.</span>
             </div>
-          </div>
+          ) : (
+            <form
+              onSubmit={handleNotify}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md mx-auto"
+            >
+              <input
+                type="email"
+                required
+                value={notifyEmail}
+                onChange={(e) => setNotifyEmail(e.target.value)}
+                placeholder="Enter your email for pricing launch updates..."
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#090A0D] border border-white/15 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5]"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider transition-all shrink-0"
+              >
+                Notify Me
+              </button>
+            </form>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {STUDIO_PLANS.filter((p) => p.id !== 'free').map((plan) => {
-              const price = billingCycle === 'annual' ? plan.annualMonthlyUsd : plan.monthlyUsd;
-              const isCurrent = user?.plan === plan.id;
-              return (
-                <div
-                  key={plan.id}
-                  className={`p-4 rounded-xl border flex flex-col justify-between gap-4 ${
-                    plan.id === 'plus'
-                      ? 'bg-zinc-900/90 border-[#46ecd5]'
-                      : 'bg-[#18181C] border-white/10'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span>{plan.name}</span>
-                      {plan.badge && <span className="text-[#46ecd5] font-semibold">{plan.badge}</span>}
-                    </div>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-2xl font-bold font-mono-tabular text-white">
-                        ${price}
-                      </span>
-                      <span className="text-xs text-zinc-400">/ month</span>
-                    </div>
-                    <div className="text-xs font-mono-tabular text-[#46ecd5] mt-1">
-                      ✦ {plan.monthlyCredits.toLocaleString()} credits / mo
-                    </div>
-                    <ul className="mt-3 space-y-1.5 text-xs text-zinc-400">
-                      {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-[#46ecd5] shrink-0 mt-0.5" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      checkoutPlanOrTopup({
-                        kind: 'subscription',
-                        planId: plan.id,
-                        billingCycle,
-                      })
-                    }
-                    className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                      isCurrent
-                        ? 'bg-white/10 text-white hover:bg-white/15'
-                        : 'bg-[#46ecd5] text-zinc-950 hover:brightness-105'
-                    }`}
-                  >
-                    {isCurrent ? 'Reset / Renew Allowance' : `Switch to ${plan.name}`}
-                  </button>
-                </div>
-              );
-            })}
+          <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setUpgradeModalOpen(false);
+                navigate('pricing');
+              }}
+              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all"
+            >
+              View Full Coming Soon Pricing Page →
+            </button>
+            <button
+              type="button"
+              onClick={() => setUpgradeModalOpen(false)}
+              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 text-xs font-semibold transition-all"
+            >
+              Continue in Studio
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 };
+

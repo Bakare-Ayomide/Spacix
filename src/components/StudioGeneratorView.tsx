@@ -331,6 +331,8 @@ export const GenerationTile: React.FC<{
 
 export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface }) => {
   const {
+    models,
+    calculateTokenCost,
     dockDraft,
     setDockDraft,
     applyModelToDock,
@@ -362,23 +364,25 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
   // Sync dock surface when route changes
   useEffect(() => {
     if (dockDraft.surface !== surface) {
-      const surfaceModels = getModelsBySurface(surface);
+      const surfaceModels = models.filter((m) => m.surface === surface);
       if (surfaceModels[0]) {
         applyModelToDock(surfaceModels[0].id, surface);
       }
     }
-  }, [surface, dockDraft.surface, applyModelToDock]);
+  }, [surface, dockDraft.surface, applyModelToDock, models]);
 
   const activeModel =
-    getModelById(dockDraft.modelId) || getModelsBySurface(surface)[0];
+    models.find((m) => m.id === dockDraft.modelId) ||
+    getModelById(dockDraft.modelId) ||
+    getModelsBySurface(surface)[0];
 
   const activeProviderSpec = resolveProviderSpec(activeModel, dockDraft.apiProvider);
 
-  const creditCost = priceFor(
+  const creditCost = calculateTokenCost(
     activeModel.id,
     dockDraft.settings,
     dockDraft.media,
-    { apiProvider: activeProviderSpec.providerId }
+    1
   );
 
   const surfaceGenerations = generations.filter((g) => g.surface === surface);

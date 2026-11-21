@@ -6,25 +6,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
-  Clapperboard,
-  Command as CommandIcon,
-  Compass,
   CreditCard,
-  Film,
   Folder,
-  Heart,
-  Home,
-  Layers,
   LogOut,
   Menu,
-  Music,
   Shield,
   Sparkles,
-  Users,
-  Wand2,
+  User,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import { RoutePath, StudioProvider, useRuns } from './lib/useRuns';
 import { StudioGeneratorView } from './components/StudioGeneratorView';
@@ -64,14 +55,6 @@ import {
   AvatarFallback,
   Badge,
   Button,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-  CommandShortcut,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -96,15 +79,14 @@ const PRIMARY_NAV_ITEMS: Array<{
   id: string;
   label: string;
   route: RoutePath;
-  icon: React.ComponentType<{ className?: string }>;
   params?: Record<string, string>;
 }> = [
-  { id: 'home', label: 'Home', route: 'explore', icon: Home },
-  { id: 'cinema', label: 'Cinema Studio', route: 'cinema', icon: Clapperboard },
-  { id: 'projects', label: 'My Projects', route: 'cinema', icon: Folder, params: { tab: 'projects' } },
-  { id: 'elements', label: 'My Elements', route: 'cinema', icon: Users, params: { tab: 'elements' } },
-  { id: 'favorites', label: 'My Favorites', route: 'cinema', icon: Heart, params: { tab: 'favorites' } },
-  { id: 'community', label: 'Community', route: 'community', icon: Compass },
+  { id: 'home', label: 'Home', route: 'explore' },
+  { id: 'cinema', label: 'Cinema Studio', route: 'cinema' },
+  { id: 'projects', label: 'My Projects', route: 'cinema', params: { tab: 'projects' } },
+  { id: 'elements', label: 'My Elements', route: 'cinema', params: { tab: 'elements' } },
+  { id: 'favorites', label: 'My Favorites', route: 'cinema', params: { tab: 'favorites' } },
+  { id: 'community', label: 'Community', route: 'community' },
 ];
 
 const StudioShell: React.FC = () => {
@@ -113,7 +95,6 @@ const StudioShell: React.FC = () => {
     routeParams,
     navigate,
     user,
-    models,
     notifications,
     setUpgradeModalOpen,
     logout,
@@ -125,7 +106,6 @@ const StudioShell: React.FC = () => {
   const [customSubCredits, setCustomSubCredits] = useState<string>('');
   const [customTopupCredits, setCustomTopupCredits] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [globalCommandOpen, setGlobalCommandOpen] = useState(false);
   const [dismissedNotifIds, setDismissedNotifIds] = useState<string[]>([]);
   const [cookieConsent, setCookieConsent] = useState<string | null>(() => {
     try {
@@ -134,22 +114,6 @@ const StudioShell: React.FC = () => {
       return 'accepted';
     }
   });
-
-  // Global keyboard shortcut ⌘K / Ctrl+K for the application-wide Command Palette
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        // Only intercept if not inside Cinema Studio (which has its own tool command palette)
-        const isStudioRoute = SPACI6X_STUDIOS.some((s) => s.id === route);
-        if (!isStudioRoute) {
-          e.preventDefault();
-          setGlobalCommandOpen((prev) => !prev);
-        }
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [route]);
 
   // Connect global toast state with Sonner notification system
   useEffect(() => {
@@ -202,125 +166,9 @@ const StudioShell: React.FC = () => {
   };
 
   return (
-    <TooltipProvider delayDuration={150}>
-      <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100 selection:bg-[#46ecd5] selection:text-zinc-950">
+    <TooltipProvider delayDuration={180}>
+      <div className="min-h-screen flex flex-col bg-[#09090B] text-zinc-100">
         <Toaster position="bottom-center" theme="dark" richColors />
-
-        {/* =================================================================== */}
-        {/* GLOBAL COMMAND PALETTE (cmdk + Radix UI Dialog)                     */}
-        {/* =================================================================== */}
-        <CommandDialog open={globalCommandOpen} onOpenChange={setGlobalCommandOpen}>
-          <CommandInput placeholder="Search Cinema Studio tools, AI models, camera rigs, or pages..." />
-          <CommandList>
-            <CommandEmpty>No matching studio tools, models, or destinations found.</CommandEmpty>
-            <CommandGroup heading="Primary Destinations">
-              {PRIMARY_NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <CommandItem
-                    key={item.id}
-                    value={`${item.label} ${item.id}`}
-                    onSelect={() => {
-                      navigate(item.route, item.params);
-                      setGlobalCommandOpen(false);
-                    }}
-                  >
-                    <Icon className="w-4 h-4 text-[#46ecd5]" />
-                    <span>{item.label}</span>
-                    <CommandShortcut>Go</CommandShortcut>
-                  </CommandItem>
-                );
-              })}
-              <CommandItem
-                value="Automatic Production 4 Stage Guided Film Pipeline"
-                onSelect={() => {
-                  navigate('cinema', { mode: 'automatic' });
-                  setGlobalCommandOpen(false);
-                }}
-              >
-                <Sparkles className="w-4 h-4 text-[#46ecd5]" />
-                <span>4-Stage Automatic Film Production</span>
-                <CommandShortcut>Pipeline</CommandShortcut>
-              </CommandItem>
-              <CommandItem
-                value="Music Video Production Lip Sync Audio Timeline B-Roll"
-                onSelect={() => {
-                  navigate('cinema', { mode: 'music_video' });
-                  setGlobalCommandOpen(false);
-                }}
-              >
-                <Music className="w-4 h-4 text-[#46ecd5]" />
-                <span>Music Video Production Studio</span>
-                <CommandShortcut>Lip Sync</CommandShortcut>
-              </CommandItem>
-              <CommandItem
-                value="Camera Rigs Visual Effects Presets"
-                onSelect={() => {
-                  navigate('effects');
-                  setGlobalCommandOpen(false);
-                }}
-              >
-                <Wand2 className="w-4 h-4 text-[#46ecd5]" />
-                <span>Camera Rigs & Visual Effects</span>
-                <CommandShortcut>VFX</CommandShortcut>
-              </CommandItem>
-              <CommandItem
-                value="Pricing Plans Credits Top-Up"
-                onSelect={() => {
-                  navigate('pricing');
-                  setGlobalCommandOpen(false);
-                }}
-              >
-                <CreditCard className="w-4 h-4 text-[#46ecd5]" />
-                <span>Pricing & Token Plans</span>
-                <CommandShortcut>Soon</CommandShortcut>
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Cinema Studio Production Tools">
-              {[
-                { label: 'Characters & Facial Identities', cat: 'production_elements', tool: 'character_identity' },
-                { label: 'Locations & INT./EXT. Sets', cat: 'production_elements', tool: 'location_environment' },
-                { label: 'Wardrobes & Outfit Continuity', cat: 'production_elements', tool: 'wardrobe_outfit' },
-                { label: 'Hero Props & Vehicles', cat: 'production_elements', tool: 'prop_object' },
-                { label: 'Cinema Video Creation', cat: 'media_generation', tool: 'video_creation' },
-                { label: 'Optical Image Creation', cat: 'media_generation', tool: 'image_creation' },
-                { label: 'Voice, Dialogue & Lip Sync', cat: 'media_generation', tool: 'lip_sync' },
-                { label: 'Screenplay & Storyboard Planning', cat: 'film_production', tool: 'storyboard_planning' },
-              ].map((t) => (
-                <CommandItem
-                  key={t.tool}
-                  value={`${t.label} ${t.tool}`}
-                  onSelect={() => {
-                    navigate('cinema', { category: t.cat, tool: t.tool });
-                    setGlobalCommandOpen(false);
-                  }}
-                >
-                  <Film className="w-4 h-4 text-zinc-400" />
-                  <span>{t.label}</span>
-                  <CommandShortcut>Studio Tool</CommandShortcut>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Verified AI Generation Engines">
-              {models.slice(0, 8).map((m) => (
-                <CommandItem
-                  key={m.id}
-                  value={`${m.label} ${m.provider} ${m.surface}`}
-                  onSelect={() => {
-                    navigate('cinema', { model: m.id });
-                    setGlobalCommandOpen(false);
-                  }}
-                >
-                  <Layers className="w-4 h-4 text-[#46ecd5]" />
-                  <span>{m.label}</span>
-                  <CommandShortcut>{m.surface.toUpperCase()}</CommandShortcut>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </CommandDialog>
 
         {/* =================================================================== */}
         {/* ACTIVE PLATFORM NOTIFICATION BROADCAST BANNER                       */}
@@ -363,36 +211,27 @@ const StudioShell: React.FC = () => {
         )}
 
         {/* =================================================================== */}
-        {/* GLOBAL TOP NAVIGATION BAR (shadcn/ui + Radix UI + Framer Motion)    */}
+        {/* GLOBAL TOP NAVIGATION BAR (Minimal Unified Navigation + Radix UI)   */}
         {/* =================================================================== */}
-        <header className="sticky top-0 z-40 h-16 bg-[#09090B]/90 backdrop-blur-2xl border-b border-white/[0.08] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 max-w-full shadow-[0_8px_32px_rgba(0,0,0,0.55)]">
-          {/* Zone 1: Brand Wordmark + Studio Status Pill */}
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => navigate('explore')}
-              aria-label="SPACIX Home"
-              className="flex items-center hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <SpacixLogo size="md" />
-            </button>
-            <Badge
-              variant="default"
-              className="hidden xl:inline-flex font-mono text-[10px] tracking-widest uppercase px-2.5 py-0.5"
-            >
-              CINEMA STUDIO 4.0
-            </Badge>
-          </div>
+        <header className="sticky top-0 z-40 h-16 bg-[#09090B]/90 backdrop-blur-xl border-b border-white/10 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-6 lg:gap-8 max-w-full">
+          {/* Zone 1: Single-line Brand Wordmark / Logo */}
+          <button
+            onClick={() => navigate('explore')}
+            aria-label="SPACIX Home"
+            className="flex items-center hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <SpacixLogo size="md" />
+          </button>
 
           {/* Zone 2: Minimal Main Navigation Links with Framer Motion Layout Pill */}
-          <nav className="hidden lg:flex items-center gap-1 rounded-2xl bg-[#11131A]/95 p-1.5 border border-white/[0.08] shadow-inner">
+          <nav className="hidden lg:flex items-center gap-1.5 rounded-2xl bg-[#111319] p-1 border border-white/[0.07]">
             {PRIMARY_NAV_ITEMS.map((item) => {
               const active = isNavItemActive(item);
-              const Icon = item.icon;
               return (
                 <button
                   key={item.id}
                   onClick={() => navigate(item.route, item.params)}
-                  className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer z-10 ${
+                  className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap shrink-0 cursor-pointer z-10 ${
                     active ? 'text-zinc-950' : 'text-zinc-400 hover:text-white'
                   }`}
                 >
@@ -400,11 +239,10 @@ const StudioShell: React.FC = () => {
                     <motion.span
                       layoutId="spacix-top-nav-pill"
                       transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                      className="absolute inset-0 -z-10 rounded-xl bg-[#46ecd5] shadow-[0_0_24px_rgba(70,236,213,0.38)]"
+                      className="absolute inset-0 -z-10 rounded-xl bg-[#46ecd5] shadow-[0_0_20px_rgba(70,236,213,0.3)]"
                     />
                   )}
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{item.label}</span>
+                  {item.label}
                 </button>
               );
             })}
@@ -430,26 +268,8 @@ const StudioShell: React.FC = () => {
             )}
           </nav>
 
-          {/* Zone 3: Global ⌘K Command Trigger + Radix Popover Wallet + Radix Dropdown Account */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setGlobalCommandOpen(true)}
-                  className="hidden md:inline-flex gap-2 bg-[#12141C] border-white/10 text-zinc-300 hover:text-white hover:border-[#46ecd5]/40"
-                >
-                  <CommandIcon className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span className="text-xs">Quick Jump</span>
-                  <kbd className="px-1.5 py-0.5 rounded bg-black/60 border border-white/10 font-mono text-[10px] text-[#46ecd5]">
-                    ⌘K
-                  </kbd>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Open Global Studio Command Palette (⌘K)</TooltipContent>
-            </Tooltip>
-
+          {/* Zone 3: Radix Popover Credit Wallet + Radix Dropdown Account Menu */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {user ? (
               <>
                 <Popover
@@ -468,9 +288,9 @@ const StudioShell: React.FC = () => {
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="font-mono-tabular text-[#46ecd5] border-[#46ecd5]/25 bg-[#12171B] hover:bg-[#172126]"
+                          className="font-mono-tabular text-[#46ecd5] border-white/12"
                         >
-                          <span>✦ {user.credits.total.toLocaleString()} TK</span>
+                          <span>✦ {user.credits.total.toLocaleString()}</span>
                           <ChevronDown className="w-3 h-3 text-zinc-400" />
                         </Button>
                       </PopoverTrigger>
@@ -702,7 +522,6 @@ const StudioShell: React.FC = () => {
                   <div className="space-y-1.5">
                     {PRIMARY_NAV_ITEMS.map((item) => {
                       const active = isNavItemActive(item);
-                      const Icon = item.icon;
                       return (
                         <Button
                           key={item.id}
@@ -712,10 +531,9 @@ const StudioShell: React.FC = () => {
                             navigate(item.route, item.params);
                             setMobileMenuOpen(false);
                           }}
-                          className="w-full justify-start uppercase tracking-wider gap-2"
+                          className="w-full justify-start uppercase tracking-wider"
                         >
-                          <Icon className="w-3.5 h-3.5" />
-                          <span>{item.label}</span>
+                          {item.label}
                         </Button>
                       );
                     })}
@@ -765,42 +583,32 @@ const StudioShell: React.FC = () => {
         </header>
 
         {/* =================================================================== */}
-        {/* MAIN ROUTE VIEWPORT WITH FRAMER MOTION TRANSITIONS                  */}
+        {/* MAIN ROUTE VIEWPORT                                                 */}
         {/* =================================================================== */}
         <main className="flex-1 w-full max-w-full overflow-x-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${route}-${routeParams.tab || ''}-${routeParams.mode || ''}`}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-            >
-              {route === 'explore' && <ExplorePage />}
-              {route === 'cinema' && <CinemaStudioView />}
-              {route === 'character' && <CharacterStudioView />}
-              {route === 'motion' && <MotionStudioView />}
-              {route === 'wardrobe' && <WardrobeStudioView />}
-              {route === 'props' && <PropsStudioView />}
-              {route === 'location' && <LocationStudioView />}
-              {route === 'storyboard' && <StoryboardStudioView />}
-              {route === 'marketing' && <MarketingStudioView />}
-              {route === 'lipsync' && <LipSyncStudioView />}
-              {route === 'canvas' && <CanvasStudioView />}
-              {route === 'editing' && <EditingStudioView />}
-              {route === 'image' && <StudioGeneratorView surface="image" />}
-              {route === 'video' && <StudioGeneratorView surface="video" />}
-              {route === 'audio' && <StudioGeneratorView surface="audio" />}
-              {route === 'effects' && <EffectsPage />}
-              {route === 'community' && <CommunityPage />}
-              {route === 'assets' && <AssetsLibraryPage />}
-              {route === 'pricing' && <PricingPage />}
-              {route === 'account' && <AccountBillingPage />}
-              {route === 'admin' && <AdminConsolePage />}
-              {route === 'legal' && <LegalPage section={routeParams.section} />}
-              {route === 'auth' && <AuthPage />}
-            </motion.div>
-          </AnimatePresence>
+          {route === 'explore' && <ExplorePage />}
+          {route === 'cinema' && <CinemaStudioView />}
+          {route === 'character' && <CharacterStudioView />}
+          {route === 'motion' && <MotionStudioView />}
+          {route === 'wardrobe' && <WardrobeStudioView />}
+          {route === 'props' && <PropsStudioView />}
+          {route === 'location' && <LocationStudioView />}
+          {route === 'storyboard' && <StoryboardStudioView />}
+          {route === 'marketing' && <MarketingStudioView />}
+          {route === 'lipsync' && <LipSyncStudioView />}
+          {route === 'canvas' && <CanvasStudioView />}
+          {route === 'editing' && <EditingStudioView />}
+          {route === 'image' && <StudioGeneratorView surface="image" />}
+          {route === 'video' && <StudioGeneratorView surface="video" />}
+          {route === 'audio' && <StudioGeneratorView surface="audio" />}
+          {route === 'effects' && <EffectsPage />}
+          {route === 'community' && <CommunityPage />}
+          {route === 'assets' && <AssetsLibraryPage />}
+          {route === 'pricing' && <PricingPage />}
+          {route === 'account' && <AccountBillingPage />}
+          {route === 'admin' && <AdminConsolePage />}
+          {route === 'legal' && <LegalPage section={routeParams.section} />}
+          {route === 'auth' && <AuthPage />}
         </main>
 
         {/* =================================================================== */}

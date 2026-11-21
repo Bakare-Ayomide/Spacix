@@ -66,7 +66,6 @@ import {
 } from '../types/studio';
 import { StoryStudioView } from './StoryStudioView';
 import { AutomaticProductionWorkflow } from './AutomaticProductionWorkflow';
-import { MusicVideoProductionStudio } from './MusicVideoProductionStudio';
 import {
   CINEMA_TOOL_CATEGORIES,
   CINEMA_TOOL_LIST,
@@ -88,10 +87,6 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
   Input,
   ScrollArea,
   Select,
@@ -685,7 +680,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   // ==========================================================================
   // WORKSPACE MODE, CONTEXTUAL TOOL & NAVIGATION STATE
   // ==========================================================================
-  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'music_video' | 'production'>('director');
+  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'production'>('director');
   const [activeCategory, setActiveCategory] = useState<CinemaToolCategoryId>('media_generation');
   const [activeToolId, setActiveToolId] = useState<CinemaToolId>('video_creation');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -739,8 +734,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   useEffect(() => {
     if (routeParams?.mode === 'auto_production') {
       setWorkingMode('auto_production');
-    } else if (routeParams?.mode === 'music_video') {
-      setWorkingMode('music_video');
     } else if (routeParams?.mode === 'production') {
       setWorkingMode('production');
     }
@@ -819,8 +812,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
       setActivePopover('lighting');
     } else if (spec.id === 'script_screenplay' || spec.id === 'scene_breakdown') {
       setAiDirectorOpen(true);
-    } else if (spec.id === 'music_video_production') {
-      setWorkingMode('music_video');
     } else if (spec.id === 'video_sequencing') {
       setWorkingMode('production');
     }
@@ -2144,23 +2135,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                 <Button
                   type="button"
-                  variant={workingMode === 'music_video' ? 'default' : 'secondary'}
-                  size="sm"
-                  onClick={() =>
-                    setWorkingMode((prev) =>
-                      prev === 'music_video' ? 'director' : 'music_video'
-                    )
-                  }
-                  className="whitespace-nowrap"
-                >
-                  <Music className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span>
-                    {workingMode === 'music_video' ? '← Workspace' : 'Music Video'}
-                  </span>
-                </Button>
-
-                <Button
-                  type="button"
                   variant={workingMode === 'production' ? 'default' : 'secondary'}
                   size="sm"
                   onClick={() =>
@@ -2258,16 +2232,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                 productionType={productionType}
                 onProjectTitleChange={(t) => setProjectTitle(t)}
                 onOpenAdvancedStoryStudio={() => setWorkingMode('production')}
-              />
-            </div>
-          ) : workingMode === 'music_video' ? (
-            /* DEDICATED MUSIC VIDEO PRODUCTION WORKSPACE INSIDE CINEMA STUDIO */
-            <div className="flex-1 w-full max-w-[1520px] mx-auto px-3 sm:px-6 py-4 overflow-x-hidden">
-              <MusicVideoProductionStudio
-                projectId={selectedProjId}
-                projectTitle={projectTitle}
-                onProjectTitleChange={(t) => setProjectTitle(t)}
-                onBackToStudio={() => setWorkingMode('director')}
               />
             </div>
           ) : workingMode === 'production' ? (
@@ -2819,56 +2783,16 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               </div>
 
               {/* ============================================================
-                  RADIX UI DIALOG DIRECTOR'S PANEL (ABOVE COMPOSER)
+                  FLOATING DIRECTOR'S PANEL POPOVER MODALS (ABOVE COMPOSER)
                   Matching Screenshots: Film setup, Camera, Color palette, Lighting
                   ============================================================ */}
-              <Dialog
-                open={Boolean(activePopover)}
-                onOpenChange={(open) => {
-                  if (!open) setActivePopover(null);
-                }}
-              >
-                <DialogContent className="max-w-[1040px] w-[96vw] p-0 bg-transparent border-none shadow-none overflow-visible">
-                  <DialogTitle className="sr-only">Cinema Studio Director Controls</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Configure visual references, film setup, camera optics, color grading palettes, lighting schemes, and AI engines.
-                  </DialogDescription>
-                  <div className="w-full max-h-[85vh] overflow-y-auto space-y-2.5">
-                    {/* Top Radix / Framer Motion Quick-Switch Pill Bar across all Director Controls */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[#12141B]/95 backdrop-blur-xl border border-white/15 shadow-2xl">
-                      <AnimatedPillTabs
-                        layoutId="director-modal-top-switcher"
-                        activeId={activePopover === 'at_elements' ? 'references' : activePopover || 'film_setup'}
-                        items={[
-                          { id: 'references', label: `References (${allReferences.length}/50)` },
-                          { id: 'film_setup', label: 'Film Setup' },
-                          { id: 'camera', label: 'Camera & Lens' },
-                          { id: 'color_palette', label: 'Color Palette' },
-                          { id: 'lighting', label: 'Lighting' },
-                          { id: 'models', label: 'AI Engine' },
-                        ]}
-                        onChange={(tabId) =>
-                          setActivePopover(
-                            tabId as
-                              | 'references'
-                              | 'film_setup'
-                              | 'camera'
-                              | 'color_palette'
-                              | 'lighting'
-                              | 'models'
-                          )
-                        }
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="xs"
-                        onClick={() => setActivePopover(null)}
-                        className="rounded-xl"
-                      >
-                        Done (Esc)
-                      </Button>
-                    </div>
+              {activePopover && (
+                <>
+                  <div
+                    onClick={() => setActivePopover(null)}
+                    className="fixed inset-0 bg-black/70 z-40 sm:hidden"
+                  />
+                  <div className="fixed inset-x-0 bottom-0 sm:static z-50 p-2 sm:px-8 sm:pb-3 max-w-[1040px] w-full mx-auto max-h-[82vh] overflow-y-auto">
                     {/* 1. FILM SETUP & STUDIO SETUP POPOVER MODAL */}
                     {activePopover === 'film_setup' && (
                       <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
@@ -4475,8 +4399,8 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                       </div>
                     )}
                   </div>
-                </DialogContent>
-              </Dialog>
+                </>
+              )}
 
               {/* ============================================================
                   UNIVERSAL FLOATING GENERATION COMPOSER (BOTTOM CENTRE)
@@ -5033,15 +4957,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               >
                 <Sparkles className="w-4 h-4 text-[#46ecd5]" />
                 <span>Automatic Production (4-Stage Film Pipeline)</span>
-              </CommandItem>
-              <CommandItem
-                onSelect={() => {
-                  setWorkingMode('music_video');
-                  setCommandPaletteOpen(false);
-                }}
-              >
-                <Music className="w-4 h-4 text-[#46ecd5]" />
-                <span>Music Video Production (Audio Trim, Lip Sync & B-Roll)</span>
               </CommandItem>
               <CommandItem
                 onSelect={() => {

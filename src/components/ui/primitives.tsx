@@ -23,37 +23,35 @@ import { cn } from '../../lib/utils';
 // 1. SHADCN / RADIX BUTTON (with @radix-ui/react-slot + CVA)
 // ============================================================================
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer active:scale-[0.98]',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#46ecd5]/60 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer active:scale-[0.98]',
   {
     variants: {
       variant: {
         default:
-          'bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-500 text-white font-semibold shadow-[0_6px_24px_rgba(99,102,241,0.38)] hover:brightness-110',
+          'bg-[#46ecd5] text-zinc-950 font-extrabold shadow-[0_0_24px_rgba(70,236,213,0.28)] hover:brightness-110',
         secondary:
-          'bg-[#131826] text-slate-100 border border-white/[0.08] hover:bg-[#1A2133] hover:border-white/15',
+          'bg-[#1C1E26] text-zinc-100 border border-white/10 hover:bg-[#252832] hover:border-white/20',
         outline:
-          'border border-white/[0.1] bg-[#0B0F19]/90 text-slate-200 hover:bg-[#131826] hover:text-white hover:border-indigo-500/45',
+          'border border-white/12 bg-[#12141A]/90 text-zinc-200 hover:bg-[#1B1E26] hover:text-white hover:border-[#46ecd5]/40',
         ghost:
-          'text-slate-400 hover:bg-white/[0.06] hover:text-white',
+          'text-zinc-400 hover:bg-white/[0.06] hover:text-white',
         destructive:
-          'bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25',
+          'bg-rose-500/20 text-rose-300 border border-rose-500/35 hover:bg-rose-500/30',
         glass:
           'bg-white/[0.06] backdrop-blur-md border border-white/12 text-white hover:bg-white/[0.12]',
         cyanGhost:
-          'bg-indigo-500/12 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white',
+          'bg-[#46ecd5]/12 text-[#46ecd5] border border-[#46ecd5]/35 hover:bg-[#46ecd5] hover:text-zinc-950',
         accent:
-          'bg-indigo-500/15 text-cyan-300 border border-indigo-500/35 hover:bg-indigo-600 hover:text-white',
-        link:
-          'text-indigo-400 underline-offset-4 hover:underline',
+          'bg-[#46ecd5]/12 text-[#46ecd5] border border-[#46ecd5]/35 hover:bg-[#46ecd5] hover:text-zinc-950',
       },
       size: {
-        default: 'h-9 px-4 py-2',
+        default: 'h-9 px-3.5 py-2',
         xs: 'h-7 px-2.5 text-[11px] rounded-lg',
-        sm: 'h-8 px-3.5 text-xs rounded-xl',
-        lg: 'h-11 px-5 text-sm rounded-xl',
+        sm: 'h-8 px-3 text-xs rounded-xl',
+        lg: 'h-11 px-5 text-sm rounded-2xl',
         pill: 'h-8 px-3.5 rounded-full text-[11px]',
         icon: 'h-9 w-9 rounded-xl',
-        iconSm: 'h-7 w-7 rounded-lg',
+        iconSm: 'h-7 w-7 rounded-full',
       },
     },
     defaultVariants: {
@@ -87,13 +85,13 @@ Button.displayName = 'Button';
 // 2. SHADCN BADGE (CVA)
 // ============================================================================
 export const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-mono-tabular font-medium tracking-wide transition-colors',
+  'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-mono-tabular font-bold uppercase tracking-wider transition-colors',
   {
     variants: {
       variant: {
-        default: 'border-indigo-500/35 bg-indigo-500/15 text-indigo-300',
-        secondary: 'border-white/[0.08] bg-[#131826] text-slate-300',
-        outline: 'border-white/15 text-slate-400',
+        default: 'border-[#46ecd5]/40 bg-[#46ecd5]/15 text-[#46ecd5]',
+        secondary: 'border-white/10 bg-[#181A20] text-zinc-300',
+        outline: 'border-white/15 text-zinc-400',
         success: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
         warning: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
         destructive: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
@@ -123,7 +121,7 @@ export const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      'rounded-2xl border border-white/[0.08] bg-[#0B0F19]/95 text-slate-100 shadow-[0_16px_48px_rgba(0,0,0,0.65)]',
+      'rounded-2xl border border-white/10 bg-[#12141A]/95 text-zinc-100 shadow-[0_16px_48px_rgba(0,0,0,0.65)]',
       className
     )}
     {...props}
@@ -875,19 +873,4 @@ export const CommandSeparator = React.forwardRef<
   />
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
-
-export const CommandShortcut: React.FC<React.HTMLAttributes<HTMLSpanElement>> = ({
-  className,
-  ...props
-}) => (
-  <span
-    className={cn(
-      'ml-auto text-[10px] font-mono tracking-widest text-zinc-400',
-      className
-    )}
-    {...props}
-  />
-);
-CommandShortcut.displayName = 'CommandShortcut';
-
 

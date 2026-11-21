@@ -715,83 +715,6 @@ export interface TimelineAssemblyTrackSet {
   }>;
 }
 
-export type MusicVideoGenerationMode = 'lip_sync' | 'b_roll';
-
-export type LipSyncCapabilityKind =
-  | 'native_audio_driven'
-  | 'dedicated_lipsync_step'
-  | 'requires_lipsync_step'
-  | 'video_no_lipsync';
-
-export interface MusicVideoAudioTrack {
-  id: string;
-  name: string;
-  sourceType: 'upload' | 'url';
-  sourceUrl: string;
-  originalUrl: string;
-  contentType: string;
-  durationSec: number;
-  bytes?: number;
-  waveformPeaks: number[];
-  createdAt: string;
-}
-
-export interface MusicVideoScene {
-  id: string;
-  order: number;
-  title: string;
-  mode: MusicVideoGenerationMode;
-  // Audio segment mapping (non-destructive trim against master audio)
-  audioStartSec: number;
-  audioEndSec: number;
-  trimmedAudioUrl?: string;
-  // Character & Wardrobe consistency
-  characterIds: string[];
-  wardrobeId?: string | null;
-  // Scene creation vs upload
-  sceneSourceMode: 'generate' | 'upload';
-  scenePrompt: string;
-  environmentNotes: string;
-  cameraFraming: string;
-  cameraMovement: string;
-  lightingStyle: string;
-  visualStyle: string;
-  // Performance / B-Roll specifics
-  performanceDirection: string;
-  facialExpression: string;
-  bodyMovement: string;
-  bRollCategory: string;
-  // Visual references & outputs
-  sceneImageUrl: string;
-  sceneImageModelId: string;
-  sceneImageGenerationId?: string;
-  // Animation & Lip Sync pipeline
-  lipSyncPipelineType: 'native' | 'two_stage';
-  animationModelId: string;
-  lipSyncModelId: string;
-  // Output settings (dynamic per model)
-  aspectRatio: string;
-  resolution: string;
-  durationSec: number;
-  modelSettings: Record<string, string | number | boolean>;
-  // Generated video artifacts
-  stage1VideoUrl?: string;
-  stage1GenerationId?: string;
-  finalVideoUrl?: string;
-  finalGenerationId?: string;
-  status: 'draft' | 'generating_image' | 'animating' | 'syncing_lips' | 'ready' | 'failed';
-  statusMessage?: string;
-  updatedAt: string;
-}
-
-export interface MusicVideoProjectData {
-  audioTrack: MusicVideoAudioTrack | null;
-  activeSceneId: string | null;
-  scenes: MusicVideoScene[];
-  defaultAspectRatio: '16:9' | '9:16' | '1:1' | '21:9';
-  updatedAt: string;
-}
-
 export interface CinemaProductionProject {
   id: string;
   userId: string;
@@ -809,7 +732,6 @@ export interface CinemaProductionProject {
   scenes: ProductionScene[];
   canvasNodes: CanvasWorkflowNode[];
   timelineTracks: TimelineAssemblyTrackSet;
-  musicVideo?: MusicVideoProjectData;
   createdAt: string;
   updatedAt: string;
 }
@@ -822,5 +744,4 @@ export interface ActiveContinuityContext {
   locationId: string | null;
   motionTemplateId: string | null;
 }
-
 

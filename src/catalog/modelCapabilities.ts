@@ -27,8 +27,7 @@ export type CinemaToolId =
   | 'storyboard_planning'
   | 'camera_coverage'
   | 'lighting_cinema'
-  | 'video_sequencing'
-  | 'music_video_production';
+  | 'video_sequencing';
 
 export interface CinemaToolSpec {
   id: CinemaToolId;
@@ -115,14 +114,11 @@ const MOTION_VIDEO_MODEL_IDS = [
 
 // Lip sync & speech-driven character performance video models
 const LIP_SYNC_MODEL_IDS = [
-  'omnihuman-1-5-lipsync',
-  'hedra-character-3',
-  'veed-fabric-lipsync',
-  'sync-lipsync-2-pro',
-  'kling-lipsync-pro',
   'seedance-2-5',
   'kling-3-0-pro',
   'wan-3-0-prime',
+  'veo-3-1',
+  'ltx-video-2',
 ];
 
 // Voice creation & Speech/Dialogue TTS models
@@ -520,28 +516,6 @@ export const CINEMA_TOOLS: Record<CinemaToolId, CinemaToolSpec> = {
     promptPlaceholder:
       'Generate a bridging transition shot or B-roll insert for the timeline sequence...',
     directivePrefix: 'Timeline Sequence Cut & B-Roll Insert',
-    supportsCameraOptics: true,
-    supportsLightingAndColor: true,
-    supportsReferences: true,
-    supportsDuration: true,
-    supportsAspectRatio: true,
-    supportsResolution: true,
-    supportsAudioToggle: true,
-  },
-  music_video_production: {
-    id: 'music_video_production',
-    category: 'film_production',
-    label: 'Music Video Production',
-    shortLabel: 'Music Video',
-    description:
-      'Full music-video workstation: performers, scenes, audio waveform trimming, lip sync, B-roll & sequence assembly.',
-    targetSurface: 'video',
-    defaultModelId: 'omnihuman-1-5-lipsync',
-    defaultMode: 'Lip Sync Performance',
-    compatibleModelIds: [...LIP_SYNC_MODEL_IDS, ...VIDEO_MODEL_IDS],
-    promptPlaceholder:
-      'Open the dedicated Music Video Production workspace to trim audio, direct lip-sync performances, and sequence scenes...',
-    directivePrefix: 'Music Video Production Direction',
     supportsCameraOptics: true,
     supportsLightingAndColor: true,
     supportsReferences: true,
