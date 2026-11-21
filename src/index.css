@@ -8,22 +8,6 @@
   --border-hairline: rgba(255, 255, 255, 0.08);
   --primary: #46ecd5;
   --primary-ink: #09090B;
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 6.5%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 7.5%;
-  --popover-foreground: 0 0% 98%;
-  --muted: 240 5% 14%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 172 82% 60%;
-  --accent-foreground: 240 10% 3.9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 4% 16%;
-  --input: 240 4% 16%;
-  --ring: 172 82% 60%;
-  --radius: 0.875rem;
   --font-display: 'Big Shoulders Display', sans-serif;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -64,19 +48,6 @@ body,
 .quanta-dot-bg {
   background-image: radial-gradient(rgba(70, 236, 213, 0.11) 1px, transparent 1px);
   background-size: 20px 20px;
-}
-
-@keyframes border-beam-spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-border-beam {
-  animation: border-beam-spin 8s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -42,8 +42,6 @@ import {
   SpacixLogo,
 } from './ProviderBrandIcon';
 import { ContinuityStudioBar } from './ContinuityStudiosView';
-import { Badge, Button, Textarea, Tooltip, TooltipContent, TooltipTrigger } from './ui/primitives';
-import { AnimatedPillTabs, BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
 
 const SAMPLE_PROMPTS: Record<Surface, string[]> = {
   video: [
@@ -189,7 +187,7 @@ export const GenerationTile: React.FC<{
   }
 
   return (
-    <SpotlightCard className="group p-0 overflow-hidden flex flex-col justify-between transition-all">
+    <div className="group rounded-xl bg-[#121216] border border-white/10 hover:border-white/25 overflow-hidden flex flex-col justify-between transition-all">
       <div
         onClick={() => onOpenDetail(gen)}
         className="relative aspect-video bg-[#09090B] cursor-pointer overflow-hidden flex items-center justify-center"
@@ -312,35 +310,27 @@ export const GenerationTile: React.FC<{
             <span className="text-zinc-300 font-medium truncate">{gen.modelLabel}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="default" className="font-mono-tabular">✦ {gen.cost}</Badge>
+            <span className="font-mono-tabular text-[#46ecd5]">✦ {gen.cost}</span>
             {out && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    onClick={(e) => downloadGeneration(gen, e)}
-                    aria-label="Download generated media"
-                    className="h-7 w-7"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Download generated media</TooltipContent>
-              </Tooltip>
+              <button
+                type="button"
+                onClick={(e) => downloadGeneration(gen, e)}
+                title="Download generated media"
+                aria-label="Download generated media"
+                className="p-1.5 rounded-lg bg-zinc-900 hover:bg-[#46ecd5] text-zinc-300 hover:text-zinc-950 border border-white/10 transition-colors inline-flex items-center justify-center"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
         </div>
       </div>
-    </SpotlightCard>
+    </div>
   );
 };
 
 export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface }) => {
   const {
-    models,
-    calculateTokenCost,
     dockDraft,
     setDockDraft,
     applyModelToDock,
@@ -372,25 +362,23 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
   // Sync dock surface when route changes
   useEffect(() => {
     if (dockDraft.surface !== surface) {
-      const surfaceModels = models.filter((m) => m.surface === surface);
+      const surfaceModels = getModelsBySurface(surface);
       if (surfaceModels[0]) {
         applyModelToDock(surfaceModels[0].id, surface);
       }
     }
-  }, [surface, dockDraft.surface, applyModelToDock, models]);
+  }, [surface, dockDraft.surface, applyModelToDock]);
 
   const activeModel =
-    models.find((m) => m.id === dockDraft.modelId) ||
-    getModelById(dockDraft.modelId) ||
-    getModelsBySurface(surface)[0];
+    getModelById(dockDraft.modelId) || getModelsBySurface(surface)[0];
 
   const activeProviderSpec = resolveProviderSpec(activeModel, dockDraft.apiProvider);
 
-  const creditCost = calculateTokenCost(
+  const creditCost = priceFor(
     activeModel.id,
     dockDraft.settings,
     dockDraft.media,
-    1
+    { apiProvider: activeProviderSpec.providerId }
   );
 
   const surfaceGenerations = generations.filter((g) => g.surface === surface);
@@ -445,16 +433,22 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
       {/* =================================================================== */}
       {/* LEFT CONTROL DOCK (~380px on desktop, 4 of 12 columns)              */}
       {/* =================================================================== */}
-      <aside className="min-w-0 w-full lg:col-span-4 xl:col-span-4 bg-[#111114] border border-white/10 rounded-xl flex flex-col overflow-hidden lg:sticky lg:top-20 relative">
-        <BorderBeam />
+      <aside className="min-w-0 w-full lg:col-span-4 xl:col-span-4 bg-[#111114] border border-white/10 rounded-xl flex flex-col overflow-hidden lg:sticky lg:top-20">
         {/* 1. Surface Mode Selector Tabs */}
-        <div className="p-2.5 sm:p-3 bg-[#151519] border-b border-white/10">
-          <AnimatedPillTabs
-            layoutGroupId="studio-dock-mode-tabs"
-            value={dockDraft.mode}
-            onChange={(m) => setDockDraft((prev) => ({ ...prev, mode: m as typeof prev.mode }))}
-            items={activeModel.modes.map((m) => ({ value: m, label: m }))}
-          />
+        <div className="p-2.5 sm:p-3 bg-[#151519] border-b border-white/10 flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {activeModel.modes.map((m) => (
+            <button
+              key={m}
+              onClick={() => setDockDraft((prev) => ({ ...prev, mode: m }))}
+              className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                dockDraft.mode === m
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
 
         <div className="p-3.5 sm:p-4 space-y-4 overflow-y-auto lg:max-h-[calc(100vh-230px)]">
@@ -633,7 +627,7 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
               </button>
             </div>
 
-            <Textarea
+            <textarea
               id="studio-prompt-input"
               rows={4}
               value={dockDraft.prompt}
@@ -641,7 +635,7 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
                 setDockDraft((prev) => ({ ...prev, prompt: e.target.value }))
               }
               placeholder={`Describe camera lens, movement, lighting, and subject for ${activeModel.label}...`}
-              className="w-full p-3 text-xs resize-none leading-relaxed"
+              className="w-full p-3 text-xs bg-[#16161A] border border-white/10 rounded-xl text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5] resize-none leading-relaxed"
             />
 
             <div className="flex items-center justify-between text-[11px] text-zinc-500">
@@ -725,37 +719,36 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
         <div className="p-4 bg-[#151519] border-t border-white/10 space-y-2">
           {queuedRun ? (
             <div className="flex items-center gap-2">
-              <ShimmerButton
+              <button
                 type="button"
                 onClick={handleGenerateClick}
                 disabled={Boolean(invalidReason) || submitting}
-                className="flex-1 py-3 px-4 text-xs"
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-[#46ecd5] text-zinc-950 hover:brightness-105 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Queue Another · ✦ {creditCost}</span>
-              </ShimmerButton>
-              <Button
+              </button>
+              <button
                 type="button"
-                variant="destructive"
                 onClick={() => cancelGeneration(queuedRun.id)}
-                className="py-3 px-4 h-auto shrink-0"
+                className="py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-colors shrink-0"
               >
                 Cancel Queued
-              </Button>
+              </button>
             </div>
           ) : (
-            <ShimmerButton
+            <button
               type="button"
               onClick={handleGenerateClick}
               disabled={Boolean(invalidReason) || submitting}
               title={invalidReason || `Generate with ${activeModel.label}`}
-              className="w-full py-3 px-4 text-sm"
+              className="w-full py-3 px-4 rounded-xl font-bold text-sm uppercase tracking-wider bg-[#46ecd5] text-zinc-950 hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#46ecd5]/15"
             >
               <Sparkles className="w-4 h-4" />
               <span>
                 {submitting ? 'Submitting to Cluster...' : `Generate ✦ ${creditCost}`}
               </span>
-            </ShimmerButton>
+            </button>
           )}
 
           {invalidReason && (
@@ -772,15 +765,30 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
       <section className="min-w-0 w-full lg:col-span-8 xl:col-span-8 space-y-4">
         {/* Canvas Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#111114] border border-white/10 rounded-xl">
-          <AnimatedPillTabs
-            layoutGroupId="studio-right-canvas-tabs"
-            value={rightTab}
-            onChange={(v) => setRightTab(v as 'history' | 'how-it-works')}
-            items={[
-              { value: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" />, count: surfaceGenerations.length },
-              { value: 'how-it-works', label: 'How It Works', icon: <HelpCircle className="w-3.5 h-3.5" /> },
-            ]}
-          />
+          <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg border border-white/5 max-w-full overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setRightTab('history')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                rightTab === 'history'
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>History ({surfaceGenerations.length})</span>
+            </button>
+            <button
+              onClick={() => setRightTab('how-it-works')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                rightTab === 'how-it-works'
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>How It Works</span>
+            </button>
+          </div>
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1 text-xs text-zinc-400">

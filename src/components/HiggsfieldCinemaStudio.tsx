@@ -66,6 +66,7 @@ import {
 } from '../types/studio';
 import { StoryStudioView } from './StoryStudioView';
 import { AutomaticProductionWorkflow } from './AutomaticProductionWorkflow';
+import { MusicVideoProductionStudio } from './MusicVideoProductionStudio';
 import {
   CINEMA_TOOL_CATEGORIES,
   CINEMA_TOOL_LIST,
@@ -684,7 +685,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   // ==========================================================================
   // WORKSPACE MODE, CONTEXTUAL TOOL & NAVIGATION STATE
   // ==========================================================================
-  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'production'>('director');
+  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'music_video' | 'production'>('director');
   const [activeCategory, setActiveCategory] = useState<CinemaToolCategoryId>('media_generation');
   const [activeToolId, setActiveToolId] = useState<CinemaToolId>('video_creation');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -738,6 +739,8 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   useEffect(() => {
     if (routeParams?.mode === 'auto_production') {
       setWorkingMode('auto_production');
+    } else if (routeParams?.mode === 'music_video') {
+      setWorkingMode('music_video');
     } else if (routeParams?.mode === 'production') {
       setWorkingMode('production');
     }
@@ -816,6 +819,8 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
       setActivePopover('lighting');
     } else if (spec.id === 'script_screenplay' || spec.id === 'scene_breakdown') {
       setAiDirectorOpen(true);
+    } else if (spec.id === 'music_video_production') {
+      setWorkingMode('music_video');
     } else if (spec.id === 'video_sequencing') {
       setWorkingMode('production');
     }
@@ -2139,6 +2144,23 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                 <Button
                   type="button"
+                  variant={workingMode === 'music_video' ? 'default' : 'secondary'}
+                  size="sm"
+                  onClick={() =>
+                    setWorkingMode((prev) =>
+                      prev === 'music_video' ? 'director' : 'music_video'
+                    )
+                  }
+                  className="whitespace-nowrap"
+                >
+                  <Music className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span>
+                    {workingMode === 'music_video' ? '← Workspace' : 'Music Video'}
+                  </span>
+                </Button>
+
+                <Button
+                  type="button"
                   variant={workingMode === 'production' ? 'default' : 'secondary'}
                   size="sm"
                   onClick={() =>
@@ -2236,6 +2258,16 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                 productionType={productionType}
                 onProjectTitleChange={(t) => setProjectTitle(t)}
                 onOpenAdvancedStoryStudio={() => setWorkingMode('production')}
+              />
+            </div>
+          ) : workingMode === 'music_video' ? (
+            /* DEDICATED MUSIC VIDEO PRODUCTION WORKSPACE INSIDE CINEMA STUDIO */
+            <div className="flex-1 w-full max-w-[1520px] mx-auto px-3 sm:px-6 py-4 overflow-x-hidden">
+              <MusicVideoProductionStudio
+                projectId={selectedProjId}
+                projectTitle={projectTitle}
+                onProjectTitleChange={(t) => setProjectTitle(t)}
+                onBackToStudio={() => setWorkingMode('director')}
               />
             </div>
           ) : workingMode === 'production' ? (
@@ -5001,6 +5033,15 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               >
                 <Sparkles className="w-4 h-4 text-[#46ecd5]" />
                 <span>Automatic Production (4-Stage Film Pipeline)</span>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setWorkingMode('music_video');
+                  setCommandPaletteOpen(false);
+                }}
+              >
+                <Music className="w-4 h-4 text-[#46ecd5]" />
+                <span>Music Video Production (Audio Trim, Lip Sync & B-Roll)</span>
               </CommandItem>
               <CommandItem
                 onSelect={() => {

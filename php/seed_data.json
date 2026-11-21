@@ -637,6 +637,56 @@
         "fal"
       ],
       "customEndpoint": "fishaudio:s2.1@pro"
+    },
+    {
+      "modelId": "omnihuman-1-5",
+      "enabled": true,
+      "baseHfUsd": 0.14,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": null,
+      "updatedAt": "2026-11-21T13:00:33.111Z"
+    },
+    {
+      "modelId": "kling-lipsync-audio",
+      "enabled": true,
+      "baseHfUsd": 0.09,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "fal",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": null,
+      "updatedAt": "2026-11-21T13:00:33.111Z"
+    },
+    {
+      "modelId": "sync-lipsync-v2",
+      "enabled": true,
+      "baseHfUsd": 0.11,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "fal",
+        "muapi"
+      ],
+      "customEndpoint": null,
+      "updatedAt": "2026-11-21T13:00:33.111Z"
+    },
+    {
+      "modelId": "latentsync-v1",
+      "enabled": true,
+      "baseHfUsd": 0.055,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "fal",
+        "runware"
+      ],
+      "customEndpoint": null,
+      "updatedAt": "2026-11-21T13:00:33.111Z"
     }
   ],
   "plans": [
@@ -844,7 +894,7 @@
     ],
     "excludedModels": []
   },
-  "savedAt": "2026-11-07T22:41:57.914Z",
+  "savedAt": "2026-11-21T13:00:33.111Z",
   "catalogModels": [
     {
       "id": "nano-banana-2-1",
@@ -1020,44 +1070,6 @@
           "description": "Auto-expand lighting, atmosphere, and lens mechanics",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:google-nano-banana@2.1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.028,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/nano-banana-2",
-          "editEndpoint": "fal-ai/nano-banana-2/edit",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.035,
-          "latencyBadge": "Fal Subscribe CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/nano-banana-2"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "google/nano-banana-2.1/text-to-image",
-          "editEndpoint": "google/nano-banana-2.1/image-to-image",
-          "callingPattern": "queue",
-          "baseUsd": 0.04,
-          "latencyBadge": "HF Queue + Webhook",
-          "docsUrl": "https://docs.higgsfield.ai/docs/models/nano-banana-2-1"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/google/nano-banana-2.1",
-          "callingPattern": "queue",
-          "baseUsd": 0.032,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -1184,33 +1196,6 @@
           "key": "enhance_prompt",
           "label": "Enhance Prompt",
           "defaultValue": true
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:google-nano-banana-pro@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.04,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/nano-banana-pro",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.05,
-          "latencyBadge": "Fal Subscribe CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/nano-banana-pro"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/google/nano-banana-pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.045,
-          "latencyBadge": "Muapi Router"
         }
       ]
     },
@@ -1347,33 +1332,6 @@
           "label": "35mm Film Grain",
           "description": "Preserve organic halide texture without smoothing",
           "defaultValue": true
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:100@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.04,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "higgsfield-ai/soul/v2/standard",
-          "callingPattern": "queue",
-          "baseUsd": 0.04,
-          "latencyBadge": "HF Native Optical",
-          "docsUrl": "https://docs.higgsfield.ai/docs/models/soul-v2"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/higgsfield/soul-v2",
-          "callingPattern": "queue",
-          "baseUsd": 0.038,
-          "latencyBadge": "Muapi Proxy"
         }
       ]
     },
@@ -1516,32 +1474,6 @@
           "label": "Enhance Prompt",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:100@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.06,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "higgsfield-ai/soul/cinema",
-          "callingPattern": "queue",
-          "baseUsd": 0.06,
-          "latencyBadge": "HF Anamorphic"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/higgsfield/soul-cinema",
-          "callingPattern": "queue",
-          "baseUsd": 0.055,
-          "latencyBadge": "Muapi Proxy"
-        }
       ]
     },
     {
@@ -1676,33 +1608,6 @@
           "max": 8,
           "step": 0.5,
           "defaultValue": 3.5
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "bfl:flux-kontext-pro@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.04,
-          "latencyBadge": "Sonic Sub-2s"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/flux-pro/kontext",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.05,
-          "latencyBadge": "Fal Subscribe CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/flux-pro/kontext"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/bfl/flux-kontext-pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.045,
-          "latencyBadge": "Muapi Router"
         }
       ]
     },
@@ -1847,42 +1752,6 @@
           "label": "Prompt Upsampling",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "bfl:flux-2-pro@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.035,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/flux-2-flex",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.045,
-          "latencyBadge": "Fal Flex Typography",
-          "docsUrl": "https://fal.ai/models/fal-ai/flux-2-flex"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "flux-2-pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.05,
-          "latencyBadge": "HF Queue",
-          "docsUrl": "https://docs.higgsfield.ai/docs/models/flux-2-pro"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/bfl/flux-2-pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.042,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -1996,32 +1865,6 @@
           "key": "enhance_prompt",
           "label": "Enhance Prompt",
           "defaultValue": true
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:100@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.05,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "xai/grok-imagine-image-2.0",
-          "callingPattern": "queue",
-          "baseUsd": 0.05,
-          "latencyBadge": "HF Queue"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/xai/grok-imagine-2.0",
-          "callingPattern": "queue",
-          "baseUsd": 0.045,
-          "latencyBadge": "Muapi Router"
         }
       ]
     },
@@ -2145,32 +1988,6 @@
           "label": "Magic Prompt",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "ideogram:v4@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.05,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/ideogram/v3",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.055,
-          "latencyBadge": "Fal Subscribe CDN"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "ideogram/v4.0",
-          "callingPattern": "queue",
-          "baseUsd": 0.06,
-          "latencyBadge": "HF Queue"
-        }
       ]
     },
     {
@@ -2286,33 +2103,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "recraft:v4-pro@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.035,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/recraft/v4/pro/text-to-image",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.04,
-          "latencyBadge": "Fal Recraft V4 Pro",
-          "docsUrl": "https://fal.ai/models/fal-ai/recraft/v4/pro/text-to-image"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "recraft/v4.1/text-to-image",
-          "callingPattern": "queue",
-          "baseUsd": 0.04,
-          "latencyBadge": "HF Queue"
-        }
       ]
     },
     {
@@ -2423,32 +2213,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "alibaba:qwen-image@3.0",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.02,
-          "latencyBadge": "Sonic Sub-Second"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "alibaba/qwen-image-3/text-to-image",
-          "callingPattern": "queue",
-          "baseUsd": 0.03,
-          "latencyBadge": "HF Queue"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/alibaba/qwen-image-3",
-          "callingPattern": "queue",
-          "baseUsd": 0.025,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -2546,32 +2310,6 @@
           "max": 12,
           "step": 2,
           "defaultValue": 8
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "runware:100@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.01,
-          "latencyBadge": "Sub-500ms Sonic"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/fast-lightning-sdxl",
-          "callingPattern": "sync",
-          "baseUsd": 0.015,
-          "latencyBadge": "Fal Direct Run"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "z-image/turbo",
-          "callingPattern": "queue",
-          "baseUsd": 0.02,
-          "latencyBadge": "HF Turbo"
         }
       ]
     },
@@ -2765,41 +2503,6 @@
           "label": "Director Prompt Expansion",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "bytedance:seedance@2.5",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.05,
-          "latencyBadge": "Sonic Video Task"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "bytedance/seedance-2.5",
-          "editEndpoint": "bytedance/seedance-2.5/video-edit",
-          "callingPattern": "queue",
-          "baseUsd": 0.06,
-          "latencyBadge": "HF Queue + Webhook"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/bytedance/seedance/v2.5/text-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.058,
-          "latencyBadge": "Fal Queue CDN"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/bytedance/seedance-2.5",
-          "callingPattern": "queue",
-          "baseUsd": 0.052,
-          "latencyBadge": "Muapi High-Throughput"
-        }
       ]
     },
     {
@@ -2959,43 +2662,6 @@
           "step": 0.1,
           "defaultValue": 0.6
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.07,
-          "latencyBadge": "Sonic Video Task",
-          "docsUrl": "https://runware.ai/docs/models-api/introduction"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/kling-video/v2.5-turbo/pro/image-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.075,
-          "latencyBadge": "Fal Queue CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/kling-video/v2.5-turbo/pro/image-to-video"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "kling-video/v3.0/pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.08,
-          "latencyBadge": "HF 4K Mastering",
-          "docsUrl": "https://docs.higgsfield.ai/docs/models/kling-v3"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/kling/v3.0-pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.068,
-          "latencyBadge": "Muapi Direct Cluster"
-        }
       ]
     },
     {
@@ -3123,25 +2789,6 @@
           "label": "Generate Synchronized Audio",
           "description": "Post-trained fal + BFL audio track synthesis",
           "defaultValue": true
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "bfl:flux-3-max-video@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.065,
-          "latencyBadge": "Sonic Video Task"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "blackforestlabs/flux-3-max/text-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.07,
-          "latencyBadge": "Fal Post-Trained BFL",
-          "docsUrl": "https://fal.ai/models/blackforestlabs/flux-3-max/text-to-video"
         }
       ]
     },
@@ -3278,41 +2925,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.065,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/kling-video/o3/standard/image-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.065,
-          "latencyBadge": "Fal O3 Start-End",
-          "docsUrl": "https://fal.ai/models/fal-ai/kling-video/o3/standard/image-to-video"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "kling-video/o3/first-last-frame",
-          "callingPattern": "queue",
-          "baseUsd": 0.07,
-          "latencyBadge": "HF Queue"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/kling/o3-frames",
-          "callingPattern": "queue",
-          "baseUsd": 0.06,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -3441,41 +3053,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.05,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "minimax/h3-max/text-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.05,
-          "latencyBadge": "Fal Post-Trained Audio",
-          "docsUrl": "https://fal.ai/models/minimax/h3-max/text-to-video"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "minimax/h3/text-to-video",
-          "callingPattern": "queue",
-          "baseUsd": 0.05,
-          "latencyBadge": "HF Queue"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/minimax/h3-max",
-          "callingPattern": "queue",
-          "baseUsd": 0.045,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -3598,33 +3175,6 @@
               "label": "50 fps Smooth"
             }
           ]
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "lightricks:ltx-2-19b@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.03,
-          "latencyBadge": "Sonic Fast Video"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/ltx-2-19b/image-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.035,
-          "latencyBadge": "Fal LTX-2 19B Audio",
-          "docsUrl": "https://fal.ai/models/fal-ai/ltx-2-19b/image-to-video"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "lightricks/ltx-2.5/text-to-video/pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.04,
-          "latencyBadge": "HF Queue"
         }
       ]
     },
@@ -3752,32 +3302,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "bytedance:seedance-fast@2.0",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.025,
-          "latencyBadge": "Sonic Fast Video"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "bytedance/seedance-2.0/fast",
-          "callingPattern": "queue",
-          "baseUsd": 0.03,
-          "latencyBadge": "HF Queue"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/bytedance/seedance-2.0-fast",
-          "callingPattern": "queue",
-          "baseUsd": 0.026,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -3904,40 +3428,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.035,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/kling/v3.0-turbo",
-          "callingPattern": "queue",
-          "baseUsd": 0.035,
-          "latencyBadge": "Muapi Turbo"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/kling-video/v2.5-turbo/standard/text-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.038,
-          "latencyBadge": "Fal Queue CDN"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "kling-video/v3.0-turbo/text-to-video",
-          "callingPattern": "queue",
-          "baseUsd": 0.04,
-          "latencyBadge": "HF Queue"
-        }
       ]
     },
     {
@@ -4051,32 +3541,6 @@
           "max": 1,
           "step": 0.05,
           "defaultValue": 0.85
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.09,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "kling-video/v3/motion-control/pro",
-          "callingPattern": "queue",
-          "baseUsd": 0.09,
-          "latencyBadge": "HF Motion Rig"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/kling-video/motion-control",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.085,
-          "latencyBadge": "Fal Queue CDN"
         }
       ]
     },
@@ -4218,32 +3682,6 @@
           "description": "Synthesize synchronized environmental soundscape",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "alibaba:wan-prime@3.0",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.048,
-          "latencyBadge": "Sonic Task Engine"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/wan-pro/text-to-video",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.055,
-          "latencyBadge": "Fal Queue CDN"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "alibaba/wan-3.0-prime/text-to-video",
-          "callingPattern": "queue",
-          "baseUsd": 0.06,
-          "latencyBadge": "HF Queue"
-        }
       ]
     },
     {
@@ -4375,31 +3813,526 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
+      ]
+    },
+    {
+      "id": "omnihuman-1-5",
+      "surface": "video",
+      "family": "OmniHuman",
+      "provider": "ByteDance",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
         {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "klingai:kling-video@3-4k",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.25,
-          "latencyBadge": "Runware Sonic v1"
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/bytedance/omnihuman",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.14,
+          "latencyBadge": "Native Audio-to-Video",
+          "docsUrl": "https://fal.ai/models/fal-ai/bytedance/omnihuman"
         },
         {
           "providerId": "higgsfield",
           "label": "Higgsfield",
-          "endpoint": "higgsfield-ai/dop/lite",
+          "endpoint": "bytedance/omnihuman-v1.5",
           "callingPattern": "queue",
-          "baseUsd": 0.25,
-          "latencyBadge": "HF Native Camera Rig"
+          "baseUsd": 0.15,
+          "latencyBadge": "HF Audio Performance"
         },
         {
           "providerId": "muapi",
           "label": "Muapi.ai",
-          "endpoint": "muapi/higgsfield/dop-v2",
+          "endpoint": "muapi/bytedance/omnihuman-1.5",
           "callingPattern": "queue",
-          "baseUsd": 0.22,
-          "latencyBadge": "Muapi Proxy"
+          "baseUsd": 0.13,
+          "latencyBadge": "Muapi Router"
+        }
+      ],
+      "label": "OmniHuman v1.5 (Audio Lip Sync)",
+      "category": "CINEMATIC",
+      "description": "Native audio-driven full-body & facial singing/speaking performance directly from a single performer scene image and trimmed audio track.",
+      "bestFor": "Music video singing performances, natural head/body rhythm & mouth sync from a still frame",
+      "badges": [
+        "NEW",
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/bytedance/omnihuman",
+      "modes": [
+        "Audio Lip Sync"
+      ],
+      "lipSyncCapability": "native_audio_lipsync",
+      "videoInputModes": [
+        "image-to-video",
+        "audio-to-video"
+      ],
+      "roles": [
+        {
+          "role": "start",
+          "kind": "image",
+          "label": "Performer Scene Image",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Audio Segment",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "baseHfUsd": 0.14,
+      "billingUnit": "per_second",
+      "previewGradient": "from-[#46ecd5]/30 via-emerald-950/75 to-zinc-950",
+      "previewAccent": "#46ecd5",
+      "restPaths": {
+        "default": "fal-ai/bytedance/omnihuman"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            },
+            {
+              "value": "4:3",
+              "label": "4:3 Classic"
+            },
+            {
+              "value": "3:4",
+              "label": "3:4 Vertical"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "resolution",
+          "label": "Resolution",
+          "headline": true,
+          "defaultValue": "1080p",
+          "options": [
+            {
+              "value": "720p",
+              "label": "720p HD"
+            },
+            {
+              "value": "1080p",
+              "label": "1080p Full HD"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "expression_intensity",
+          "label": "Performance Expressiveness",
+          "defaultValue": "expressive",
+          "options": [
+            {
+              "value": "subtle",
+              "label": "Subtle / Intimate"
+            },
+            {
+              "value": "natural",
+              "label": "Natural Singing"
+            },
+            {
+              "value": "expressive",
+              "label": "High-Energy Stage"
+            }
+          ]
+        },
+        {
+          "type": "boolean",
+          "key": "preserve_identity",
+          "label": "Strict Facial Identity Lock",
+          "description": "Prioritize facial consistency over wide head rotation",
+          "defaultValue": true
+        }
+      ]
+    },
+    {
+      "id": "kling-lipsync-audio",
+      "surface": "video",
+      "family": "Kling",
+      "provider": "Kuaishou Kling",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/kling-video/lipsync/audio-to-video",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.09,
+          "latencyBadge": "Kling Lip-Sync Pass",
+          "docsUrl": "https://fal.ai/models/fal-ai/kling-video/lipsync/audio-to-video"
+        },
+        {
+          "providerId": "higgsfield",
+          "label": "Higgsfield",
+          "endpoint": "kling-video/lipsync/audio-to-video",
+          "callingPattern": "queue",
+          "baseUsd": 0.095,
+          "latencyBadge": "HF Queue"
+        },
+        {
+          "providerId": "muapi",
+          "label": "Muapi.ai",
+          "endpoint": "muapi/kling/lipsync-audio",
+          "callingPattern": "queue",
+          "baseUsd": 0.085,
+          "latencyBadge": "Muapi Router"
+        }
+      ],
+      "label": "Kling Audio Lip Sync",
+      "category": "CINEMATIC",
+      "description": "Dedicated audio-to-video lip synchronization model that aligns an animated performance video clip to a trimmed vocal audio track.",
+      "bestFor": "Two-stage music video pipeline: animate camera & choreography first, then synchronize mouth articulation",
+      "badges": [
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/kling-video/lipsync/audio-to-video",
+      "modes": [
+        "Video Lip Sync"
+      ],
+      "lipSyncCapability": "video_lipsync_postprocess",
+      "videoInputModes": [
+        "video-to-video",
+        "audio-to-video"
+      ],
+      "roles": [
+        {
+          "role": "video",
+          "kind": "video",
+          "label": "Animated Performance Video",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Vocal Audio",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "baseHfUsd": 0.09,
+      "billingUnit": "per_second",
+      "previewGradient": "from-amber-400/25 via-zinc-900/80 to-zinc-950",
+      "previewAccent": "#FBBF24",
+      "restPaths": {
+        "default": "fal-ai/kling-video/lipsync/audio-to-video"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Output Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "resolution",
+          "label": "Resolution",
+          "headline": true,
+          "defaultValue": "1080p",
+          "options": [
+            {
+              "value": "720p",
+              "label": "720p HD"
+            },
+            {
+              "value": "1080p",
+              "label": "1080p Full HD"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "sync_mode",
+          "label": "Duration Alignment",
+          "defaultValue": "cut_off",
+          "options": [
+            {
+              "value": "cut_off",
+              "label": "Match Audio Trim Length"
+            },
+            {
+              "value": "loop",
+              "label": "Loop Video to Audio"
+            },
+            {
+              "value": "bounce",
+              "label": "Bounce Video to Audio"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sync-lipsync-v2",
+      "surface": "video",
+      "family": "Sync",
+      "provider": "Sync.so",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/sync-lipsync/v2",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.11,
+          "latencyBadge": "Sync 2.0 Studio",
+          "docsUrl": "https://fal.ai/models/fal-ai/sync-lipsync/v2"
+        },
+        {
+          "providerId": "muapi",
+          "label": "Muapi.ai",
+          "endpoint": "muapi/sync/lipsync-v2",
+          "callingPattern": "queue",
+          "baseUsd": 0.1,
+          "latencyBadge": "Muapi Router"
+        }
+      ],
+      "label": "Sync Lipsync 2.0 Pro",
+      "category": "CINEMATIC",
+      "description": "Studio-grade viseme & dental-detail lip synchronization preserving original lighting, skin texture, and camera movement.",
+      "bestFor": "Close-up singing shots, fast rap/vocal cadences, preserving high-res facial fidelity",
+      "badges": [
+        "NEW",
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/sync-lipsync/v2",
+      "modes": [
+        "Video Lip Sync"
+      ],
+      "lipSyncCapability": "video_lipsync_postprocess",
+      "videoInputModes": [
+        "video-to-video",
+        "audio-to-video"
+      ],
+      "roles": [
+        {
+          "role": "video",
+          "kind": "video",
+          "label": "Source Performance Video",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Audio Track",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "baseHfUsd": 0.11,
+      "billingUnit": "per_second",
+      "previewGradient": "from-sky-400/25 via-zinc-900/80 to-zinc-950",
+      "previewAccent": "#38BDF8",
+      "restPaths": {
+        "default": "fal-ai/sync-lipsync/v2"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            },
+            {
+              "value": "21:9",
+              "label": "21:9 Scope"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "resolution",
+          "label": "Output Resolution",
+          "headline": true,
+          "defaultValue": "1080p",
+          "options": [
+            {
+              "value": "720p",
+              "label": "720p HD"
+            },
+            {
+              "value": "1080p",
+              "label": "1080p Full HD"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "sync_mode",
+          "label": "Timing Mode",
+          "defaultValue": "cut_off",
+          "options": [
+            {
+              "value": "cut_off",
+              "label": "Cut to Shortest"
+            },
+            {
+              "value": "loop",
+              "label": "Loop Video"
+            },
+            {
+              "value": "remap",
+              "label": "Time-Remap Video"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "latentsync-v1",
+      "surface": "video",
+      "family": "LatentSync",
+      "provider": "ByteDance",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/latentsync",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.055,
+          "latencyBadge": "Fast Diffusion Lip Sync",
+          "docsUrl": "https://fal.ai/models/fal-ai/latentsync"
+        },
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "bytedance:latentsync@1",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.05,
+          "latencyBadge": "Sonic Task"
+        }
+      ],
+      "label": "LatentSync Fast Lip Sync",
+      "category": "FAST",
+      "description": "Audio-conditioned latent diffusion lip synchronization for fast turnaround iterations and multi-angle vocal takes.",
+      "bestFor": "Rapid lip-sync drafts, tight chorus cuts, cost-effective vocal takes",
+      "badges": [
+        "FAST",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/latentsync",
+      "modes": [
+        "Video Lip Sync"
+      ],
+      "lipSyncCapability": "video_lipsync_postprocess",
+      "videoInputModes": [
+        "video-to-video",
+        "audio-to-video"
+      ],
+      "roles": [
+        {
+          "role": "video",
+          "kind": "video",
+          "label": "Source Performance Video",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Audio Segment",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "baseHfUsd": 0.055,
+      "billingUnit": "per_second",
+      "previewGradient": "from-teal-400/20 via-zinc-900/80 to-zinc-950",
+      "previewAccent": "#14B8A6",
+      "restPaths": {
+        "default": "fal-ai/latentsync"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            }
+          ]
+        },
+        {
+          "type": "range",
+          "key": "guidance_scale",
+          "label": "Lip Sync Strength",
+          "min": 1,
+          "max": 3,
+          "step": 0.2,
+          "defaultValue": 1.8
         }
       ]
     },
@@ -4509,32 +4442,6 @@
           "label": "Instrumental Master Only",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "fishaudio:s2.1@pro",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.05,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "sonilo/v2/music-generation",
-          "callingPattern": "queue",
-          "baseUsd": 0.05,
-          "latencyBadge": "HF Audio Master"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/sonilo/v2-music",
-          "callingPattern": "queue",
-          "baseUsd": 0.045,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -4613,33 +4520,6 @@
           "label": "Instrumental Only",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "fishaudio:s2.1@pro",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.06,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/elevenlabs/music",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.06,
-          "latencyBadge": "Fal ElevenLabs CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/elevenlabs/music"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/elevenlabs/music-v1",
-          "callingPattern": "queue",
-          "baseUsd": 0.055,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -4714,26 +4594,6 @@
             }
           ]
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "beatoven:music-sfx@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.03,
-          "latencyBadge": "Sonic Audio Task"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/beatoven/music-generation",
-          "editEndpoint": "fal-ai/beatoven/sound-effect-generation",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.035,
-          "latencyBadge": "Fal Beatoven CDN",
-          "docsUrl": "https://fal.ai/models/fal-ai/beatoven/music-generation"
-        }
       ]
     },
     {
@@ -4803,26 +4663,6 @@
           "max": 1,
           "step": 0.05,
           "defaultValue": 0.5
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "resemble:chatterbox-tts@1",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.015,
-          "latencyBadge": "Sonic Speech Task"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/chatterbox/text-to-speech",
-          "editEndpoint": "fal-ai/dia-tts/voice-clone",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.02,
-          "latencyBadge": "Fal Chatterbox / Dia",
-          "docsUrl": "https://fal.ai/models/fal-ai/chatterbox/text-to-speech"
         }
       ]
     },
@@ -4923,41 +4763,6 @@
           "step": 0.05,
           "defaultValue": 1
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "fishaudio:s2.1@pro",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.015,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/minimax/speech-02-hd",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.015,
-          "latencyBadge": "Fal Speech-02 HD",
-          "docsUrl": "https://fal.ai/models/fal-ai/minimax/speech-02-hd"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "inworld/tts/v1/synthesize",
-          "callingPattern": "queue",
-          "baseUsd": 0.015,
-          "latencyBadge": "HF Inworld TTS"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/minimax/speech-02-hd",
-          "callingPattern": "queue",
-          "baseUsd": 0.012,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -5051,32 +4856,6 @@
               "label": "48 kHz Broadcast WAV"
             }
           ]
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "fishaudio:s2.1@pro",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.02,
-          "latencyBadge": "Runware Sonic v1"
-        },
-        {
-          "providerId": "higgsfield",
-          "label": "Higgsfield",
-          "endpoint": "bytedance/seed-audio/v1/text-to-audio",
-          "callingPattern": "queue",
-          "baseUsd": 0.02,
-          "latencyBadge": "HF Binaural SFX"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/bytedance/seed-audio-v1",
-          "callingPattern": "queue",
-          "baseUsd": 0.018,
-          "latencyBadge": "Muapi Router"
         }
       ]
     },
@@ -5204,33 +4983,6 @@
           "label": "Enhance Prompt",
           "defaultValue": true
         }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "xai:grok-imagine@image-2.0",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.03,
-          "latencyBadge": "Runware Task Stream",
-          "docsUrl": "https://runware.ai/docs/models-api/introduction"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/grok-imagine-2.0",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.035,
-          "latencyBadge": "Fal Subscribe CDN"
-        },
-        {
-          "providerId": "muapi",
-          "label": "Muapi.ai",
-          "endpoint": "muapi/xai/grok-imagine-2.0",
-          "callingPattern": "queue",
-          "baseUsd": 0.032,
-          "latencyBadge": "Muapi Router"
-        }
       ]
     },
     {
@@ -5309,25 +5061,6 @@
               "label": "30s Voiceover"
             }
           ]
-        }
-      ],
-      "effectiveProviders": [
-        {
-          "providerId": "runware",
-          "label": "Runware.ai",
-          "endpoint": "fishaudio:s2.1@pro",
-          "callingPattern": "task_stream",
-          "baseUsd": 0.015,
-          "latencyBadge": "Runware Speech Task",
-          "docsUrl": "https://runware.ai/docs/models-api/introduction"
-        },
-        {
-          "providerId": "fal",
-          "label": "fal.ai",
-          "endpoint": "fal-ai/fish-audio/s2.1-pro",
-          "callingPattern": "subscribe",
-          "baseUsd": 0.018,
-          "latencyBadge": "Fal Audio CDN"
         }
       ]
     }

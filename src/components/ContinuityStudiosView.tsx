@@ -254,13 +254,65 @@ export const ContinuityStudioBar: React.FC<{ activeStudio?: StudioId }> = ({ act
 
   return (
     <div className="bg-[#0D0D11] border-b border-white/10">
-      <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-2 space-y-2">
+      <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-2.5 space-y-2.5">
+        {/* 12-Studio Switcher Row */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          {SPACI6X_STUDIOS.map((st) => {
+            const isActive = activeStudio === st.id || route === st.id;
+            return (
+              <button
+                key={st.id}
+                onClick={() => navigate(st.id as RoutePath)}
+                title={st.responsibility}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-[#46ecd5] text-zinc-950 font-bold'
+                    : 'bg-[#15151B] hover:bg-[#1E1E26] text-zinc-300 border border-white/10'
+                }`}
+              >
+                <span>{st.shortLabel} Studio</span>
+              </button>
+            );
+          })}
+          <div className="h-4 w-px bg-white/10 mx-1 shrink-0" />
+          <button
+            onClick={() => navigate('image')}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ${
+              route === 'image'
+                ? 'bg-white text-zinc-950 font-bold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Raw Image Dock
+          </button>
+          <button
+            onClick={() => navigate('video')}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ${
+              route === 'video'
+                ? 'bg-white text-zinc-950 font-bold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Raw Video Dock
+          </button>
+          <button
+            onClick={() => navigate('audio')}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ${
+              route === 'audio'
+                ? 'bg-white text-zinc-950 font-bold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Raw Audio Dock
+          </button>
+        </div>
+
         {/* Cross-Studio Continuity Lock Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5 text-xs">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#46ecd5]/10 border border-[#46ecd5]/30 font-mono-tabular text-[11px] text-[#46ecd5] font-semibold whitespace-nowrap shrink-0">
+            <span className="font-mono-tabular text-[11px] text-[#46ecd5] font-semibold flex items-center gap-1 whitespace-nowrap shrink-0">
               <Lock className="w-3 h-3" />
-              <span>ACTIVE CONTINUITY BUS</span>
+              <span>ACTIVE CONTINUITY BUS:</span>
             </span>
 
             {/* Active Project Selector */}
@@ -656,10 +708,9 @@ export const CharacterStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="character"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="character" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Studio Header */}
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
@@ -1357,8 +1408,7 @@ export const CharacterStudioView: React.FC = () => {
           </form>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -1515,10 +1565,9 @@ export const MotionStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="motion"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="motion" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
@@ -1879,8 +1928,7 @@ export const MotionStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -1978,10 +2026,9 @@ export const WardrobeStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="wardrobe"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="wardrobe" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
@@ -2242,8 +2289,7 @@ export const WardrobeStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -2307,10 +2353,9 @@ export const PropsStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="props"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="props" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="border-b border-white/10 pb-6">
           <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
             04 · PROPS STUDIO — OBJECT & ARTIFACT CONTINUITY
@@ -2478,8 +2523,7 @@ export const PropsStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -2570,10 +2614,9 @@ export const LocationStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="location"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="location" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="border-b border-white/10 pb-6">
           <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
             05 · LOCATION STUDIO — FILMING ENVIRONMENTS & MULTI-ANGLE SETS
@@ -2788,8 +2831,7 @@ export const LocationStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -3771,10 +3813,9 @@ export const StoryboardStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="storyboard"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="storyboard" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
@@ -3904,8 +3945,7 @@ export const StoryboardStudioView: React.FC = () => {
           ))}
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -3964,10 +4004,9 @@ export const MarketingStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="marketing"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="marketing" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="border-b border-white/10 pb-6">
           <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
             08 · MARKETING & UGC STUDIO — BRAND COMMERCIALS & CREATOR CONTINUITY
@@ -4071,8 +4110,7 @@ export const MarketingStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -4120,10 +4158,9 @@ export const LipSyncStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="lipsync"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="lipsync" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="border-b border-white/10 pb-6">
           <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
             09 · LIP SYNC STUDIO — MULTILINGUAL DIALOGUE & FACIAL PERFORMANCE
@@ -4207,8 +4244,7 @@ export const LipSyncStudioView: React.FC = () => {
           </button>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -4284,10 +4320,9 @@ export const CanvasStudioView: React.FC = () => {
   };
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="canvas"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="canvas" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
@@ -4445,8 +4480,7 @@ export const CanvasStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };
 
@@ -4482,10 +4516,9 @@ export const EditingStudioView: React.FC = () => {
   const currentPlaying = timelineClips[activePlayIdx] || videoGens[0] || null;
 
   return (
-    <HiggsfieldCinemaStudio
-      studioId="editing"
-      renderStudioVault={() => (
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div>
+      <ContinuityStudioBar activeStudio="editing" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="text-xs font-mono-tabular text-[#46ecd5] uppercase tracking-wider">
@@ -4646,7 +4679,6 @@ export const EditingStudioView: React.FC = () => {
           </div>
         </div>
       </div>
-      )}
-    />
+    </div>
   );
 };

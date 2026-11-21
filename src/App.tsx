@@ -17,6 +17,7 @@ import {
   Layers,
   LogOut,
   Menu,
+  Music,
   Shield,
   Sparkles,
   Users,
@@ -240,6 +241,17 @@ const StudioShell: React.FC = () => {
                 <Sparkles className="w-4 h-4 text-[#46ecd5]" />
                 <span>4-Stage Automatic Film Production</span>
                 <CommandShortcut>Pipeline</CommandShortcut>
+              </CommandItem>
+              <CommandItem
+                value="Music Video Production Lip Sync Audio Timeline B-Roll"
+                onSelect={() => {
+                  navigate('cinema', { mode: 'music_video' });
+                  setGlobalCommandOpen(false);
+                }}
+              >
+                <Music className="w-4 h-4 text-[#46ecd5]" />
+                <span>Music Video Production Studio</span>
+                <CommandShortcut>Lip Sync</CommandShortcut>
               </CommandItem>
               <CommandItem
                 value="Camera Rigs Visual Effects Presets"

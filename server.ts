@@ -1,4 +1,6 @@
 import express, { Request, Response } from 'express';
+import dns from 'dns/promises';
+import net from 'net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -212,7 +214,7 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '15mb' }));
+  app.use(express.json({ limit: '35mb' }));
 
   // Support POST-tunneling for PATCH & DELETE so reverse proxies / iframe gateways never block non-POST mutations
   app.use((req, res, next) => {
@@ -1201,9 +1203,268 @@ async function startServer() {
     'image/gif',
     'image/svg+xml',
     'video/mp4',
+    'video/webm',
     'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
     'audio/mpeg',
+    'audio/mp3',
+    'audio/ogg',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac',
+    'audio/x-m4a',
+    'audio/flac',
   ]);
+
+  const isPrivateOrReservedIp = (ip: string): boolean => {
+    const clean = ip.replace(/^::ffff:/i, '');
+    if (net.isIPv4(clean)) {
+      const parts = clean.split('.').map(Number);
+      if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+      const [a, b] = parts;
+      if (a === 0 || a === 10 || a === 127) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+      if (a >= 224) return true;
+      return false;
+    }
+    if (net.isIPv6(clean)) {
+      const lower = clean.toLowerCase();
+      if (lower === '::1' || lower === '::') return true;
+      if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+      if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true;
+      if (lower.startsWith('ff')) return true;
+      return false;
+    }
+    return true;
+  };
+
+  const validateSafeAudioUrl = async (rawUrl: string): Promise<{ ok: true; url: URL } | { ok: false; error: string }> => {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl.trim());
+    } catch {
+      return { ok: false, error: 'Please enter a valid http:// or https:// direct audio URL.' };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, error: 'Only HTTP and HTTPS direct audio URLs are supported.' };
+    }
+    if (parsed.username || parsed.password) {
+      return { ok: false, error: 'Audio URLs with embedded credentials are not supported.' };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      !hostname ||
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal')
+    ) {
+      return { ok: false, error: 'Private or local network URLs are not permitted.' };
+    }
+    if (net.isIP(hostname)) {
+      if (isPrivateOrReservedIp(hostname)) {
+        return { ok: false, error: 'Private or reserved IP addresses are not permitted.' };
+      }
+      return { ok: true, url: parsed };
+    }
+    try {
+      const addresses = await dns.lookup(hostname, { all: true });
+      if (!addresses.length || addresses.some((a) => isPrivateOrReservedIp(a.address))) {
+        return { ok: false, error: 'The audio URL resolved to a restricted network address.' };
+      }
+    } catch {
+      return { ok: false, error: 'Could not resolve the audio URL host. Verify the link is reachable.' };
+    }
+    return { ok: true, url: parsed };
+  };
+
+  const detectAudioMimeFromBuffer = (buf: Buffer, headerMime: string, pathname: string): string | null => {
+    const cleanHeader = headerMime.split(';')[0].trim().toLowerCase();
+    if (cleanHeader.startsWith('audio/')) {
+      return cleanHeader === 'audio/mp3' ? 'audio/mpeg' : cleanHeader;
+    }
+    // Check binary magic bytes for direct audio files served as application/octet-stream
+    if (buf.length >= 12) {
+      const head4 = buf.subarray(0, 4).toString('ascii');
+      const head3 = buf.subarray(0, 3).toString('ascii');
+      const ftyp = buf.subarray(4, 8).toString('ascii');
+      if (head4 === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WAVE') return 'audio/wav';
+      if (head3 === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+      if (head4 === 'OggS') return 'audio/ogg';
+      if (head4 === 'fLaC') return 'audio/flac';
+      if (ftyp === 'ftyp') return 'audio/mp4';
+    }
+    if (cleanHeader === 'application/octet-stream') {
+      const lower = pathname.toLowerCase();
+      if (lower.endsWith('.mp3')) return 'audio/mpeg';
+      if (lower.endsWith('.wav')) return 'audio/wav';
+      if (lower.endsWith('.m4a') || lower.endsWith('.aac')) return 'audio/mp4';
+      if (lower.endsWith('.ogg')) return 'audio/ogg';
+      if (lower.endsWith('.flac')) return 'audio/flac';
+    }
+    return null;
+  };
+
+  app.post('/api/music-video/import-url', async (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Sign in to import music tracks.' });
+      return;
+    }
+    if (!db.checkRateLimit(`mv-audio-url:${user.id}`, 12, 60_000)) {
+      res.status(429).json({ error: 'Too many audio import attempts. Wait a moment and try again.' });
+      return;
+    }
+
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      res.status(400).json({ error: 'Enter a direct audio file URL (.mp3, .wav, .m4a, .ogg, .flac).' });
+      return;
+    }
+
+    const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+    let currentUrl = rawUrl;
+    let finalRes: globalThis.Response | null = null;
+    let finalParsedUrl: URL | null = null;
+
+    try {
+      for (let hop = 0; hop < 4; hop++) {
+        const check = await validateSafeAudioUrl(currentUrl);
+        if (!check.ok) {
+          res.status(400).json({ error: check.error });
+          return;
+        }
+        finalParsedUrl = check.url;
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        const upstream = await fetch(check.url.toString(), {
+          method: 'GET',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            Accept: 'audio/*, application/octet-stream;q=0.8',
+            'User-Agent': 'SPACIX-CinemaStudio/4.0',
+          },
+        }).finally(() => clearTimeout(timeout));
+
+        if (upstream.status >= 300 && upstream.status < 400) {
+          const location = upstream.headers.get('location');
+          if (!location) {
+            res.status(400).json({ error: 'Audio URL redirect did not include a target location.' });
+            return;
+          }
+          currentUrl = new URL(location, check.url).toString();
+          continue;
+        }
+
+        finalRes = upstream;
+        break;
+      }
+
+      if (!finalRes || !finalParsedUrl) {
+        res.status(400).json({ error: 'Audio URL redirected too many times.' });
+        return;
+      }
+      if (!finalRes.ok) {
+        res.status(400).json({
+          error: `Could not retrieve audio from URL (HTTP ${finalRes.status}). Make sure the link is publicly accessible.`,
+        });
+        return;
+      }
+
+      const contentLength = Number(finalRes.headers.get('content-length') || '0');
+      if (contentLength > MAX_AUDIO_BYTES) {
+        res.status(400).json({ error: 'Remote audio file exceeds the 20 MB import limit.' });
+        return;
+      }
+
+      const headerType = finalRes.headers.get('content-type') || '';
+      if (headerType.toLowerCase().includes('text/html')) {
+        res.status(400).json({
+          error:
+            'This URL points to a web page rather than a direct audio file. Provide a direct MP3, WAV, M4A, OGG, or FLAC audio URL.',
+        });
+        return;
+      }
+
+      const reader = finalRes.body?.getReader();
+      if (!reader) {
+        res.status(400).json({ error: 'Remote server returned an empty audio stream.' });
+        return;
+      }
+
+      const chunks: Uint8Array[] = [];
+      let totalBytes = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > MAX_AUDIO_BYTES) {
+            await reader.cancel();
+            res.status(400).json({ error: 'Remote audio stream exceeds the 20 MB import limit.' });
+            return;
+          }
+          chunks.push(value);
+        }
+      }
+
+      const fullBuffer = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+      const detectedMime = detectAudioMimeFromBuffer(
+        fullBuffer,
+        headerType,
+        finalParsedUrl.pathname
+      );
+
+      if (!detectedMime) {
+        res.status(400).json({
+          error:
+            'Unsupported audio format. Only accessible direct MP3, WAV, M4A, AAC, OGG, or FLAC files are supported.',
+        });
+        return;
+      }
+
+      const rawFilename = decodeURIComponent(
+        finalParsedUrl.pathname.split('/').filter(Boolean).pop() || 'imported-track'
+      );
+      const cleanName = rawFilename.slice(0, 80) || 'Imported Audio Track';
+      const dataUrl = `data:${detectedMime};base64,${fullBuffer.toString('base64')}`;
+
+      const id = `upl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const record = {
+        id,
+        userId: user.id,
+        kind: 'audio' as MediaKind,
+        label: cleanName,
+        publicUrl: dataUrl,
+        contentType: detectedMime,
+        bytes: fullBuffer.byteLength,
+        createdAt: new Date().toISOString(),
+      };
+      db.uploads.set(id, record);
+
+      res.json({
+        ok: true,
+        upload: record,
+        name: cleanName,
+        contentType: detectedMime,
+        bytes: fullBuffer.byteLength,
+        dataUrl,
+        originalUrl: finalParsedUrl.toString(),
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.name === 'AbortError'
+          ? 'Timed out retrieving audio from URL.'
+          : 'Could not retrieve audio from the provided URL. Check that it is accessible and points directly to an audio file.';
+      res.status(400).json({ error: msg });
+    }
+  });
 
   app.get('/api/uploads', (req: Request, res: Response) => {
     const user = getSessionUser(req);
@@ -1230,9 +1491,10 @@ async function startServer() {
     }
 
     const { contentType, label, bytes = 1024, dataUrl } = req.body || {};
-    if (!ALLOWED_UPLOAD_TYPES.has(String(contentType))) {
+    const normalizedType = String(contentType || '').split(';')[0].trim().toLowerCase();
+    if (!ALLOWED_UPLOAD_TYPES.has(normalizedType)) {
       res.status(400).json({
-        error: 'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, WAV.',
+        error: 'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, WebM, WAV, MP3, M4A, OGG, FLAC.',
       });
       return;
     }
@@ -1767,6 +2029,10 @@ async function startServer() {
               musicClips: [],
               sfxClips: [],
             },
+      musicVideo:
+        body.musicVideo && typeof body.musicVideo === 'object'
+          ? body.musicVideo
+          : existing?.musicVideo,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
