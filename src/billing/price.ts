@@ -17,39 +17,47 @@ export function priceFor(
     creditUsdValue?: number;
     overrideBaseUsd?: number;
     apiProvider?: ApiProviderId;
+    billingUnitOverride?: 'per_second' | 'per_image' | 'per_generation';
+    surfaceOverride?: 'image' | 'video' | 'audio';
   }
 ): number {
   const model = getModelById(modelId);
-  if (!model) return 10;
+  if (!model && options?.overrideBaseUsd === undefined) return 10;
 
   const markup = options?.creditMarkup ?? DEFAULT_CREDIT_MARKUP;
-  const creditUsd = options?.creditUsdValue ?? DEFAULT_CREDIT_USD_VALUE;
+  const creditUsd = Math.max(0.0001, options?.creditUsdValue ?? DEFAULT_CREDIT_USD_VALUE);
 
-  const providerSpec = options?.apiProvider
-    ? model.supportedProviders?.find((p) => p.providerId === options.apiProvider)
-    : undefined;
+  const providerSpec =
+    model && options?.apiProvider
+      ? model.supportedProviders?.find((p) => p.providerId === options.apiProvider)
+      : undefined;
 
-  const baseUsd = options?.overrideBaseUsd ?? providerSpec?.baseUsd ?? model.baseHfUsd;
+  const baseUsd =
+    options?.overrideBaseUsd ?? providerSpec?.baseUsd ?? model?.baseHfUsd ?? 0.05;
+  const billingUnit = options?.billingUnitOverride ?? model?.billingUnit ?? 'per_image';
+  const surface = options?.surfaceOverride ?? model?.surface ?? 'image';
 
   let hfUsdCost = baseUsd;
 
-  if (model.billingUnit === 'per_second') {
+  if (billingUnit === 'per_second') {
     const durationSec = Math.max(1, Number(settings.duration ?? 5));
     hfUsdCost = baseUsd * durationSec;
-  } else if (model.billingUnit === 'per_image') {
+  } else if (billingUnit === 'per_image') {
     hfUsdCost = baseUsd;
   } else {
     // per_generation (audio or specialized rig)
     const durationSec = Number(settings.duration ?? 0);
-    if (model.surface === 'audio' && durationSec >= 60) {
+    if (surface === 'audio' && durationSec >= 60) {
       hfUsdCost = baseUsd * 1.6;
     }
   }
 
-  // Resolution multipliers matching console tiers
+  // Resolution multipliers matching studio composer tiers
   const resolution = String(settings.resolution ?? '');
   if (resolution === '4K') {
     hfUsdCost *= 1.5;
+  } else if (resolution === '2K') {
+    hfUsdCost *= 1.2;
   } else if (resolution === '720p' || resolution === '1K') {
     hfUsdCost *= 0.85;
   }

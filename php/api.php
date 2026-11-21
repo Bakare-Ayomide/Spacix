@@ -606,7 +606,9 @@ function resolve_runware_model_air(string $surface, string $rawIdentifier): stri
         if (
             strpos($lower, 'klingai:') === 0 ||
             strpos($lower, 'bytedance:') === 0 ||
-            strpos($lower, 'alibaba:') === 0
+            strpos($lower, 'alibaba:') === 0 ||
+            strpos($lower, 'sync:') === 0 ||
+            strpos($lower, 'runware:') === 0
         ) {
             return $id;
         }
@@ -619,6 +621,172 @@ function resolve_runware_model_air(string $surface, string $rawIdentifier): stri
         return 'auto';
     }
     return 'auto';
+}
+
+function get_merged_catalog_models(PDO $pdo): array {
+    $stored = kv_get($pdo, 'catalogModels', []);
+    if (!is_array($stored)) {
+        $stored = [];
+    }
+    $seedPath = __DIR__ . '/seed_data.json';
+    if (!is_file($seedPath)) {
+        return $stored;
+    }
+    static $seedModelsCache = null;
+    if ($seedModelsCache === null) {
+        $rawSeed = @file_get_contents($seedPath);
+        $decodedSeed = is_string($rawSeed) ? json_decode($rawSeed, true) : null;
+        $seedModelsCache = is_array($decodedSeed['catalogModels'] ?? null) ? $decodedSeed['catalogModels'] : [];
+    }
+    if (empty($seedModelsCache)) {
+        return $stored;
+    }
+
+    $byId = [];
+    foreach ($stored as $idx => $m) {
+        if (is_array($m) && !empty($m['id'])) {
+            $byId[$m['id']] = $idx;
+        }
+    }
+
+    $changed = false;
+    foreach ($seedModelsCache as $sm) {
+        if (!is_array($sm) || empty($sm['id'])) {
+            continue;
+        }
+        $sid = $sm['id'];
+        if (!isset($byId[$sid])) {
+            $stored[] = $sm;
+            $byId[$sid] = count($stored) - 1;
+            $changed = true;
+        } else {
+            $idx = $byId[$sid];
+            if (isset($sm['lipSyncCapability']) && !isset($stored[$idx]['lipSyncCapability'])) {
+                $stored[$idx]['lipSyncCapability'] = $sm['lipSyncCapability'];
+                $changed = true;
+            }
+            if (isset($sm['videoInputModes']) && !isset($stored[$idx]['videoInputModes'])) {
+                $stored[$idx]['videoInputModes'] = $sm['videoInputModes'];
+                $changed = true;
+            }
+        }
+    }
+
+    if ($changed) {
+        kv_set($pdo, 'catalogModels', array_values($stored));
+    }
+    return $stored;
+}
+
+function spacix_is_public_ip(string $ip): bool {
+    return filter_var(
+        $ip,
+        FILTER_VALIDATE_IP,
+        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+    ) !== false;
+}
+
+function spacix_validate_external_audio_url(string $rawUrl): array {
+    $trimmed = trim($rawUrl);
+    if ($trimmed === '' || strlen($trimmed) > 2048) {
+        return ['ok' => false, 'error' => 'Please provide a valid direct audio URL.'];
+    }
+    $parts = @parse_url($trimmed);
+    if (!is_array($parts)) {
+        return ['ok' => false, 'error' => 'Invalid URL format.'];
+    }
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme !== 'https' && $scheme !== 'http') {
+        return ['ok' => false, 'error' => 'Only HTTP and HTTPS audio URLs are supported.'];
+    }
+    if (!empty($parts['user']) || !empty($parts['pass'])) {
+        return ['ok' => false, 'error' => 'URLs with embedded credentials are not supported.'];
+    }
+    $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+    if (
+        $host === '' ||
+        $host === 'localhost' ||
+        str_ends_with($host, '.localhost') ||
+        str_ends_with($host, '.local') ||
+        str_ends_with($host, '.internal')
+    ) {
+        return ['ok' => false, 'error' => 'Local or internal hostnames are not permitted.'];
+    }
+
+    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        if (!spacix_is_public_ip($host)) {
+            return ['ok' => false, 'error' => 'Private or reserved IP addresses are not permitted.'];
+        }
+        return ['ok' => true, 'url' => $trimmed, 'host' => $host, 'ips' => [$host]];
+    }
+
+    $ips = [];
+    $v4 = @gethostbynamel($host);
+    if (is_array($v4)) {
+        $ips = array_merge($ips, $v4);
+    }
+    if (function_exists('dns_get_record')) {
+        $aaaa = @dns_get_record($host, DNS_AAAA);
+        if (is_array($aaaa)) {
+            foreach ($aaaa as $rec) {
+                if (!empty($rec['ipv6'])) {
+                    $ips[] = $rec['ipv6'];
+                }
+            }
+        }
+    }
+    $ips = array_values(array_unique($ips));
+    if (empty($ips)) {
+        return ['ok' => false, 'error' => 'Could not resolve the audio host. Verify the direct audio link is reachable.'];
+    }
+    foreach ($ips as $ip) {
+        if (!spacix_is_public_ip($ip)) {
+            return ['ok' => false, 'error' => 'This URL resolves to a restricted network address and cannot be imported.'];
+        }
+    }
+    return ['ok' => true, 'url' => $trimmed, 'host' => $host, 'ips' => $ips];
+}
+
+function spacix_detect_audio_magic_mime(string $bytes, string $contentTypeHint = ''): ?string {
+    $len = strlen($bytes);
+    if ($len < 12) {
+        return null;
+    }
+    $head4 = substr($bytes, 0, 4);
+    $head3 = substr($bytes, 0, 3);
+    $b0 = ord($bytes[0]);
+    $b1 = ord($bytes[1]);
+
+    if ($head4 === 'RIFF' && substr($bytes, 8, 4) === 'WAVE') {
+        return 'audio/wav';
+    }
+    if ($head3 === 'ID3' || ($b0 === 0xFF && ($b1 & 0xE0) === 0xE0)) {
+        return ($b0 === 0xFF && ($b1 & 0xF6) === 0xF0) ? 'audio/aac' : 'audio/mpeg';
+    }
+    if ($head4 === 'OggS') {
+        return 'audio/ogg';
+    }
+    if ($head4 === 'fLaC') {
+        return 'audio/flac';
+    }
+    if (substr($bytes, 4, 4) === 'ftyp') {
+        $brand = substr($bytes, 8, 4);
+        if (in_array($brand, ['M4A ', 'M4B ', 'mp42', 'isom', 'iso2', 'qt  '], true)) {
+            return 'audio/mp4';
+        }
+    }
+    if ($head4 === "\x1A\x45\xDF\xA3") {
+        return 'audio/webm';
+    }
+    $cleanHint = strtolower(trim(explode(';', $contentTypeHint)[0] ?? ''));
+    if (in_array($cleanHint, ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/ogg', 'audio/webm', 'audio/flac', 'audio/x-flac'], true)) {
+        $prefixTrim = ltrim(substr($bytes, 0, 64));
+        if (strpos($prefixTrim, '<') === 0 || strpos($prefixTrim, '{') === 0) {
+            return null;
+        }
+        return $cleanHint === 'audio/mp3' ? 'audio/mpeg' : $cleanHint;
+    }
+    return null;
 }
 
 function compute_runware_dimensions(string $surface, array $settings): array {
@@ -1018,7 +1186,7 @@ if ($path === '/api/catalog' && $method === 'GET') {
         }
     }
 
-    $catalogModels = kv_get($pdo, 'catalogModels', []);
+    $catalogModels = get_merged_catalog_models($pdo);
     $modelOverrides = get_all_model_pricing($pdo);
 
     $models = [];
@@ -1075,6 +1243,12 @@ if ($path === '/api/catalog' && $method === 'GET') {
             'previewGradient' => $m['previewGradient'],
             'previewAccent' => $m['previewAccent'],
         ];
+        if (!empty($m['lipSyncCapability'])) {
+            $item['lipSyncCapability'] = $m['lipSyncCapability'];
+        }
+        if (!empty($m['videoInputModes']) && is_array($m['videoInputModes'])) {
+            $item['videoInputModes'] = $m['videoInputModes'];
+        }
         if ($isAdmin) {
             $item['defaultApiProvider'] = $defaultApiProvider;
             $item['supportedProviders'] = $filteredSpecs;
@@ -1176,7 +1350,7 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
     $presetId = !empty($reqBody['presetId']) ? (string) $reqBody['presetId'] : null;
     $requestedProvider = (string) ($reqBody['apiProvider'] ?? '');
 
-    $catalogModels = kv_get($pdo, 'catalogModels', []);
+    $catalogModels = get_merged_catalog_models($pdo);
     $model = null;
     foreach ($catalogModels as $cm) {
         if (($cm['id'] ?? '') === $modelId) {
@@ -1226,6 +1400,7 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
     }
     $resSetting = (string) ($settings['resolution'] ?? '');
     if ($resSetting === '4K') $hfUsdCost *= 1.5;
+    elseif ($resSetting === '2K') $hfUsdCost *= 1.2;
     elseif ($resSetting === '720p' || $resSetting === '1K') $hfUsdCost *= 0.85;
     if (count($media) > 2) $hfUsdCost *= 1.1;
 
@@ -1337,6 +1512,18 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
             if ($resolvedModel !== 'auto') {
                 $task['width'] = $dims['width'];
                 $task['height'] = $dims['height'];
+            }
+            $frameInput = (string) ($media['imageUrl'] ?? $media['characterUrl'] ?? '');
+            if ($frameInput !== '' && (strpos($frameInput, 'http://') === 0 || strpos($frameInput, 'https://') === 0 || strpos($frameInput, 'data:image/') === 0)) {
+                $task['frameImages'] = [['inputImage' => $frameInput, 'frame' => 'first']];
+            }
+            $audioInput = (string) ($media['audioUrl'] ?? '');
+            if ($audioInput !== '' && (strpos($audioInput, 'http://') === 0 || strpos($audioInput, 'https://') === 0 || strpos($audioInput, 'data:audio/') === 0)) {
+                $task['inputAudios'] = [$audioInput];
+            }
+            $videoInput = (string) ($media['videoUrl'] ?? '');
+            if ($videoInput !== '' && (strpos($videoInput, 'http://') === 0 || strpos($videoInput, 'https://') === 0)) {
+                $task['referenceVideos'] = [$videoInput];
             }
         } else {
             $safeW = min(2048, max(512, (int) round($dims['width'] / 64) * 64)) ?: 1024;
@@ -1563,10 +1750,26 @@ if ($path === '/api/uploads' && $method === 'GET') {
 if ($path === '/api/upload' && $method === 'POST') {
     $user = get_session_user($pdo);
     if (!$user) json_response(['error' => 'Sign in to upload reference files.'], 401);
-    $contentType = (string) ($reqBody['contentType'] ?? 'image/png');
-    $label = (string) ($reqBody['label'] ?? 'Reference Asset');
+    $allowedUploadTypes = [
+        'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+        'video/mp4', 'video/webm',
+        'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+        'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac',
+        'audio/ogg', 'audio/webm', 'audio/flac', 'audio/x-flac',
+    ];
+    $contentType = strtolower(trim((string) ($reqBody['contentType'] ?? 'image/png')));
+    if (!in_array($contentType, $allowedUploadTypes, true)) {
+        json_response(['error' => 'Unsupported file type. Upload a supported image, video, or audio file.'], 400);
+    }
+    $label = substr(trim((string) ($reqBody['label'] ?? 'Reference Asset')), 0, 120) ?: 'Reference Asset';
     $bytes = (int) ($reqBody['bytes'] ?? 1024);
+    if ($bytes < 0 || $bytes > 25 * 1024 * 1024) {
+        json_response(['error' => 'Uploaded file exceeds the 25 MB maximum size limit.'], 413);
+    }
     $dataUrl = (string) ($reqBody['dataUrl'] ?? '');
+    if ($dataUrl !== '' && strlen($dataUrl) > 34 * 1024 * 1024) {
+        json_response(['error' => 'Encoded file payload exceeds the maximum allowed size.'], 413);
+    }
     $kind = strpos($contentType, 'video/') === 0 ? 'video' : (strpos($contentType, 'audio/') === 0 ? 'audio' : 'image');
     $id = 'upl_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 5);
     $record = [
@@ -1586,6 +1789,128 @@ if ($path === '/api/upload' && $method === 'POST') {
         'upload_url' => $record['publicUrl'],
         'public_url' => $record['publicUrl'],
         'upload_headers' => ['Content-Type' => $contentType],
+    ]);
+}
+
+if ($path === '/api/audio/import-url' && $method === 'POST') {
+    $user = get_session_user($pdo);
+    if (!$user) {
+        json_response(['error' => 'Sign in to import audio from a URL.'], 401);
+    }
+    $rawUrl = trim((string) ($reqBody['url'] ?? ''));
+    $customLabel = trim((string) ($reqBody['label'] ?? ''));
+
+    $currentUrl = $rawUrl;
+    $maxRedirects = 3;
+    $maxBytes = 20 * 1024 * 1024;
+    $audioBytes = '';
+    $responseContentType = '';
+    $finalStatus = 0;
+
+    for ($hop = 0; $hop <= $maxRedirects; $hop++) {
+        $check = spacix_validate_external_audio_url($currentUrl);
+        if (empty($check['ok'])) {
+            json_response(['error' => $check['error'] ?? 'Invalid audio URL.'], 400);
+        }
+
+        $buffer = '';
+        $overflow = false;
+        $respHeaders = [];
+
+        $ch = curl_init($currentUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_USERAGENT => 'SPACIX-Studio-AudioImporter/1.0',
+            CURLOPT_HTTPHEADER => ['Accept: audio/*, application/octet-stream;q=0.5'],
+            CURLOPT_HEADERFUNCTION => function ($ch, $headerLine) use (&$respHeaders) {
+                $len = strlen($headerLine);
+                $parts = explode(':', $headerLine, 2);
+                if (count($parts) === 2) {
+                    $respHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+                }
+                return $len;
+            },
+            CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$buffer, &$overflow, $maxBytes) {
+                if (strlen($buffer) + strlen($chunk) > $maxBytes) {
+                    $overflow = true;
+                    return 0;
+                }
+                $buffer .= $chunk;
+                return strlen($chunk);
+            },
+        ]);
+        $ok = curl_exec($ch);
+        $finalStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($overflow) {
+            json_response(['error' => 'Audio file exceeds the 20 MB import limit. Trim or compress the file and try again.'], 413);
+        }
+
+        if ($finalStatus >= 300 && $finalStatus < 400 && !empty($respHeaders['location'])) {
+            if ($hop === $maxRedirects) {
+                json_response(['error' => 'Too many redirects while fetching the audio URL.'], 400);
+            }
+            $loc = $respHeaders['location'];
+            if (strpos($loc, 'http://') !== 0 && strpos($loc, 'https://') !== 0) {
+                $baseParts = parse_url($currentUrl);
+                $origin = ($baseParts['scheme'] ?? 'https') . '://' . ($baseParts['host'] ?? '') . (!empty($baseParts['port']) ? ':' . $baseParts['port'] : '');
+                $loc = strpos($loc, '/') === 0 ? ($origin . $loc) : ($origin . '/' . ltrim($loc, '/'));
+            }
+            $currentUrl = $loc;
+            continue;
+        }
+
+        if (!$ok && $finalStatus === 0) {
+            json_response(['error' => 'Could not download audio from this URL. Verify the file is publicly accessible (' . ($curlErr ?: 'network error') . ').'], 502);
+        }
+
+        $audioBytes = $buffer;
+        $responseContentType = $respHeaders['content-type'] ?? '';
+        break;
+    }
+
+    if ($finalStatus < 200 || $finalStatus >= 300) {
+        json_response(['error' => "Remote audio host returned HTTP {$finalStatus}. Provide a direct downloadable audio file URL (MP3, WAV, M4A, OGG, FLAC)."], 422);
+    }
+
+    $detectedMime = spacix_detect_audio_magic_mime($audioBytes, $responseContentType);
+    if ($detectedMime === null) {
+        json_response(['error' => 'This URL did not return a supported audio file. Streaming web pages cannot be imported—use a direct MP3, WAV, M4A, AAC, OGG, or FLAC file link.'], 415);
+    }
+
+    $urlPath = (string) (parse_url($currentUrl, PHP_URL_PATH) ?? '');
+    $baseName = basename($urlPath);
+    $title = substr($customLabel !== '' ? $customLabel : ($baseName !== '' && $baseName !== '/' ? urldecode($baseName) : 'Imported Audio Track'), 0, 120);
+    $dataUrl = 'data:' . $detectedMime . ';base64,' . base64_encode($audioBytes);
+    $byteLen = strlen($audioBytes);
+
+    $id = 'upl_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 5);
+    $record = [
+        'id' => $id,
+        'userId' => $user['id'],
+        'kind' => 'audio',
+        'label' => $title,
+        'publicUrl' => $dataUrl,
+        'contentType' => $detectedMime,
+        'bytes' => $byteLen,
+        'createdAt' => gmdate('c'),
+    ];
+    $stmt = $pdo->prepare('INSERT INTO `spacix_uploads` (`id`, `user_id`, `kind`, `label`, `created_at`, `payload_json`) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$id, $user['id'], 'audio', $title, $record['createdAt'], json_encode($record, JSON_UNESCAPED_SLASHES)]);
+
+    json_response([
+        'ok' => true,
+        'upload' => $record,
+        'public_url' => $dataUrl,
+        'contentType' => $detectedMime,
+        'bytes' => $byteLen,
+        'title' => $title,
     ]);
 }
 
@@ -2360,12 +2685,20 @@ if ($path === '/api/admin/billing' && ($method === 'PATCH' || $method === 'POST'
     if (!empty($reqBody['topups']) && is_array($reqBody['topups'])) {
         kv_set($pdo, 'topups', $reqBody['topups']);
     }
+    if (!empty($reqBody['modelPricing']) && is_array($reqBody['modelPricing'])) {
+        foreach ($reqBody['modelPricing'] as $mp) {
+            if (!empty($mp['modelId'])) {
+                save_model_pricing($pdo, $mp);
+            }
+        }
+    }
     record_audit($pdo, $admin['email'], 'BILLING_ECONOMICS_UPDATE', 'Global Billing', 'Updated pricing & plan rules');
     json_response([
         'ok' => true,
         'billingConfig' => $cfg,
         'plans' => kv_get($pdo, 'plans', []),
         'topups' => kv_get($pdo, 'topups', []),
+        'modelPricing' => array_values(get_all_model_pricing($pdo)),
     ]);
 }
 
@@ -2514,4 +2847,664 @@ if ($path === '/api/cron/reconcile' && $method === 'GET') {
     json_response(['ok' => true, 'reconciledCount' => 0]);
 }
 
+// Internal One-Trip MySQL Snapshot for AI Studio Preview Tab Synchronization
+if ($path === '/api/internal/mysql-snapshot' && $method === 'GET') {
+    $syncKey = $_SERVER['HTTP_X_MYSQL_SYNC_KEY'] ?? ($_GET['syncKey'] ?? '');
+    if ($syncKey !== '@f33rinimi') {
+        json_response(['error' => 'Not found'], 404);
+    }
+
+    $userRows = $pdo->query('SELECT `id`, `password_hash`, `payload_json` FROM `spacix_users`')->fetchAll();
+    $users = [];
+    $userPasswords = [];
+    foreach ($userRows as $ur) {
+        $u = json_decode((string) $ur['payload_json'], true);
+        if ($u && isset($u['id'])) {
+            $users[] = $u;
+            if (!empty($ur['password_hash'])) {
+                $userPasswords[$u['id']] = (string) $ur['password_hash'];
+            }
+        }
+    }
+
+    $sessionRows = $pdo->query('SELECT `token`, `user_id`, `remember_me`, `expires_at` FROM `spacix_sessions`')->fetchAll();
+    $sessions = [];
+    $sessionMeta = [];
+    foreach ($sessionRows as $sr) {
+        $sessions[] = ['token' => $sr['token'], 'userId' => $sr['user_id']];
+        $sessionMeta[$sr['token']] = [
+            'userId' => $sr['user_id'],
+            'rememberMe' => !empty($sr['remember_me']),
+            'expiresAt' => (int) ($sr['expires_at'] ?: (round(microtime(true) * 1000) + 30 * 86400 * 1000)),
+        ];
+    }
+
+    $secretRows = $pdo->query('SELECT * FROM `spacix_secrets`')->fetchAll();
+    $platformSecrets = [];
+    foreach ($secretRows as $sec) {
+        $platformSecrets[] = [
+            'key' => $sec['secret_key'],
+            'category' => $sec['category'] ?: 'auth',
+            'label' => $sec['label'] ?: $sec['secret_key'],
+            'value' => (string) $sec['secret_value'],
+            'secretMasked' => $sec['secret_masked'] ?: 'Not configured',
+            'hasValue' => !empty($sec['has_value']),
+            'description' => $sec['description'] ?? '',
+            'updatedAt' => $sec['updated_at'] ?: gmdate('c'),
+        ];
+    }
+
+    $providerConfigs = array_values(get_all_providers($pdo));
+    $modelPricing = array_values(get_all_model_pricing($pdo));
+    $generations = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_generations` ORDER BY `created_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $projects = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_projects` ORDER BY `updated_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $uploads = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_uploads` ORDER BY `created_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $ledger = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_ledger` ORDER BY `created_at` DESC LIMIT 200')->fetchAll(PDO::FETCH_COLUMN))));
+    $notifications = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_notifications` ORDER BY `created_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $supportTickets = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_support_tickets` ORDER BY `updated_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $teamMembers = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_team_members` ORDER BY `created_at` ASC')->fetchAll(PDO::FETCH_COLUMN))));
+    $adminAuditLog = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_audit_log` ORDER BY `created_at` DESC LIMIT 100')->fetchAll(PDO::FETCH_COLUMN))));
+    $reports = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_reports` ORDER BY `created_at` DESC')->fetchAll(PDO::FETCH_COLUMN))));
+    $runwareTaskHistory = array_values(array_filter(array_map(fn($r) => json_decode((string) $r, true), $pdo->query('SELECT `payload_json` FROM `spacix_runware_tasks` ORDER BY `created_at` DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN))));
+
+    json_response([
+        'ok' => true,
+        'users' => $users,
+        'userPasswords' => $userPasswords,
+        'sessions' => $sessions,
+        'sessionMeta' => $sessionMeta,
+        'platformSecrets' => $platformSecrets,
+        'providerConfigs' => $providerConfigs,
+        'modelPricing' => $modelPricing,
+        'generations' => $generations,
+        'projects' => $projects,
+        'uploads' => $uploads,
+        'ledger' => $ledger,
+        'notifications' => $notifications,
+        'supportTickets' => $supportTickets,
+        'teamMembers' => $teamMembers,
+        'adminAuditLog' => $adminAuditLog,
+        'reports' => $reports,
+        'runwareTaskHistory' => $runwareTaskHistory,
+        'plans' => kv_get($pdo, 'plans', []),
+        'topups' => kv_get($pdo, 'topups', []),
+        'billingConfig' => kv_get($pdo, 'billingConfig', ['creditUsdValue' => 0.01, 'creditMarkup' => 2.0, 'signupBonusCredits' => 50]),
+        'runwareRoutingConfig' => kv_get($pdo, 'runwareRoutingConfig', []),
+        'characters' => kv_get($pdo, 'characters', []),
+        'wardrobes' => kv_get($pdo, 'wardrobes', []),
+        'props' => kv_get($pdo, 'props', []),
+        'locations' => kv_get($pdo, 'locations', []),
+        'motionTemplates' => kv_get($pdo, 'motionTemplates', []),
+        'cinemaProjects' => kv_get($pdo, 'cinemaProjects', []),
+    ]);
+}
+
+if ($path === '/api/internal/mysql-push' && $method === 'POST') {
+    $syncKey = $_SERVER['HTTP_X_MYSQL_SYNC_KEY'] ?? ($reqBody['syncKey'] ?? '');
+    if ($syncKey !== '@f33rinimi') {
+        json_response(['error' => 'Not found'], 404);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        // 1. Users & Passwords
+        $pwMap = is_array($reqBody['userPasswords'] ?? null) ? $reqBody['userPasswords'] : [];
+        foreach ($reqBody['users'] ?? [] as $u) {
+            if (!isset($u['id'], $u['email'])) continue;
+            $pwHash = $pwMap[$u['id']] ?? null;
+            save_user($pdo, $u, $pwHash);
+        }
+
+        // 2. Sessions
+        $sessionMeta = is_array($reqBody['sessionMeta'] ?? null) ? $reqBody['sessionMeta'] : [];
+        $stmtSess = $pdo->prepare('
+            INSERT INTO `spacix_sessions` (`token`, `user_id`, `remember_me`, `expires_at`)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `user_id` = VALUES(`user_id`), `remember_me` = VALUES(`remember_me`), `expires_at` = VALUES(`expires_at`)
+        ');
+        foreach ($reqBody['sessions'] ?? [] as $s) {
+            if (empty($s['token']) || empty($s['userId'])) continue;
+            $meta = $sessionMeta[$s['token']] ?? [];
+            $rem = !empty($meta['rememberMe']) ? 1 : 0;
+            $exp = (int) ($meta['expiresAt'] ?? (round(microtime(true) * 1000) + 30 * 86400 * 1000));
+            $stmtSess->execute([$s['token'], $s['userId'], $rem, $exp]);
+        }
+
+        // 3. Secrets Vault
+        $stmtSec = $pdo->prepare('
+            INSERT INTO `spacix_secrets` (`secret_key`, `category`, `label`, `secret_value`, `secret_masked`, `has_value`, `description`, `updated_at`)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            `category` = VALUES(`category`),
+            `label` = VALUES(`label`),
+            `secret_value` = VALUES(`secret_value`),
+            `secret_masked` = VALUES(`secret_masked`),
+            `has_value` = VALUES(`has_value`),
+            `description` = VALUES(`description`),
+            `updated_at` = VALUES(`updated_at`)
+        ');
+        foreach ($reqBody['platformSecrets'] ?? [] as $sec) {
+            if (empty($sec['key'])) continue;
+            $val = (string) ($sec['value'] ?? '');
+            $stmtSec->execute([
+                $sec['key'],
+                $sec['category'] ?? 'auth',
+                $sec['label'] ?? $sec['key'],
+                $val,
+                $val !== '' ? spacix_mask_secret($val, strtolower($sec['key'])) : 'Not configured',
+                $val !== '' ? 1 : 0,
+                $sec['description'] ?? '',
+                $sec['updatedAt'] ?? gmdate('c'),
+            ]);
+        }
+
+        // 4. Providers
+        foreach ($reqBody['providerConfigs'] ?? [] as $p) {
+            if (!empty($p['id'])) {
+                save_provider($pdo, $p);
+            }
+        }
+
+        // 5. Model Pricing
+        foreach ($reqBody['modelPricing'] ?? [] as $m) {
+            if (!empty($m['modelId'])) {
+                save_model_pricing($pdo, $m);
+            }
+        }
+
+        // 6. Generations
+        foreach ($reqBody['generations'] ?? [] as $g) {
+            if (!empty($g['id'])) {
+                save_generation($pdo, $g);
+            }
+        }
+
+        // 7. Projects
+        $stmtProj = $pdo->prepare('
+            INSERT INTO `spacix_projects` (`id`, `user_id`, `name`, `created_at`, `updated_at`, `payload_json`)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `updated_at` = VALUES(`updated_at`), `payload_json` = VALUES(`payload_json`)
+        ');
+        foreach ($reqBody['projects'] ?? [] as $pr) {
+            if (empty($pr['id'])) continue;
+            $stmtProj->execute([
+                $pr['id'],
+                $pr['userId'] ?? '',
+                $pr['name'] ?? 'Project',
+                $pr['createdAt'] ?? gmdate('c'),
+                $pr['updatedAt'] ?? gmdate('c'),
+                json_encode($pr, JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+
+        // 8. Uploads
+        $stmtUpl = $pdo->prepare('
+            INSERT INTO `spacix_uploads` (`id`, `user_id`, `kind`, `label`, `created_at`, `payload_json`)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `payload_json` = VALUES(`payload_json`)
+        ');
+        foreach ($reqBody['uploads'] ?? [] as $up) {
+            if (empty($up['id'])) continue;
+            $stmtUpl->execute([
+                $up['id'],
+                $up['userId'] ?? '',
+                $up['kind'] ?? 'image',
+                $up['label'] ?? 'Reference',
+                $up['createdAt'] ?? gmdate('c'),
+                json_encode($up, JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+
+        // 9. Notifications
+        $stmtNotif = $pdo->prepare('
+            INSERT INTO `spacix_notifications` (`id`, `active`, `target_audience`, `created_at`, `payload_json`)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `active` = VALUES(`active`), `target_audience` = VALUES(`target_audience`), `payload_json` = VALUES(`payload_json`)
+        ');
+        foreach ($reqBody['notifications'] ?? [] as $n) {
+            if (empty($n['id'])) continue;
+            $stmtNotif->execute([
+                $n['id'],
+                !empty($n['active']) ? 1 : 0,
+                $n['targetAudience'] ?? 'all',
+                $n['createdAt'] ?? gmdate('c'),
+                json_encode($n, JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+
+        // 10. Support Tickets
+        $stmtTkt = $pdo->prepare('
+            INSERT INTO `spacix_support_tickets` (`id`, `user_id`, `status`, `priority`, `updated_at`, `payload_json`)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `status` = VALUES(`status`), `priority` = VALUES(`priority`), `updated_at` = VALUES(`updated_at`), `payload_json` = VALUES(`payload_json`)
+        ');
+        foreach ($reqBody['supportTickets'] ?? [] as $t) {
+            if (empty($t['id'])) continue;
+            $stmtTkt->execute([
+                $t['id'],
+                $t['userId'] ?? '',
+                $t['status'] ?? 'open',
+                $t['priority'] ?? 'medium',
+                $t['updatedAt'] ?? gmdate('c'),
+                json_encode($t, JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+
+        // 11. Team Members
+        $stmtTeam = $pdo->prepare('
+            INSERT INTO `spacix_team_members` (`id`, `email`, `admin_role`, `created_at`, `payload_json`)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE `email` = VALUES(`email`), `admin_role` = VALUES(`admin_role`), `payload_json` = VALUES(`payload_json`)
+        ');
+        foreach ($reqBody['teamMembers'] ?? [] as $tm) {
+            if (empty($tm['id'])) continue;
+            $stmtTeam->execute([
+                $tm['id'],
+                $tm['email'] ?? '',
+                $tm['adminRole'] ?? 'ops_admin',
+                $tm['createdAt'] ?? gmdate('c'),
+                json_encode($tm, JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+
+        // 12. KV configs & Continuity Library
+        if (!empty($reqBody['plans'])) kv_set($pdo, 'plans', $reqBody['plans']);
+        if (!empty($reqBody['topups'])) kv_set($pdo, 'topups', $reqBody['topups']);
+        if (!empty($reqBody['billingConfig'])) kv_set($pdo, 'billingConfig', $reqBody['billingConfig']);
+        if (!empty($reqBody['runwareRoutingConfig'])) kv_set($pdo, 'runwareRoutingConfig', $reqBody['runwareRoutingConfig']);
+        if (isset($reqBody['characters']) && is_array($reqBody['characters'])) kv_set($pdo, 'characters', $reqBody['characters']);
+        if (isset($reqBody['wardrobes']) && is_array($reqBody['wardrobes'])) kv_set($pdo, 'wardrobes', $reqBody['wardrobes']);
+        if (isset($reqBody['props']) && is_array($reqBody['props'])) kv_set($pdo, 'props', $reqBody['props']);
+        if (isset($reqBody['locations']) && is_array($reqBody['locations'])) kv_set($pdo, 'locations', $reqBody['locations']);
+        if (isset($reqBody['motionTemplates']) && is_array($reqBody['motionTemplates'])) kv_set($pdo, 'motionTemplates', $reqBody['motionTemplates']);
+        if (isset($reqBody['cinemaProjects']) && is_array($reqBody['cinemaProjects'])) kv_set($pdo, 'cinemaProjects', $reqBody['cinemaProjects']);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        json_response(['ok' => false, 'error' => $e->getMessage()], 500);
+    }
+
+    json_response(['ok' => true]);
+}
+
+// ============================================================================
+// 6B. CHARACTER & PRODUCTION-CONTINUITY SYSTEM (`/api/continuity/*`)
+// ============================================================================
+if ($path === '/api/continuity' && $method === 'GET') {
+    $user = get_session_user($pdo);
+    if (!$user) {
+        json_response([
+            'characters' => [],
+            'wardrobes' => [],
+            'props' => [],
+            'locations' => [],
+            'motionTemplates' => [],
+            'cinemaProjects' => [],
+        ]);
+    }
+    $isAdmin = ($user['role'] ?? 'user') === 'admin';
+    $filterCollection = function (array $items) use ($user, $isAdmin): array {
+        $filtered = array_filter($items, function ($it) use ($user, $isAdmin) {
+            return is_array($it) && ($isAdmin || ($it['userId'] ?? '') === $user['id']);
+        });
+        usort($filtered, fn($a, $b) => strcmp((string) ($b['updatedAt'] ?? ''), (string) ($a['updatedAt'] ?? '')));
+        return array_values($filtered);
+    };
+
+    json_response([
+        'characters' => $filterCollection(kv_get($pdo, 'characters', [])),
+        'wardrobes' => $filterCollection(kv_get($pdo, 'wardrobes', [])),
+        'props' => $filterCollection(kv_get($pdo, 'props', [])),
+        'locations' => $filterCollection(kv_get($pdo, 'locations', [])),
+        'motionTemplates' => $filterCollection(kv_get($pdo, 'motionTemplates', [])),
+        'cinemaProjects' => $filterCollection(kv_get($pdo, 'cinemaProjects', [])),
+    ]);
+}
+
+$continuityCollections = [
+    'characters' => ['kv' => 'characters', 'prefix' => 'chr_', 'codeField' => 'identityId', 'codePrefix' => 'CHR-ID-', 'respKey' => 'character'],
+    'wardrobes' => ['kv' => 'wardrobes', 'prefix' => 'wrd_', 'codeField' => 'wardrobeCode', 'codePrefix' => 'WRD-ID-', 'respKey' => 'wardrobe'],
+    'props' => ['kv' => 'props', 'prefix' => 'prp_', 'codeField' => 'propCode', 'codePrefix' => 'PRP-ID-', 'respKey' => 'prop'],
+    'locations' => ['kv' => 'locations', 'prefix' => 'loc_', 'codeField' => 'locationCode', 'codePrefix' => 'LOC-ID-', 'respKey' => 'location'],
+    'motion' => ['kv' => 'motionTemplates', 'prefix' => 'mot_', 'codeField' => 'motionCode', 'codePrefix' => 'MOT-ID-', 'respKey' => 'motionTemplate'],
+    'cinema-projects' => ['kv' => 'cinemaProjects', 'prefix' => 'cin_', 'codeField' => null, 'codePrefix' => null, 'respKey' => 'cinemaProject'],
+];
+
+if (preg_match('#^/api/continuity/(characters|wardrobes|props|locations|motion|cinema-projects)(?:/([^/]+))?$#', $path, $cm)) {
+    $user = get_session_user($pdo);
+    if (!$user) {
+        json_response(['error' => 'Sign in to manage production continuity assets.'], 401);
+    }
+    $slug = $cm[1];
+    $itemIdParam = $cm[2] ?? ($reqBody['id'] ?? '');
+    $spec = $continuityCollections[$slug];
+    $list = kv_get($pdo, $spec['kv'], []);
+    if (!is_array($list)) $list = [];
+
+    $isAdmin = ($user['role'] ?? 'user') === 'admin';
+
+    if ($method === 'DELETE' || (($reqBody['_method'] ?? '') === 'DELETE')) {
+        $targetId = (string) $itemIdParam;
+        $found = null;
+        foreach ($list as $it) {
+            if (($it['id'] ?? '') === $targetId) {
+                $found = $it;
+                break;
+            }
+        }
+        if ($found && !$isAdmin && ($found['userId'] ?? '') !== $user['id']) {
+            json_response(['error' => 'You do not have permission to delete this production asset.'], 403);
+        }
+        $list = array_values(array_filter($list, fn($it) => ($it['id'] ?? '') !== $targetId));
+        kv_set($pdo, $spec['kv'], $list);
+        json_response(['ok' => true]);
+    }
+
+    if (in_array($method, ['POST', 'PATCH', 'PUT'], true)) {
+        $now = gmdate('c');
+        $id = !empty($reqBody['id']) ? (string) $reqBody['id'] : ($spec['prefix'] . round(microtime(true) * 1000) . '_' . substr(bin2hex(random_bytes(3)), 0, 4));
+        $existingIdx = -1;
+        $existing = [];
+        foreach ($list as $idx => $it) {
+            if (($it['id'] ?? '') === $id) {
+                $existingIdx = $idx;
+                $existing = $it;
+                break;
+            }
+        }
+        if ($existingIdx >= 0 && !$isAdmin && ($existing['userId'] ?? '') !== $user['id']) {
+            json_response(['error' => 'You do not have permission to modify this production asset.'], 403);
+        }
+        $merged = array_merge($existing, $reqBody);
+        unset($merged['_method']);
+        $merged['id'] = $id;
+        $merged['userId'] = $existing['userId'] ?? $user['id'];
+        if ($spec['codeField'] && empty($merged[$spec['codeField']])) {
+            $merged[$spec['codeField']] = $spec['codePrefix'] . strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
+        }
+        $merged['createdAt'] = $existing['createdAt'] ?? $now;
+        $merged['updatedAt'] = $now;
+
+        if ($existingIdx >= 0) {
+            $list[$existingIdx] = $merged;
+        } else {
+            array_unshift($list, $merged);
+        }
+        kv_set($pdo, $spec['kv'], array_values($list));
+        json_response(['ok' => true, $spec['respKey'] => $merged]);
+    }
+}
+
+if ($path === '/api/story-studio/ai-cowriter' && $method === 'POST') {
+    $action = (string) ($reqBody['action'] ?? 'continue');
+    $instruction = trim((string) ($reqBody['instruction'] ?? ''));
+    $currentMarkdown = (string) ($reqBody['currentMarkdown'] ?? '');
+    $title = (string) ($reqBody['title'] ?? 'Untitled Production');
+    $globalStyle = (string) ($reqBody['globalStyle'] ?? '35mm Anamorphic Cinema');
+    $libraryAssets = is_array($reqBody['libraryAssets'] ?? null) ? $reqBody['libraryAssets'] : [];
+
+    // Ensure GEMINI_API_KEY exists in spacix_secrets so Admin can configure it in the Secrets Vault
+    $geminiKey = get_secret_value($pdo, 'GEMINI_API_KEY');
+    if ($geminiKey === '') {
+        $chkStmt = $pdo->prepare('SELECT COUNT(*) FROM `spacix_secrets` WHERE `secret_key` = ?');
+        $chkStmt->execute(['GEMINI_API_KEY']);
+        if ((int) $chkStmt->fetchColumn() === 0) {
+            $insStmt = $pdo->prepare('
+                INSERT IGNORE INTO `spacix_secrets` (`secret_key`, `category`, `label`, `secret_value`, `secret_masked`, `has_value`, `description`, `updated_at`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ');
+            $insStmt->execute([
+                'GEMINI_API_KEY',
+                'provider',
+                'Gemini Screenplay & Director Co-Writer Key',
+                '',
+                'Not configured',
+                0,
+                'API key for Story Studio AI Screenplay Co-Writer and cinematic shot descriptor synthesis.',
+                gmdate('c'),
+            ]);
+        }
+    }
+
+    if (strlen($geminiKey) > 10) {
+        $systemPrompt = implode("\n", [
+            'You are the Executive Screenplay Co-Writer inside SPACI6X Story Studio.',
+            'Write industry-standard Markdown screenplays that strictly follow these formatting conventions:',
+            '- Project Title: `# TITLE`',
+            '- Scene Sluglines: `### INT. LOCATION - DAY <!-- scene-id: scene-xxxx -->` or `### EXT. LOCATION - NIGHT <!-- scene-id: scene-xxxx -->`',
+            '- Character Dialogue Cues: `@CHARACTER_NAME` on its own line, optional `(parenthetical)` on next line, then dialogue',
+            '- Inline Props: `[PROP: Item Name]`',
+            '- Inline B-Roll inserts: `[B-ROLL: Description]`',
+            '- Transitions: `##### CUT TO:`',
+            '- Director notes: `> Note text`',
+            'Global Visual Style: ' . $globalStyle,
+        ]);
+        $userPrompt = "Project Title: {$title}\nAction Mode: {$action}\nDirector Instruction: " . ($instruction ?: 'Write a compelling next cinematic scene.') . "\n\nCurrent Screenplay Markdown:\n{$currentMarkdown}";
+        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($geminiKey));
+        if ($ch !== false) {
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 20,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
+                    'contents' => [['parts' => [['text' => $userPrompt]]]],
+                ]),
+            ]);
+            $rawResp = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($httpCode >= 200 && $httpCode < 300 && is_string($rawResp)) {
+                $parsed = json_decode($rawResp, true);
+                $genText = trim((string) ($parsed['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+                if ($genText !== '') {
+                    json_response([
+                        'ok' => true,
+                        'provider' => 'gemini-mysql-vault',
+                        'markdown' => $genText,
+                    ]);
+                }
+            }
+        }
+    }
+
+    $leadA = 'AMARA';
+    $leadB = 'KEMI';
+    $locName = 'ROOFTOP HELIPAD';
+    $propName = 'Encrypted Titanium Ledger Drive';
+
+    foreach ($libraryAssets as $ast) {
+        $cat = (string) ($ast['category'] ?? '');
+        $nm = trim((string) ($ast['name'] ?? ''));
+        if (!$nm) continue;
+        if ($cat === 'Character') {
+            if ($leadA === 'AMARA') $leadA = strtoupper($nm);
+            elseif ($leadB === 'KEMI') $leadB = strtoupper($nm);
+        } elseif ($cat === 'Location' && $locName === 'ROOFTOP HELIPAD') {
+            $locName = strtoupper($nm);
+        } elseif ($cat === 'Prop' && $propName === 'Encrypted Titanium Ledger Drive') {
+            $propName = $nm;
+        }
+    }
+
+    $sceneUuid = 'scene-' . substr(bin2hex(random_bytes(3)), 0, 6);
+    if ($action === 'outline') {
+        $synthesizedScene = implode("\n", [
+            '> AI Co-Writer Beat Outline: ' . ($instruction !== '' ? $instruction : 'Three-Act Escalation'),
+            '> • Beat 1: ' . $leadA . ' arrives at ' . $locName . ' carrying the ' . $propName . '.',
+            '> • Beat 2: Confrontation with ' . $leadB . ' as acoustic alarms echo across the district.',
+            '> • Beat 3: High-stakes reveal and transition to the final sequence.',
+            '',
+            '### EXT. ' . $locName . ' - NIGHT <!-- scene-id: ' . $sceneUuid . ' -->',
+            '',
+            'Sodium searchlights sweep across the wet concrete of ' . $locName . '. ' . ($instruction !== '' ? $instruction : ($leadA . ' steps out of the shadows')) . ', gripping the [PROP: ' . $propName . ']. [B-ROLL: Rain droplets glistening on brushed titanium casing]',
+            '',
+            '@' . $leadA,
+            '(voice steady over the wind)',
+            'Every frequency in this sector is being mirrored. We have ninety seconds before the uplink seals.',
+            '',
+            '@' . $leadB,
+            '(checking the horizon)',
+            'Ninety seconds is all we need. Patch the master key into the relay.',
+            '',
+            '##### CUT TO:',
+        ]);
+    } elseif ($action === 'rewrite_dialogue') {
+        $synthesizedScene = implode("\n", [
+            '### INT. ' . $locName . ' - NIGHT <!-- scene-id: ' . $sceneUuid . ' -->',
+            '',
+            '> Dialogue Polish (' . ($instruction !== '' ? $instruction : 'Subtext & Pacing') . ')',
+            '',
+            '@' . $leadA,
+            '(low, eyes locked on ' . $leadB . ')',
+            'You built the vault to survive a blackout. You never told them what happens when the tide comes in.',
+            '',
+            '@' . $leadB,
+            '(a thin, knowing pause)',
+            'They didn\'t ask about the tide. They only asked for the key.',
+        ]);
+    } else {
+        $synthesizedScene = implode("\n", [
+            '### INT. ' . $locName . ' - NIGHT <!-- scene-id: ' . $sceneUuid . ' -->',
+            '',
+            ($instruction !== '' ? $instruction . '. ' : 'Low tungsten key light cuts through the mist inside ' . $locName . '. ') . $leadA . ' places the [PROP: ' . $propName . '] onto the glass console while ' . $leadB . ' monitors the perimeter feed. [B-ROLL: Extreme close-up of biometric light pulsing cyan]',
+            '',
+            '@' . $leadA,
+            '(focused, deliberate)',
+            'The continuity signature matches. Every frame from the causeway is intact.',
+            '',
+            '@' . $leadB,
+            '(nodding toward the monitor)',
+            'Send it to the main timeline before they cycle the grid.',
+            '',
+            '##### SMASH CUT TO:',
+        ]);
+    }
+
+    $combined = ($action === 'scratch')
+        ? ('# ' . strtoupper($title) . "\n\n" . $synthesizedScene . "\n")
+        : (rtrim($currentMarkdown) . "\n\n" . $synthesizedScene . "\n");
+
+    json_response([
+        'ok' => true,
+        'provider' => 'spacix-screenplay-engine',
+        'markdown' => $combined,
+        'appendedScene' => $synthesizedScene,
+    ]);
+}
+
+if ($path === '/api/cinema/auto-production' && $method === 'POST') {
+    $stage = (string) ($reqBody['stage'] ?? 'screenplay');
+    $title = trim((string) ($reqBody['title'] ?? 'ECHOES OF LAGOS'));
+    $ideaDescription = trim((string) ($reqBody['ideaDescription'] ?? ''));
+    $productionFormat = trim((string) ($reqBody['productionFormat'] ?? 'Short Films'));
+    $creativeInstructions = trim((string) ($reqBody['creativeInstructions'] ?? ''));
+    $referenceNotes = trim((string) ($reqBody['referenceNotes'] ?? ''));
+
+    if ($stage === 'screenplay') {
+        $cleanIdea = $ideaDescription !== ''
+            ? $ideaDescription
+            : 'A visionary investigator uncovers a hidden quantum archive beneath a rain-slicked metropolis at midnight.';
+        $cleanInstructions = $creativeInstructions !== ''
+            ? $creativeInstructions
+            : 'Anamorphic 35mm cinema look, high tension, atmospheric practical lighting, strong character subtext.';
+
+        $geminiKey = get_secret_value($pdo, 'GEMINI_API_KEY');
+        if (strlen($geminiKey) > 10) {
+            $promptText = implode("\n\n", array_filter([
+                "Generate a complete, structured professional screenplay for a {$productionFormat} titled \"{$title}\".",
+                "Core Idea: {$cleanIdea}",
+                "Creative Instructions: {$cleanInstructions}",
+                $referenceNotes !== '' ? "Reference Notes: {$referenceNotes}" : '',
+                "Write 3 complete scenes in Story Studio Screenplay Markdown format:\n- `# TITLE`\n- `### INT. LOCATION - NIGHT <!-- scene-id: scene-01 -->`\n- Action paragraphs with `[PROP: Item Name]` and `[B-ROLL: Visual description]`\n- Character dialogue cues using `@CHARACTER_NAME` on its own line, `(parenthetical)` on next line, and spoken dialogue below.\n- Include `> Production Note: ...` for lighting, wardrobe, and camera direction.",
+            ]));
+            $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($geminiKey));
+            if ($ch !== false) {
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 25,
+                    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                    CURLOPT_POSTFIELDS => json_encode([
+                        'contents' => [['parts' => [['text' => $promptText]]]],
+                    ]),
+                ]);
+                $rawResp = curl_exec($ch);
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                if ($httpCode >= 200 && $httpCode < 300 && is_string($rawResp)) {
+                    $parsed = json_decode($rawResp, true);
+                    $genText = trim((string) ($parsed['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+                    if ($genText !== '') {
+                        json_response([
+                            'ok' => true,
+                            'provider' => 'gemini-mysql-vault',
+                            'markdown' => $genText,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        $upperTitle = strtoupper($title !== '' ? $title : 'UNTITLED PRODUCTION');
+        $generatedMarkdown = implode("\n", [
+            "# {$upperTitle}",
+            "",
+            "> Production Format: {$productionFormat} | Visual Direction: {$cleanInstructions}",
+            "> Premise: {$cleanIdea}",
+            "",
+            "### EXT. METROPOLIS SKYLINE CAUSEWAY - NIGHT <!-- scene-id: scene-01 -->",
+            "",
+            "Rain lashes the glass barricades of the elevated causeway. {$cleanIdea} @AMARA stands beside a [PROP: Matte-Black Tactical Coupe], adjusting her [WARDROBE: Trench Coat with Brass Collar]. [B-ROLL: Wide anamorphic establishing shot of neon reflections shimmering across wet asphalt]",
+            "",
+            "@AMARA",
+            "(into encrypted comms, steady and urgent)",
+            "We are at the perimeter. The signal is coming from beneath the old central turbine hall.",
+            "",
+            "@KEMI",
+            "(stepping out from the passenger side, scanning the horizon)",
+            "If the archive is still active, the security grid will recognize our biometrics the second we cross the threshold.",
+            "",
+            "##### CUT TO:",
+            "",
+            "### INT. SUBTERRANEAN ARCHIVE VAULT - NIGHT <!-- scene-id: scene-02 -->",
+            "",
+            "Shafts of cool overhead light pierce the mist inside the cavernous concrete vault. @AMARA and @KEMI approach the central plinth where the [PROP: Quantum Chronometer Core] hums with amber light. @KEMI wears a [WARDROBE: Charcoal Utility Jacket]. [B-ROLL: Extreme close-up of rotating brass rings inside the Quantum Chronometer Core]",
+            "",
+            "@KEMI",
+            "(whispering in awe)",
+            "Look at the timestamp ledger. These recordings weren't made in the past—they are indexing tomorrow.",
+            "",
+            "@AMARA",
+            "(reaching for the console, resolute)",
+            "Then we extract the master key before the syndicate rewrites the sequence.",
+            "",
+            "##### DISSOLVE TO:",
+            "",
+            "### EXT. ROOFTOP HELIPAD OVERLOOK - DAWN <!-- scene-id: scene-03 -->",
+            "",
+            "Golden dawn breaks through low clouds above the city skyline. @AMARA holds the [PROP: Quantum Chronometer Core] as rotor wash ripples across the helipad. [B-ROLL: Sweeping 360-degree crane shot around Amara and Kemi against the rising sun]",
+            "",
+            "@AMARA",
+            "(looking out over the waking city)",
+            "Every frame is preserved. Now the whole world sees the truth.",
+        ]);
+
+        json_response([
+            'ok' => true,
+            'provider' => 'spacix-auto-production',
+            'markdown' => $generatedMarkdown,
+        ]);
+    }
+
+    json_response(['ok' => true]);
+}
+
 json_response(['error' => 'Endpoint not found: ' . $method . ' ' . $path], 404);
+
+
+

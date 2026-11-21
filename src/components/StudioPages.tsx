@@ -31,6 +31,10 @@ import {
   ProviderBrandIcon,
   SpacixLogo,
 } from './ProviderBrandIcon';
+import {
+  ContinuityStudioBar,
+  SPACI6X_STUDIOS,
+} from './ContinuityStudiosView';
 
 // ============================================================================
 // 1. EXPLORE / HOME PAGE (`/`)
@@ -43,14 +47,21 @@ export const ExplorePage: React.FC = () => {
     navigate,
     applyPresetToDock,
     setSelectedGeneration,
+    characters,
+    wardrobes,
+    propsList,
+    locations,
+    motionTemplates,
+    cinemaProjects,
   } = useRuns();
 
   const featuredModels = models.slice(0, 6);
 
   return (
     <div className="space-y-16 pb-16">
+      <ContinuityStudioBar />
       {/* Full-bleed Quanta Hero with radial teal glow + dot field */}
-      <section className="relative border-b border-white/10 quanta-dot-bg overflow-hidden py-10 sm:py-20">
+      <section className="relative border-b border-white/10 quanta-dot-bg overflow-hidden py-10 sm:py-16 -mt-16">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(70,236,213,0.18),transparent_62%)] pointer-events-none" />
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="min-w-0 lg:col-span-7 space-y-6">
@@ -58,37 +69,41 @@ export const ExplorePage: React.FC = () => {
               <SpacixLogo size="md" />
               <span className="text-white/20 hidden sm:inline">·</span>
               <span className="text-[11px] sm:text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
-                MULTI-MODEL CINEMA, STILL & AUDIO STUDIO
+                CHARACTER & PRODUCTION CONTINUITY FILMMAKING SUITE
               </span>
             </div>
             <h1 className="font-display text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tight text-white leading-[0.95] break-words">
-              DIRECT EVERY FRAME WITH PRECISION AI RIGS
+              PERSISTENT CHARACTERS & 12 PRODUCTION STUDIOS
             </h1>
             <p className="text-sm sm:text-base text-zinc-300 max-w-xl leading-relaxed">
-              Generate 4K anamorphic stills, choreographed Steadicam video sequences, and synchronized modular scores across Nano Banana 2.1, Seedance 2.5, Kling 3.0 Pro, Grok Imagine 2.0, Soul 2.0, Flux 2, and Fish Audio S2.1—backed by permanent Cloudflare R2 storage.
+              Create permanent character identities with locked faces, multilingual voices, outfits, props, and filming locations once—and reuse them seamlessly across Cinema Studio, Motion Control, Storyboard, Lip Sync, Marketing, Canvas, and Timeline Assembly.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
-                onClick={() => navigate('video', { model: 'seedance-2-5' })}
+                onClick={() => navigate('cinema')}
                 className="px-6 py-3 text-xs sm:text-sm font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all flex items-center gap-2 shadow-lg shadow-[#46ecd5]/20"
               >
                 <Film className="w-4 h-4" />
-                <span>Open Video Studio</span>
+                <span>Open Cinema Studio</span>
               </button>
               <button
-                onClick={() => navigate('image', { model: 'nano-banana-2-1' })}
+                onClick={() => navigate('character')}
                 className="px-5 py-3 text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-xl transition-colors flex items-center gap-2"
               >
-                <ImageIcon className="w-4 h-4 text-[#46ecd5]" />
-                <span>Image Studio</span>
+                <span>Character Identity Studio</span>
               </button>
               <button
-                onClick={() => navigate('audio', { model: 'sonilo-music-v2' })}
+                onClick={() => navigate('motion')}
                 className="px-5 py-3 text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 rounded-xl transition-colors flex items-center gap-2"
               >
-                <Music className="w-4 h-4 text-[#46ecd5]" />
-                <span>Audio & Foley</span>
+                <span>Motion Control Studio</span>
+              </button>
+              <button
+                onClick={() => navigate('video', { model: 'seedance-2-5' })}
+                className="px-4 py-3 text-xs sm:text-sm font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <span>Raw Model Docks</span>
               </button>
             </div>
           </div>
@@ -131,6 +146,68 @@ export const ExplorePage: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* 12 SPACI6X INTERCONNECTED PRODUCTION STUDIOS */}
+      <section className="max-w-[1440px] mx-auto px-4 sm:px-6 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="text-xs font-mono-tabular uppercase tracking-widest text-[#46ecd5]">
+              UNIFIED PRODUCTION ASSET BUS
+            </div>
+            <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-white mt-0.5">
+              00. SPACI6X 12 Production Studios
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+              Every character, voice, wardrobe, prop, location, and motion rig is saved permanently to the database and travels with you across all 12 studios.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular">
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Characters: <strong className="text-[#46ecd5]">{characters.length}</strong>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Wardrobes: <strong className="text-[#46ecd5]">{wardrobes.length}</strong>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Props: <strong className="text-[#46ecd5]">{propsList.length}</strong>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Locations: <strong className="text-[#46ecd5]">{locations.length}</strong>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Motion Rigs: <strong className="text-[#46ecd5]">{motionTemplates.length}</strong>
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#111114] border border-white/10 text-zinc-300">
+              Productions: <strong className="text-[#46ecd5]">{cinemaProjects.length}</strong>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {SPACI6X_STUDIOS.map((st, idx) => (
+            <button
+              key={st.id}
+              onClick={() => navigate(st.id)}
+              className="group p-4 rounded-xl bg-[#111114] hover:bg-[#15151A] border border-white/10 hover:border-[#46ecd5]/60 text-left flex flex-col justify-between gap-3 transition-all"
+            >
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-mono-tabular text-zinc-400">
+                  <span>STUDIO {String(idx + 1).padStart(2, '0')}</span>
+                  <span className="text-[#46ecd5] group-hover:translate-x-0.5 transition-transform">
+                    OPEN →
+                  </span>
+                </div>
+                <h3 className="font-display text-xl font-bold uppercase tracking-wide text-white group-hover:text-[#46ecd5] transition-colors">
+                  {st.label}
+                </h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {st.responsibility}
+                </p>
+              </div>
+            </button>
+          ))}
         </div>
       </section>
 
@@ -331,7 +408,9 @@ export const EffectsPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="min-h-screen bg-[#09090B]">
+      <ContinuityStudioBar activeStudio="effects" />
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8 space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl font-extrabold uppercase tracking-wide text-white">
@@ -466,6 +545,7 @@ export const EffectsPage: React.FC = () => {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -606,10 +686,29 @@ export const AssetsLibraryPage: React.FC = () => {
     deleteGeneration,
     togglePublishGeneration,
     moveGenerationToProject,
+    characters,
+    wardrobes,
+    propsList,
+    locations,
+    motionTemplates,
+    cinemaProjects,
+    activeContinuity,
+    setActiveContinuity,
+    navigate,
   } = useRuns();
 
   const [filterTab, setFilterTab] = useState<
-    'all' | 'image' | 'video' | 'audio' | 'uploads'
+    | 'all'
+    | 'characters'
+    | 'wardrobes'
+    | 'props'
+    | 'locations'
+    | 'motion'
+    | 'productions'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'uploads'
   >('all');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
@@ -620,8 +719,10 @@ export const AssetsLibraryPage: React.FC = () => {
   const filteredGenerations = generations
     .filter((g) => (activeProjectId ? g.projectId === activeProjectId : true))
     .filter((g) => {
-      if (filterTab === 'all' || filterTab === 'uploads') return true;
-      return g.surface === filterTab;
+      if (filterTab === 'image' || filterTab === 'video' || filterTab === 'audio') {
+        return g.surface === filterTab;
+      }
+      return true;
     });
 
   const handleCreateProject = async (e: React.FormEvent) => {
@@ -667,23 +768,98 @@ export const AssetsLibraryPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="min-h-screen bg-[#09090B]">
+      <ContinuityStudioBar />
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left Projects Sidebar */}
       <aside className="min-w-0 w-full lg:col-span-3 bg-[#111114] border border-white/10 rounded-xl p-4 space-y-5">
         <div>
           <h2 className="font-display text-xl font-bold uppercase tracking-wide text-white">
-            SPACIX Vault & Projects
+            SPACIX Continuity Asset Vault
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Backed by Cloudflare R2 permanent object storage
+            Shared database library across all 12 SPACI6X Studios
           </p>
+        </div>
+
+        {/* Continuity Asset Summary Quick Filters */}
+        <div className="grid grid-cols-2 gap-1.5 text-xs">
+          <button
+            onClick={() => setFilterTab('characters')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'characters'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Characters</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{characters.length}</div>
+          </button>
+          <button
+            onClick={() => setFilterTab('wardrobes')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'wardrobes'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Wardrobes</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{wardrobes.length}</div>
+          </button>
+          <button
+            onClick={() => setFilterTab('props')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'props'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Props</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{propsList.length}</div>
+          </button>
+          <button
+            onClick={() => setFilterTab('locations')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'locations'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Locations</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{locations.length}</div>
+          </button>
+          <button
+            onClick={() => setFilterTab('motion')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'motion'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Motion Rigs</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{motionTemplates.length}</div>
+          </button>
+          <button
+            onClick={() => setFilterTab('productions')}
+            className={`p-2 rounded-lg border text-left transition-colors ${
+              filterTab === 'productions'
+                ? 'bg-[#46ecd5]/15 border-[#46ecd5] text-white'
+                : 'bg-zinc-900/80 border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <div className="text-[10px] text-zinc-400 uppercase">Productions</div>
+            <div className="font-mono-tabular font-bold text-[#46ecd5]">{cinemaProjects.length}</div>
+          </button>
         </div>
 
         <div className="space-y-1">
           <button
-            onClick={() => setActiveProjectId(null)}
+            onClick={() => {
+              setActiveProjectId(null);
+              setFilterTab('all');
+            }}
             className={`w-full px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
-              activeProjectId === null
+              activeProjectId === null && filterTab === 'all'
                 ? 'bg-[#46ecd5] text-zinc-950 font-bold'
                 : 'text-zinc-300 hover:bg-white/5'
             }`}
@@ -790,11 +966,25 @@ export const AssetsLibraryPage: React.FC = () => {
       <section className="min-w-0 w-full lg:col-span-9 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-[#111114] border border-white/10 rounded-xl">
           <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg max-w-full overflow-x-auto no-scrollbar">
-            {(['all', 'video', 'image', 'audio', 'uploads'] as const).map((t) => (
+            {(
+              [
+                'all',
+                'characters',
+                'wardrobes',
+                'props',
+                'locations',
+                'motion',
+                'productions',
+                'video',
+                'image',
+                'audio',
+                'uploads',
+              ] as const
+            ).map((t) => (
               <button
                 key={t}
                 onClick={() => setFilterTab(t)}
-                className={`px-3 py-1.5 text-xs font-semibold uppercase rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-xs font-semibold uppercase rounded-md transition-colors whitespace-nowrap shrink-0 ${
                   filterTab === t
                     ? 'bg-[#46ecd5] text-zinc-950'
                     : 'text-zinc-400 hover:text-white'
@@ -858,7 +1048,265 @@ export const AssetsLibraryPage: React.FC = () => {
           </div>
         </div>
 
-        {filterTab === 'uploads' ? (
+        {filterTab === 'characters' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {characters.map((ch) => (
+              <div
+                key={ch.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div className="flex items-start gap-3">
+                  {ch.faceReferenceUrl ? (
+                    <img
+                      src={ch.faceReferenceUrl}
+                      alt={ch.name}
+                      className="w-16 h-16 rounded-lg object-cover border border-white/10 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center text-xs font-mono-tabular text-[#46ecd5] shrink-0">
+                      ID
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                      {ch.identityId} · {ch.voiceId}
+                    </div>
+                    <h3 className="text-sm font-bold text-white truncate">{ch.name}</h3>
+                    <div className="text-[11px] text-zinc-400">
+                      {ch.ageRange} · {ch.skinTone} · {ch.primaryLanguage}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() =>
+                      setActiveContinuity((prev) => ({
+                        ...prev,
+                        characterIds: [ch.id],
+                      }))
+                    }
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold ${
+                      activeContinuity.characterIds.includes(ch.id)
+                        ? 'bg-[#46ecd5] text-zinc-950'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {activeContinuity.characterIds.includes(ch.id)
+                      ? 'Locked in Bus'
+                      : 'Lock Character'}
+                  </button>
+                  <button
+                    onClick={() => navigate('character')}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-white/5 hover:bg-white/10 text-zinc-300"
+                  >
+                    Edit Studio
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'wardrobes' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {wardrobes.map((w) => (
+              <div
+                key={w.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                    {w.id} · {w.category}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-0.5">{w.name}</h3>
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{w.description}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() =>
+                      setActiveContinuity((prev) => ({ ...prev, wardrobeId: w.id }))
+                    }
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold ${
+                      activeContinuity.wardrobeId === w.id
+                        ? 'bg-[#46ecd5] text-zinc-950'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {activeContinuity.wardrobeId === w.id ? 'Locked in Bus' : 'Lock Wardrobe'}
+                  </button>
+                  <button
+                    onClick={() => navigate('wardrobe')}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-white/5 hover:bg-white/10 text-zinc-300"
+                  >
+                    Open Studio
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'props' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {propsList.map((pr) => (
+              <div
+                key={pr.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                    {pr.id} · {pr.category}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-0.5">{pr.name}</h3>
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{pr.description}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() =>
+                      setActiveContinuity((prev) => ({
+                        ...prev,
+                        propIds: [pr.id],
+                      }))
+                    }
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold ${
+                      activeContinuity.propIds.includes(pr.id)
+                        ? 'bg-[#46ecd5] text-zinc-950'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {activeContinuity.propIds.includes(pr.id) ? 'Locked in Bus' : 'Lock Prop'}
+                  </button>
+                  <button
+                    onClick={() => navigate('props')}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-white/5 hover:bg-white/10 text-zinc-300"
+                  >
+                    Open Studio
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'locations' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {locations.map((loc) => (
+              <div
+                key={loc.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                    {loc.locationCode} · {loc.settingType} · {loc.timeOfDay}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-0.5">{loc.name}</h3>
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{loc.description}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() =>
+                      setActiveContinuity((prev) => ({ ...prev, locationId: loc.id }))
+                    }
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold ${
+                      activeContinuity.locationId === loc.id
+                        ? 'bg-[#46ecd5] text-zinc-950'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {activeContinuity.locationId === loc.id
+                      ? 'Locked in Bus'
+                      : 'Lock Location'}
+                  </button>
+                  <button
+                    onClick={() => navigate('location')}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-white/5 hover:bg-white/10 text-zinc-300"
+                  >
+                    Open Studio
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'motion' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {motionTemplates.map((m) => (
+              <div
+                key={m.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                    {m.motionCode} · {m.movementCategory}
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-0.5">{m.name}</h3>
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{m.motionPrompt}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() =>
+                      setActiveContinuity((prev) => ({
+                        ...prev,
+                        motionTemplateId: m.id,
+                      }))
+                    }
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold ${
+                      activeContinuity.motionTemplateId === m.id
+                        ? 'bg-[#46ecd5] text-zinc-950'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10'
+                    }`}
+                  >
+                    {activeContinuity.motionTemplateId === m.id
+                      ? 'Locked in Bus'
+                      : 'Lock Motion Rig'}
+                  </button>
+                  <button
+                    onClick={() => navigate('motion')}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-white/5 hover:bg-white/10 text-zinc-300"
+                  >
+                    Open Studio
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'productions' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {cinemaProjects.map((cp) => (
+              <div
+                key={cp.id}
+                className="p-4 rounded-xl bg-[#111114] border border-white/10 flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="text-[10px] font-mono-tabular text-[#46ecd5]">
+                    {cp.id} · {cp.productionType.toUpperCase()} · {cp.scenes.length} SCENES
+                  </div>
+                  <h3 className="text-base font-bold text-white mt-0.5">{cp.title}</h3>
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{cp.logline}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() => {
+                      setActiveContinuity((prev) => ({
+                        ...prev,
+                        cinemaProjectId: cp.id,
+                      }));
+                      navigate('cinema');
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-[#46ecd5] text-zinc-950 text-xs font-bold"
+                  >
+                    Open in Cinema Studio
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveContinuity((prev) => ({
+                        ...prev,
+                        cinemaProjectId: cp.id,
+                      }));
+                      navigate('storyboard');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs border border-white/10"
+                  >
+                    Storyboard
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterTab === 'uploads' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {uploads.map((u) => (
               <div
@@ -909,6 +1357,7 @@ export const AssetsLibraryPage: React.FC = () => {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 };

@@ -6,22 +6,28 @@ import {
   AdminRoleType,
   ApiProviderCallingPattern,
   ApiProviderId,
+  CharacterProfile,
+  CinemaProductionProject,
   CommunityReport,
   CreditBucket,
   CreditLedgerEntry,
   GenerationRecord,
   LedgerReason,
+  LocationItem,
+  MotionTemplateItem,
   PlanTierId,
   PlatformNotification,
   PlatformSecretEntry,
   PlatformTeamMember,
   PresetEffect,
   ProjectRecord,
+  PropItem,
   ProviderApiKeyEntry,
   ProviderGatewayConfig,
   SupportTicket,
   UploadRecord,
   UserProfile,
+  WardrobeItem,
 } from '../types/studio';
 import { INITIAL_PRESETS } from '../catalog/presets';
 import { getEffectiveProvidersForModel, MODEL_CATALOG } from '../catalog/models';
@@ -186,6 +192,12 @@ const DEFAULT_SECRET_DEFINITIONS: Array<{
     description: 'Primary Muapi.ai Bearer key synced with the Muapi provider gateway.',
   },
   {
+    key: 'GEMINI_API_KEY',
+    category: 'system',
+    label: 'Gemini Screenplay & Director Co-Writer Key',
+    description: 'API key for Story Studio AI Screenplay Co-Writer and cinematic shot descriptor synthesis.',
+  },
+  {
     key: 'WEBHOOK_HMAC_SECRET',
     category: 'webhook',
     label: 'Provider Webhook HMAC Secret',
@@ -260,6 +272,12 @@ class StudioDatabase {
   generations = new Map<string, GenerationRecord>();
   projects = new Map<string, ProjectRecord>();
   uploads = new Map<string, UploadRecord>();
+  characters = new Map<string, CharacterProfile>();
+  wardrobes = new Map<string, WardrobeItem>();
+  props = new Map<string, PropItem>();
+  locations = new Map<string, LocationItem>();
+  motionTemplates = new Map<string, MotionTemplateItem>();
+  cinemaProjects = new Map<string, CinemaProductionProject>();
   ledger: CreditLedgerEntry[] = [];
   ledgerUniqueKeys = new Set<string>();
   stripeEvents = new Set<string>();
@@ -312,7 +330,15 @@ class StudioDatabase {
     this.initStructuralCatalog();
     this.loadFromDisk();
     this.ensureBootstrapAccountsAndSecrets();
-    this.saveToDisk();
+    this.saveToDisk(true);
+
+    // Synchronize live state with remote MySQL (aixdqvdz_spacix) in the background
+    setTimeout(() => {
+      void this.pullFromRemoteMySQL();
+    }, 500);
+    setInterval(() => {
+      void this.pullFromRemoteMySQL();
+    }, 25000).unref?.();
   }
 
   private initStructuralCatalog() {
@@ -557,6 +583,48 @@ class StudioDatabase {
           }
         }
       }
+      if (Array.isArray(parsed.characters)) {
+        for (const ch of parsed.characters as CharacterProfile[]) {
+          if (ch && ch.id) {
+            this.characters.set(ch.id, ch);
+          }
+        }
+      }
+      if (Array.isArray(parsed.wardrobes)) {
+        for (const wr of parsed.wardrobes as WardrobeItem[]) {
+          if (wr && wr.id) {
+            this.wardrobes.set(wr.id, wr);
+          }
+        }
+      }
+      if (Array.isArray(parsed.props)) {
+        for (const prp of parsed.props as PropItem[]) {
+          if (prp && prp.id) {
+            this.props.set(prp.id, prp);
+          }
+        }
+      }
+      if (Array.isArray(parsed.locations)) {
+        for (const loc of parsed.locations as LocationItem[]) {
+          if (loc && loc.id) {
+            this.locations.set(loc.id, loc);
+          }
+        }
+      }
+      if (Array.isArray(parsed.motionTemplates)) {
+        for (const mot of parsed.motionTemplates as MotionTemplateItem[]) {
+          if (mot && mot.id) {
+            this.motionTemplates.set(mot.id, mot);
+          }
+        }
+      }
+      if (Array.isArray(parsed.cinemaProjects)) {
+        for (const cp of parsed.cinemaProjects as CinemaProductionProject[]) {
+          if (cp && cp.id) {
+            this.cinemaProjects.set(cp.id, cp);
+          }
+        }
+      }
       if (Array.isArray(parsed.notifications)) {
         this.notifications = parsed.notifications.filter(
           (n: PlatformNotification) => n && !LEGACY_SEED_NOTIF_IDS.has(n.id)
@@ -764,7 +832,11 @@ class StudioDatabase {
     }
   }
 
-  saveToDisk() {
+  private pushTimer: ReturnType<typeof setTimeout> | null = null;
+  private isSyncingRemote = false;
+  private mysqlRemoteOrigin = 'http://spacix.ticketplaster.com';
+
+  saveToDisk(skipRemotePush = false) {
     try {
       const passwordsObj: Record<string, string> = {};
       for (const [uid, hash] of this.userPasswords.entries()) {
@@ -786,6 +858,12 @@ class StudioDatabase {
         generations: Array.from(this.generations.values()).slice(0, 200),
         projects: Array.from(this.projects.values()),
         uploads: Array.from(this.uploads.values()),
+        characters: Array.from(this.characters.values()),
+        wardrobes: Array.from(this.wardrobes.values()),
+        props: Array.from(this.props.values()),
+        locations: Array.from(this.locations.values()),
+        motionTemplates: Array.from(this.motionTemplates.values()),
+        cinemaProjects: Array.from(this.cinemaProjects.values()),
         notifications: this.notifications,
         supportTickets: this.supportTickets,
         teamMembers: this.teamMembers,
@@ -796,6 +874,304 @@ class StudioDatabase {
       fs.writeFileSync(this.storeFilePath, JSON.stringify(payload, null, 2), 'utf-8');
     } catch {
       // Ignore write errors in read-only environments
+    }
+
+    if (!skipRemotePush) {
+      this.scheduleRemoteMySQLPush();
+    }
+  }
+
+  private scheduleRemoteMySQLPush() {
+    if (this.pushTimer) {
+      clearTimeout(this.pushTimer);
+    }
+    this.pushTimer = setTimeout(() => {
+      this.pushTimer = null;
+      void this.pushToRemoteMySQL();
+    }, 350);
+  }
+
+  async pushToRemoteMySQL(): Promise<boolean> {
+    if (this.isSyncingRemote) return false;
+    this.isSyncingRemote = true;
+    try {
+      const passwordsObj: Record<string, string> = {};
+      for (const [uid, hash] of this.userPasswords.entries()) {
+        passwordsObj[uid] = hash;
+      }
+      const sessionsArr: Array<{ token: string; userId: string }> = [];
+      const sessionMetaObj: Record<string, { userId: string; rememberMe: boolean; expiresAt: number }> = {};
+      for (const [token, uid] of this.sessions.entries()) {
+        sessionsArr.push({ token, userId: uid });
+        const meta = this.sessionMeta.get(token);
+        sessionMetaObj[token] = {
+          userId: uid,
+          rememberMe: meta?.rememberMe ?? true,
+          expiresAt: meta?.expiresAt ?? Date.now() + 30 * 86400 * 1000,
+        };
+      }
+
+      const secretsArr = Array.from(this.platformSecrets.values()).map((s) => ({
+        key: s.key,
+        category: s.category,
+        label: s.label,
+        value: s.secretValue,
+        secretMasked: s.secretMasked,
+        hasValue: s.hasValue,
+        description: s.description,
+        updatedAt: s.updatedAt,
+      }));
+
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), 10000);
+      const res = await fetch(`${this.mysqlRemoteOrigin}/api/internal/mysql-push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-MySQL-Sync-Key': '@f33rinimi',
+        },
+        body: JSON.stringify({
+          syncKey: '@f33rinimi',
+          users: Array.from(this.users.values()),
+          userPasswords: passwordsObj,
+          sessions: sessionsArr,
+          sessionMeta: sessionMetaObj,
+          platformSecrets: secretsArr,
+          providerConfigs: Array.from(this.providerConfigs.values()),
+          modelPricing: Array.from(this.modelPricing.values()),
+          generations: Array.from(this.generations.values()).slice(0, 100),
+          projects: Array.from(this.projects.values()),
+          uploads: Array.from(this.uploads.values()),
+          characters: Array.from(this.characters.values()),
+          wardrobes: Array.from(this.wardrobes.values()),
+          props: Array.from(this.props.values()),
+          locations: Array.from(this.locations.values()),
+          motionTemplates: Array.from(this.motionTemplates.values()),
+          cinemaProjects: Array.from(this.cinemaProjects.values()),
+          notifications: this.notifications,
+          supportTickets: this.supportTickets,
+          teamMembers: this.teamMembers,
+          plans: this.plans,
+          topups: this.topups,
+          billingConfig: this.billingConfig,
+          runwareRoutingConfig: this.runwareRoutingConfig,
+        }),
+        signal: abortCtrl.signal,
+      });
+      clearTimeout(timeoutId);
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      this.isSyncingRemote = false;
+    }
+  }
+
+  async pullFromRemoteMySQL(): Promise<boolean> {
+    if (this.isSyncingRemote) return false;
+    this.isSyncingRemote = true;
+    try {
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), 10000);
+      const res = await fetch(
+        `${this.mysqlRemoteOrigin}/api/internal/mysql-snapshot?syncKey=%40f33rinimi`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'X-MySQL-Sync-Key': '@f33rinimi',
+          },
+          signal: abortCtrl.signal,
+        }
+      );
+      clearTimeout(timeoutId);
+      if (!res.ok) return false;
+
+      const snap = (await res.json()) as Record<string, any>;
+      if (!snap || !snap.ok) return false;
+
+      if (Array.isArray(snap.users)) {
+        for (const u of snap.users as UserProfile[]) {
+          if (u?.id && !LEGACY_SEED_USER_IDS.has(u.id)) {
+            this.users.set(u.id, u);
+          }
+        }
+      }
+      if (snap.userPasswords && typeof snap.userPasswords === 'object') {
+        for (const [uid, hash] of Object.entries(snap.userPasswords as Record<string, string>)) {
+          if (uid && hash && !LEGACY_SEED_USER_IDS.has(uid)) {
+            this.userPasswords.set(uid, hash);
+          }
+        }
+      }
+      if (Array.isArray(snap.sessions)) {
+        for (const s of snap.sessions as Array<{ token: string; userId: string }>) {
+          if (s?.token && s?.userId && !LEGACY_SEED_USER_IDS.has(s.userId)) {
+            this.sessions.set(s.token, s.userId);
+          }
+        }
+      }
+      if (snap.sessionMeta && typeof snap.sessionMeta === 'object') {
+        for (const [tok, meta] of Object.entries(
+          snap.sessionMeta as Record<string, { userId: string; rememberMe: boolean; expiresAt: number }>
+        )) {
+          if (tok && meta?.userId && !LEGACY_SEED_USER_IDS.has(meta.userId)) {
+            this.sessionMeta.set(tok, {
+              token: tok,
+              userId: meta.userId,
+              rememberMe: Boolean(meta.rememberMe),
+              expiresAt: Number(meta.expiresAt) || Date.now() + 30 * 86400 * 1000,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      if (Array.isArray(snap.platformSecrets)) {
+        for (const sec of snap.platformSecrets as Array<{
+          key: string;
+          category: PlatformSecretEntry['category'];
+          label: string;
+          value: string;
+          secretMasked: string;
+          hasValue: boolean;
+          description: string;
+          updatedAt: string;
+        }>) {
+          if (sec?.key) {
+            const val = String(sec.value || '');
+            this.platformSecrets.set(sec.key, {
+              key: sec.key,
+              category: sec.category || 'system',
+              label: sec.label || sec.key,
+              secretValue: val,
+              secretMasked: val ? maskSecretValue(val, sec.key.toLowerCase().slice(0, 4)) : 'Not configured',
+              hasValue: Boolean(val.trim()),
+              description: sec.description || '',
+              updatedAt: sec.updatedAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+      if (Array.isArray(snap.providerConfigs)) {
+        for (const p of snap.providerConfigs as StoredProviderGateway[]) {
+          if (p?.id) {
+            this.providerConfigs.set(p.id, p);
+            this.syncProviderActiveSecret(p);
+          }
+        }
+      }
+      if (Array.isArray(snap.modelPricing)) {
+        for (const m of snap.modelPricing as ModelPricingOverride[]) {
+          if (m?.modelId) {
+            this.modelPricing.set(m.modelId, m);
+          }
+        }
+      }
+      if (Array.isArray(snap.generations)) {
+        for (const g of snap.generations as GenerationRecord[]) {
+          if (g?.id && !LEGACY_SEED_GEN_IDS.has(g.id)) {
+            this.generations.set(g.id, g);
+          }
+        }
+      }
+      if (Array.isArray(snap.projects)) {
+        for (const pr of snap.projects as ProjectRecord[]) {
+          if (pr?.id && pr.id !== 'proj_neo_tokyo_reel') {
+            this.projects.set(pr.id, pr);
+          }
+        }
+      }
+      if (Array.isArray(snap.uploads)) {
+        for (const up of snap.uploads as UploadRecord[]) {
+          if (up?.id && !LEGACY_SEED_UPLOAD_IDS.has(up.id)) {
+            this.uploads.set(up.id, up);
+          }
+        }
+      }
+      if (Array.isArray(snap.characters)) {
+        for (const ch of snap.characters as CharacterProfile[]) {
+          if (ch?.id) {
+            this.characters.set(ch.id, ch);
+          }
+        }
+      }
+      if (Array.isArray(snap.wardrobes)) {
+        for (const wr of snap.wardrobes as WardrobeItem[]) {
+          if (wr?.id) {
+            this.wardrobes.set(wr.id, wr);
+          }
+        }
+      }
+      if (Array.isArray(snap.props)) {
+        for (const prp of snap.props as PropItem[]) {
+          if (prp?.id) {
+            this.props.set(prp.id, prp);
+          }
+        }
+      }
+      if (Array.isArray(snap.locations)) {
+        for (const loc of snap.locations as LocationItem[]) {
+          if (loc?.id) {
+            this.locations.set(loc.id, loc);
+          }
+        }
+      }
+      if (Array.isArray(snap.motionTemplates)) {
+        for (const mot of snap.motionTemplates as MotionTemplateItem[]) {
+          if (mot?.id) {
+            this.motionTemplates.set(mot.id, mot);
+          }
+        }
+      }
+      if (Array.isArray(snap.cinemaProjects)) {
+        for (const cp of snap.cinemaProjects as CinemaProductionProject[]) {
+          if (cp?.id) {
+            this.cinemaProjects.set(cp.id, cp);
+          }
+        }
+      }
+      if (Array.isArray(snap.notifications)) {
+        this.notifications = (snap.notifications as PlatformNotification[]).filter(
+          (n) => !LEGACY_SEED_NOTIF_IDS.has(n.id)
+        );
+      }
+      if (Array.isArray(snap.supportTickets)) {
+        this.supportTickets = (snap.supportTickets as SupportTicket[]).filter(
+          (t) => !LEGACY_SEED_TICKET_IDS.has(t.id)
+        );
+      }
+      if (Array.isArray(snap.teamMembers) && snap.teamMembers.length > 0) {
+        const cleanTeam = (snap.teamMembers as PlatformTeamMember[]).filter(
+          (tm) => !LEGACY_SEED_TEAM_IDS.has(tm.id)
+        );
+        if (cleanTeam.length > 0) {
+          this.teamMembers = cleanTeam;
+        }
+      }
+      if (Array.isArray(snap.plans) && snap.plans.length > 0) {
+        this.plans = snap.plans as StudioPlan[];
+      }
+      if (Array.isArray(snap.topups) && snap.topups.length > 0) {
+        this.topups = snap.topups as TopupPack[];
+      }
+      if (snap.billingConfig && typeof snap.billingConfig === 'object') {
+        this.billingConfig = {
+          ...this.billingConfig,
+          ...(snap.billingConfig as GlobalBillingConfig),
+        };
+      }
+      if (snap.runwareRoutingConfig && typeof snap.runwareRoutingConfig === 'object') {
+        this.runwareRoutingConfig = {
+          ...this.runwareRoutingConfig,
+          ...(snap.runwareRoutingConfig as RunwareRoutingConfig),
+        };
+      }
+
+      this.saveToDisk(true);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      this.isSyncingRemote = false;
     }
   }
 

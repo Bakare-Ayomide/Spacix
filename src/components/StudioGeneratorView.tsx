@@ -41,6 +41,7 @@ import {
   ProviderBrandIcon,
   SpacixLogo,
 } from './ProviderBrandIcon';
+import { ContinuityStudioBar } from './ContinuityStudiosView';
 
 const SAMPLE_PROMPTS: Record<Surface, string[]> = {
   video: [
@@ -339,6 +340,12 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
     setSelectedGeneration,
     presets,
     applyPresetToDock,
+    characters,
+    wardrobes,
+    propsList,
+    locations,
+    motionTemplates,
+    activeContinuity,
   } = useRuns();
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -410,8 +417,19 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
     (s) => s.type === 'enum' && s.headline
   );
 
+  const lockedChar = characters.find((c) => activeContinuity.characterIds.includes(c.id));
+  const lockedWardrobe = wardrobes.find((w) => w.id === activeContinuity.wardrobeId);
+  const lockedProp = propsList.find((p) => activeContinuity.propIds.includes(p.id));
+  const lockedLoc = locations.find((l) => l.id === activeContinuity.locationId);
+  const lockedMotion = motionTemplates.find((m) => m.id === activeContinuity.motionTemplateId);
+  const hasContinuityLocks = Boolean(
+    lockedChar || lockedWardrobe || lockedProp || lockedLoc || lockedMotion
+  );
+
   return (
-    <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-4 sm:py-5 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
+    <div className="min-h-screen bg-[#09090B]">
+      <ContinuityStudioBar />
+      <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-4 sm:py-5 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
       {/* =================================================================== */}
       {/* LEFT CONTROL DOCK (~380px on desktop, 4 of 12 columns)              */}
       {/* =================================================================== */}
@@ -434,6 +452,45 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
         </div>
 
         <div className="p-3.5 sm:p-4 space-y-4 overflow-y-auto lg:max-h-[calc(100vh-230px)]">
+          {/* Active Continuity Bus Indicator */}
+          {hasContinuityLocks && (
+            <div className="p-3 rounded-xl bg-[#46ecd5]/10 border border-[#46ecd5]/35 space-y-1.5">
+              <div className="text-[10px] font-mono-tabular uppercase tracking-wider text-[#46ecd5] font-bold">
+                Active Production Continuity Lock
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                {lockedChar && (
+                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#46ecd5]/30 text-white font-mono-tabular">
+                    {lockedChar.name} ({lockedChar.identityId})
+                  </span>
+                )}
+                {lockedWardrobe && (
+                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-200">
+                    Outfit: {lockedWardrobe.name}
+                  </span>
+                )}
+                {lockedProp && (
+                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-200">
+                    Prop: {lockedProp.name}
+                  </span>
+                )}
+                {lockedLoc && (
+                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-200">
+                    Loc: {lockedLoc.name}
+                  </span>
+                )}
+                {lockedMotion && (
+                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15 text-zinc-200">
+                    Motion: {lockedMotion.name}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-400">
+                Locked identity, appearance, voice, wardrobe, and location references are automatically injected into this generation.
+              </p>
+            </div>
+          )}
+
           {/* 2. Active Model Card */}
           <div
             className={`p-4 rounded-xl border border-white/10 bg-gradient-to-br ${activeModel.previewGradient} relative overflow-hidden`}
@@ -946,6 +1003,7 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
           }))
         }
       />
+      </div>
     </div>
   );
 };

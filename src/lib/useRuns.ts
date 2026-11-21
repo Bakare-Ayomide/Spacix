@@ -1,28 +1,51 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
+  ActiveContinuityContext,
   ApiProviderId,
+  CharacterProfile,
+  CinemaProductionProject,
   GenerationRecord,
+  LocationItem,
   MediaSlotInput,
   ModelEntry,
+  MotionTemplateItem,
   PlanTierId,
   PlatformNotification,
   PresetEffect,
   ProjectRecord,
+  PropItem,
   ProviderGatewayConfig,
   Surface,
   UploadRecord,
   UserProfile,
+  WardrobeItem,
 } from '../types/studio';
 import { MODEL_CATALOG } from '../catalog/models';
 import { INITIAL_PRESETS } from '../catalog/presets';
 import { STUDIO_PLANS, StudioPlan, TOPUP_PACKS, TopupPack } from '../billing/plans';
+import {
+  DEFAULT_CREDIT_MARKUP,
+  DEFAULT_CREDIT_USD_VALUE,
+  priceFor,
+} from '../billing/price';
 
 export type RoutePath =
   | 'explore'
+  | 'cinema'
+  | 'character'
+  | 'motion'
+  | 'wardrobe'
+  | 'props'
+  | 'location'
+  | 'storyboard'
+  | 'marketing'
+  | 'lipsync'
+  | 'effects'
+  | 'canvas'
+  | 'editing'
   | 'image'
   | 'video'
   | 'audio'
-  | 'effects'
   | 'community'
   | 'assets'
   | 'pricing'
@@ -54,10 +77,43 @@ interface StudioContextValue {
   notifications: PlatformNotification[];
   plans: StudioPlan[];
   topups: TopupPack[];
+  creditMarkup: number;
+  creditUsdValue: number;
+  calculateTokenCost: (
+    modelId: string,
+    settings?: Record<string, string | number | boolean>,
+    media?: MediaSlotInput[],
+    batchCount?: number
+  ) => number;
   generations: GenerationRecord[];
   communityItems: GenerationRecord[];
   projects: ProjectRecord[];
   uploads: UploadRecord[];
+  characters: CharacterProfile[];
+  wardrobes: WardrobeItem[];
+  propsList: PropItem[];
+  locations: LocationItem[];
+  motionTemplates: MotionTemplateItem[];
+  cinemaProjects: CinemaProductionProject[];
+  activeContinuity: ActiveContinuityContext;
+  setActiveContinuity: React.Dispatch<React.SetStateAction<ActiveContinuityContext>>;
+  saveCharacter: (data: Partial<CharacterProfile> & { name: string }) => Promise<CharacterProfile | null>;
+  deleteCharacter: (id: string) => Promise<void>;
+  saveWardrobe: (data: Partial<WardrobeItem> & { name: string }) => Promise<WardrobeItem | null>;
+  deleteWardrobe: (id: string) => Promise<void>;
+  saveProp: (data: Partial<PropItem> & { name: string }) => Promise<PropItem | null>;
+  deleteProp: (id: string) => Promise<void>;
+  saveLocation: (data: Partial<LocationItem> & { name: string }) => Promise<LocationItem | null>;
+  deleteLocation: (id: string) => Promise<void>;
+  saveMotionTemplate: (data: Partial<MotionTemplateItem> & { name: string }) => Promise<MotionTemplateItem | null>;
+  deleteMotionTemplate: (id: string) => Promise<void>;
+  saveCinemaProject: (data: Partial<CinemaProductionProject> & { title: string }) => Promise<CinemaProductionProject | null>;
+  deleteCinemaProject: (id: string) => Promise<void>;
+  composeContinuityPrompt: (
+    basePrompt: string,
+    overrides?: Partial<ActiveContinuityContext>,
+    baseMedia?: MediaSlotInput[]
+  ) => { prompt: string; media: MediaSlotInput[] };
   dockDraft: DockDraftState;
   setDockDraft: React.Dispatch<React.SetStateAction<DockDraftState>>;
   applyModelToDock: (
@@ -202,10 +258,26 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
   const [plans, setPlans] = useState<StudioPlan[]>(STUDIO_PLANS);
   const [topups, setTopups] = useState<TopupPack[]>(TOPUP_PACKS);
+  const [creditMarkup, setCreditMarkup] = useState<number>(DEFAULT_CREDIT_MARKUP);
+  const [creditUsdValue, setCreditUsdValue] = useState<number>(DEFAULT_CREDIT_USD_VALUE);
   const [generations, setGenerations] = useState<GenerationRecord[]>([]);
   const [communityItems, setCommunityItems] = useState<GenerationRecord[]>([]);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
+  const [characters, setCharacters] = useState<CharacterProfile[]>([]);
+  const [wardrobes, setWardrobes] = useState<WardrobeItem[]>([]);
+  const [propsList, setPropsList] = useState<PropItem[]>([]);
+  const [locations, setLocations] = useState<LocationItem[]>([]);
+  const [motionTemplates, setMotionTemplates] = useState<MotionTemplateItem[]>([]);
+  const [cinemaProjects, setCinemaProjects] = useState<CinemaProductionProject[]>([]);
+  const [activeContinuity, setActiveContinuity] = useState<ActiveContinuityContext>({
+    projectId: null,
+    characterIds: [],
+    wardrobeId: null,
+    propIds: [],
+    locationId: null,
+    motionTemplateId: null,
+  });
   const [dockDraft, setDockDraft] = useState<DockDraftState>(() =>
     getDefaultDraftForSurface('video')
   );
@@ -233,13 +305,14 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const refreshAll = useCallback(async () => {
     try {
-      const [sessRes, genRes, commRes, projRes, uplRes, catRes] = await Promise.all([
+      const [sessRes, genRes, commRes, projRes, uplRes, catRes, contRes] = await Promise.all([
         fetch('/api/auth/session', { headers: authHeaders() }),
         fetch('/api/generations', { headers: authHeaders() }),
         fetch('/api/community'),
         fetch('/api/projects', { headers: authHeaders() }),
         fetch('/api/uploads', { headers: authHeaders() }),
         fetch('/api/catalog', { headers: authHeaders() }),
+        fetch('/api/continuity', { headers: authHeaders() }),
       ]);
 
       if (sessRes.ok) {
@@ -261,6 +334,15 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (uplRes.ok) {
         const uData = await uplRes.json();
         setUploads(uData.uploads || []);
+      }
+      if (contRes.ok) {
+        const contData = await contRes.json();
+        if (Array.isArray(contData.characters)) setCharacters(contData.characters);
+        if (Array.isArray(contData.wardrobes)) setWardrobes(contData.wardrobes);
+        if (Array.isArray(contData.props)) setPropsList(contData.props);
+        if (Array.isArray(contData.locations)) setLocations(contData.locations);
+        if (Array.isArray(contData.motionTemplates)) setMotionTemplates(contData.motionTemplates);
+        if (Array.isArray(contData.cinemaProjects)) setCinemaProjects(contData.cinemaProjects);
       }
       if (catRes.ok) {
         const catData = await catRes.json();
@@ -295,6 +377,12 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         if (Array.isArray(catData.topups) && catData.topups.length > 0) {
           setTopups(catData.topups);
+        }
+        if (typeof catData.creditMarkup === 'number' && catData.creditMarkup > 0) {
+          setCreditMarkup(catData.creditMarkup);
+        }
+        if (typeof catData.creditUsdValue === 'number' && catData.creditUsdValue > 0) {
+          setCreditUsdValue(catData.creditUsdValue);
         }
       }
     } catch {
@@ -350,6 +438,28 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return () => clearInterval(timer);
   }, [generations, authHeaders]);
+
+  const calculateTokenCost = useCallback(
+    (
+      modelId: string,
+      settings: Record<string, string | number | boolean> = {},
+      media: MediaSlotInput[] = [],
+      batchCount = 1
+    ): number => {
+      const liveModel =
+        models.find((m) => m.id === modelId) ||
+        MODEL_CATALOG.find((m) => m.id === modelId);
+      const perUnit = priceFor(modelId, settings, media, {
+        creditMarkup,
+        creditUsdValue,
+        overrideBaseUsd: liveModel?.baseHfUsd,
+        billingUnitOverride: liveModel?.billingUnit,
+        surfaceOverride: liveModel?.surface,
+      });
+      return Math.max(1, Math.round(perUnit * Math.max(1, batchCount)));
+    },
+    [models, creditMarkup, creditUsdValue]
+  );
 
   const applyModelToDock = useCallback(
     (modelId: string, surfaceOverride?: Surface, providerOverride?: ApiProviderId) => {
@@ -522,9 +632,140 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [showToast]
   );
 
+  const composeContinuityPrompt = useCallback(
+    (
+      basePrompt: string,
+      overrides?: Partial<ActiveContinuityContext>,
+      baseMedia: MediaSlotInput[] = []
+    ): { prompt: string; media: MediaSlotInput[] } => {
+      const ctx = { ...activeContinuity, ...overrides };
+      const segments: string[] = [];
+      const mergedMedia: MediaSlotInput[] = [...baseMedia];
+      const addMediaIfMissing = (slot: MediaSlotInput) => {
+        if (!slot.url) return;
+        if (!mergedMedia.some((m) => m.url === slot.url)) {
+          mergedMedia.push(slot);
+        }
+      };
+
+      const selectedChars = characters.filter((c) => ctx.characterIds.includes(c.id));
+      for (const chr of selectedChars) {
+        const outfitId = ctx.wardrobeId || chr.defaultWardrobeId;
+        const outfit = wardrobes.find((w) => w.id === outfitId);
+        const charProps = propsList.filter(
+          (p) => chr.assignedPropIds.includes(p.id) || ctx.propIds.includes(p.id)
+        );
+        const wardrobeDesc = outfit
+          ? `wearing [${outfit.wardrobeCode}: ${outfit.name} — ${outfit.garments}${outfit.shoes ? `, ${outfit.shoes}` : ''}${outfit.accessories ? `, ${outfit.accessories}` : ''}${outfit.jewellery ? `, ${outfit.jewellery}` : ''}]`
+          : '';
+        const propDesc =
+          charProps.length > 0
+            ? `with props [${charProps.map((p) => `${p.name} (${p.description || p.category})`).join('; ')}]`
+            : '';
+        segments.push(
+          `[CHARACTER IDENTITY LOCK ${chr.identityId} — ${chr.name}: ${chr.ageRange} ${chr.genderPresentation}, ${chr.skinTone} skin, ${chr.bodyType} build, ${chr.height}, ${outfit?.hairstyleOverride || chr.hairstyle} hair, ${chr.eyeColor} eyes, ${chr.distinctiveFeatures}, expression: ${chr.activeExpression}, voice lock: ${chr.voiceId} (${chr.primaryLanguage}, ${chr.speechAccent} accent, ${chr.tone}) ${wardrobeDesc} ${propDesc}]`
+        );
+        if (chr.faceReferenceUrl && chr.facialIdentityLock) {
+          addMediaIfMissing({
+            role: 'reference',
+            kind: 'image',
+            url: chr.faceReferenceUrl,
+            label: `${chr.name} (${chr.identityId})`,
+          });
+        }
+        if (outfit?.referenceImageUrl && outfit.sceneContinuityLock) {
+          addMediaIfMissing({
+            role: 'reference',
+            kind: 'image',
+            url: outfit.referenceImageUrl,
+            label: `Wardrobe: ${outfit.name}`,
+          });
+        }
+      }
+
+      if (selectedChars.length === 0 && ctx.wardrobeId) {
+        const outfit = wardrobes.find((w) => w.id === ctx.wardrobeId);
+        if (outfit) {
+          segments.push(
+            `[WARDROBE LOCK ${outfit.wardrobeCode} — ${outfit.name} (${outfit.category}): ${outfit.garments}, ${outfit.shoes}, ${outfit.accessories}, ${outfit.jewellery}]`
+          );
+          if (outfit.referenceImageUrl) {
+            addMediaIfMissing({
+              role: 'reference',
+              kind: 'image',
+              url: outfit.referenceImageUrl,
+              label: `Wardrobe: ${outfit.name}`,
+            });
+          }
+        }
+      }
+
+      const extraProps = propsList.filter((p) => ctx.propIds.includes(p.id));
+      for (const prp of extraProps) {
+        if (!segments.some((s) => s.includes(prp.name))) {
+          segments.push(
+            `[PROP LOCK ${prp.propCode} — ${prp.name} (${prp.category}): ${prp.description} ${prp.materialAndFinish}]`
+          );
+        }
+        if (prp.referenceImageUrl && prp.appearanceLock) {
+          addMediaIfMissing({
+            role: 'reference',
+            kind: 'image',
+            url: prp.referenceImageUrl,
+            label: `Prop: ${prp.name}`,
+          });
+        }
+      }
+
+      if (ctx.locationId) {
+        const loc = locations.find((l) => l.id === ctx.locationId);
+        if (loc) {
+          segments.push(
+            `[LOCATION LOCK ${loc.locationCode} — ${loc.settingType} ${loc.name} (${loc.timeOfDay}, ${loc.weather}): ${loc.description}, lighting: ${loc.lightingAndMood}]`
+          );
+          if (loc.primaryImageUrl && loc.continuityLock) {
+            addMediaIfMissing({
+              role: 'reference',
+              kind: 'image',
+              url: loc.primaryImageUrl,
+              label: `Location: ${loc.name}`,
+            });
+          }
+        }
+      }
+
+      if (ctx.motionTemplateId) {
+        const mot = motionTemplates.find((m) => m.id === ctx.motionTemplateId);
+        if (mot) {
+          segments.push(
+            `[MOTION LOCK ${mot.motionCode} — ${mot.name} (${mot.movementCategory}, Camera: ${mot.cameraMovement}): ${mot.motionPrompt}]`
+          );
+          if (mot.referenceVideoUrl) {
+            addMediaIfMissing({
+              role: 'video',
+              kind: 'video',
+              url: mot.referenceVideoUrl,
+              label: `Motion: ${mot.name}`,
+            });
+          }
+        }
+      }
+
+      const prefix = segments.join(' ');
+      const finalPrompt =
+        prefix && !basePrompt.includes('IDENTITY LOCK') && !basePrompt.includes('WARDROBE LOCK')
+          ? `${prefix} ${basePrompt}`.trim()
+          : basePrompt.trim();
+
+      return { prompt: finalPrompt, media: mergedMedia };
+    },
+    [activeContinuity, characters, wardrobes, propsList, locations, motionTemplates]
+  );
+
   const submitGeneration = useCallback(
     async (overrideDraft?: Partial<DockDraftState>) => {
       const activeDraft = { ...dockDraft, ...overrideDraft };
+      const composed = composeContinuityPrompt(activeDraft.prompt, undefined, activeDraft.media);
 
       if (!user) {
         setAuthModalOpen(true);
@@ -539,11 +780,11 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelId: activeDraft.modelId,
             apiProvider: activeDraft.apiProvider,
             mode: activeDraft.mode,
-            prompt: activeDraft.prompt,
+            prompt: composed.prompt,
             settings: activeDraft.settings,
-            media: activeDraft.media,
+            media: composed.media,
             presetId: activeDraft.presetSlug,
-            projectId: routeParams.projectId || null,
+            projectId: routeParams.projectId || activeContinuity.projectId || null,
           }),
         });
 
@@ -568,11 +809,11 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             showToast(data.generation.error || 'Generation failed — credits refunded');
           } else if (data.generation.status === 'completed') {
             showToast(
-              `Generated on ${data.generation.modelLabel} (-✦ ${data.generation.cost} credits)`
+              `Generated on ${data.generation.modelLabel} (-${data.generation.cost} TK)`
             );
           } else {
             showToast(
-              `Queued on ${data.generation.modelLabel} (-✦ ${data.generation.cost} credits)`
+              `Queued on ${data.generation.modelLabel} (-${data.generation.cost} TK)`
             );
           }
         }
@@ -583,7 +824,321 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { ok: false, error: 'NETWORK_ERROR' };
       }
     },
-    [dockDraft, user, authHeaders, routeParams.projectId, showToast]
+    [dockDraft, composeContinuityPrompt, user, authHeaders, routeParams.projectId, activeContinuity.projectId, showToast]
+  );
+
+  const saveCharacter = useCallback(
+    async (payload: Partial<CharacterProfile> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/characters', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.character) {
+          showToast(data.error || 'Could not save character');
+          return null;
+        }
+        const saved = data.character as CharacterProfile;
+        setCharacters((prev) => {
+          const exists = prev.some((c) => c.id === saved.id);
+          return exists ? prev.map((c) => (c.id === saved.id ? saved : c)) : [saved, ...prev];
+        });
+        showToast(`Saved character "${saved.name}" (${saved.identityId})`);
+        return saved;
+      } catch {
+        showToast('Network error saving character');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteCharacter = useCallback(
+    async (id: string) => {
+      setCharacters((prev) => prev.filter((c) => c.id !== id));
+      setActiveContinuity((prev) => ({
+        ...prev,
+        characterIds: prev.characterIds.filter((cid) => cid !== id),
+      }));
+      try {
+        await fetch(`/api/continuity/characters/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Character removed from continuity library');
+    },
+    [authHeaders, showToast]
+  );
+
+  const saveWardrobe = useCallback(
+    async (payload: Partial<WardrobeItem> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/wardrobes', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.wardrobe) {
+          showToast(data.error || 'Could not save wardrobe outfit');
+          return null;
+        }
+        const saved = data.wardrobe as WardrobeItem;
+        setWardrobes((prev) => {
+          const exists = prev.some((w) => w.id === saved.id);
+          return exists ? prev.map((w) => (w.id === saved.id ? saved : w)) : [saved, ...prev];
+        });
+        showToast(`Saved wardrobe "${saved.name}" (${saved.wardrobeCode})`);
+        return saved;
+      } catch {
+        showToast('Network error saving wardrobe');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteWardrobe = useCallback(
+    async (id: string) => {
+      setWardrobes((prev) => prev.filter((w) => w.id !== id));
+      setActiveContinuity((prev) => ({
+        ...prev,
+        wardrobeId: prev.wardrobeId === id ? null : prev.wardrobeId,
+      }));
+      try {
+        await fetch(`/api/continuity/wardrobes/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Wardrobe outfit removed');
+    },
+    [authHeaders, showToast]
+  );
+
+  const saveProp = useCallback(
+    async (payload: Partial<PropItem> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/props', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.prop) {
+          showToast(data.error || 'Could not save prop');
+          return null;
+        }
+        const saved = data.prop as PropItem;
+        setPropsList((prev) => {
+          const exists = prev.some((p) => p.id === saved.id);
+          return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [saved, ...prev];
+        });
+        showToast(`Saved prop "${saved.name}" (${saved.propCode})`);
+        return saved;
+      } catch {
+        showToast('Network error saving prop');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteProp = useCallback(
+    async (id: string) => {
+      setPropsList((prev) => prev.filter((p) => p.id !== id));
+      setActiveContinuity((prev) => ({
+        ...prev,
+        propIds: prev.propIds.filter((pid) => pid !== id),
+      }));
+      try {
+        await fetch(`/api/continuity/props/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Prop removed');
+    },
+    [authHeaders, showToast]
+  );
+
+  const saveLocation = useCallback(
+    async (payload: Partial<LocationItem> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/locations', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.location) {
+          showToast(data.error || 'Could not save location');
+          return null;
+        }
+        const saved = data.location as LocationItem;
+        setLocations((prev) => {
+          const exists = prev.some((l) => l.id === saved.id);
+          return exists ? prev.map((l) => (l.id === saved.id ? saved : l)) : [saved, ...prev];
+        });
+        showToast(`Saved location "${saved.name}" (${saved.locationCode})`);
+        return saved;
+      } catch {
+        showToast('Network error saving location');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteLocation = useCallback(
+    async (id: string) => {
+      setLocations((prev) => prev.filter((l) => l.id !== id));
+      setActiveContinuity((prev) => ({
+        ...prev,
+        locationId: prev.locationId === id ? null : prev.locationId,
+      }));
+      try {
+        await fetch(`/api/continuity/locations/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Location removed');
+    },
+    [authHeaders, showToast]
+  );
+
+  const saveMotionTemplate = useCallback(
+    async (payload: Partial<MotionTemplateItem> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/motion', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.motionTemplate) {
+          showToast(data.error || 'Could not save motion rig');
+          return null;
+        }
+        const saved = data.motionTemplate as MotionTemplateItem;
+        setMotionTemplates((prev) => {
+          const exists = prev.some((m) => m.id === saved.id);
+          return exists ? prev.map((m) => (m.id === saved.id ? saved : m)) : [saved, ...prev];
+        });
+        showToast(`Saved motion rig "${saved.name}" (${saved.motionCode})`);
+        return saved;
+      } catch {
+        showToast('Network error saving motion rig');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteMotionTemplate = useCallback(
+    async (id: string) => {
+      setMotionTemplates((prev) => prev.filter((m) => m.id !== id));
+      setActiveContinuity((prev) => ({
+        ...prev,
+        motionTemplateId: prev.motionTemplateId === id ? null : prev.motionTemplateId,
+      }));
+      try {
+        await fetch(`/api/continuity/motion/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Motion rig removed');
+    },
+    [authHeaders, showToast]
+  );
+
+  const saveCinemaProject = useCallback(
+    async (payload: Partial<CinemaProductionProject> & { title: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/cinema-projects', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.cinemaProject) {
+          showToast(data.error || 'Could not save production project');
+          return null;
+        }
+        const saved = data.cinemaProject as CinemaProductionProject;
+        setCinemaProjects((prev) => {
+          const exists = prev.some((p) => p.id === saved.id);
+          return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [saved, ...prev];
+        });
+        showToast(`Saved production "${saved.title}"`);
+        return saved;
+      } catch {
+        showToast('Network error saving production project');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteCinemaProject = useCallback(
+    async (id: string) => {
+      setCinemaProjects((prev) => prev.filter((p) => p.id !== id));
+      try {
+        await fetch(`/api/continuity/cinema-projects/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Production project removed');
+    },
+    [authHeaders, showToast]
   );
 
   const cancelGeneration = useCallback(
@@ -1137,10 +1692,34 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         notifications,
         plans,
         topups,
+        creditMarkup,
+        creditUsdValue,
+        calculateTokenCost,
         generations,
         communityItems,
         projects,
         uploads,
+        characters,
+        wardrobes,
+        propsList,
+        locations,
+        motionTemplates,
+        cinemaProjects,
+        activeContinuity,
+        setActiveContinuity,
+        saveCharacter,
+        deleteCharacter,
+        saveWardrobe,
+        deleteWardrobe,
+        saveProp,
+        deleteProp,
+        saveLocation,
+        deleteLocation,
+        saveMotionTemplate,
+        deleteMotionTemplate,
+        saveCinemaProject,
+        deleteCinemaProject,
+        composeContinuityPrompt,
         dockDraft,
         setDockDraft,
         applyModelToDock,

@@ -89,6 +89,18 @@ export interface ModelRoleSpec {
   required?: boolean;
 }
 
+export type LipSyncCapability =
+  | 'native_audio_lipsync'
+  | 'video_lipsync_postprocess'
+  | 'none';
+
+export type VideoInputMode =
+  | 'text-to-video'
+  | 'image-to-video'
+  | 'reference-to-video'
+  | 'video-to-video'
+  | 'audio-to-video';
+
 export interface ModelEntry {
   id: string;
   surface: Surface;
@@ -104,6 +116,8 @@ export interface ModelEntry {
   docsUrl: string;
   modes: string[];
   roles: ModelRoleSpec[];
+  lipSyncCapability?: LipSyncCapability;
+  videoInputModes?: VideoInputMode[];
   requirePrompt: boolean;
   supportsEnhancePrompt: boolean;
   settings: SettingDefinition[];
@@ -347,3 +361,478 @@ export interface AdminAuditEntry {
   detail: string;
   createdAt: string;
 }
+
+// ============================================================================
+// SPACI6X COMPLETE CHARACTER & PRODUCTION-CONTINUITY SYSTEM TYPES
+// ============================================================================
+
+export type StudioId =
+  | 'cinema'
+  | 'character'
+  | 'motion'
+  | 'wardrobe'
+  | 'props'
+  | 'location'
+  | 'storyboard'
+  | 'marketing'
+  | 'lipsync'
+  | 'effects'
+  | 'canvas'
+  | 'editing';
+
+export type SupportedCharacterLanguage =
+  | 'English'
+  | 'Nigerian Pidgin'
+  | 'Yoruba'
+  | 'Igbo'
+  | 'Hausa'
+  | 'French'
+  | 'Swahili'
+  | 'Spanish'
+  | 'Arabic'
+  | 'Mandarin';
+
+export type CharacterExpression =
+  | 'Neutral'
+  | 'Smiling'
+  | 'Crying'
+  | 'Anger'
+  | 'Fear'
+  | 'Surprise'
+  | 'Determined'
+  | 'Laughing';
+
+export interface CharacterProfile {
+  id: string;
+  identityId: string; // Permanent Identity ID, e.g. CHR-ID-8492A
+  userId: string;
+  name: string;
+  roleTitle: string;
+  // Face
+  faceReferenceUrl: string;
+  facialIdentityLock: boolean;
+  identitySeed: number;
+  facePromptDescriptor: string;
+  // Appearance
+  ageRange: string;
+  genderPresentation: string;
+  skinTone: string;
+  bodyType: string;
+  height: string;
+  hairstyle: string;
+  eyeColor: string;
+  distinctiveFeatures: string;
+  // Voice
+  voiceId: string;
+  voiceName: string;
+  voiceMode: 'generated' | 'cloned' | 'selected';
+  voiceCloneConsent: boolean;
+  voiceSampleUrl: string;
+  voiceIdentityLock: boolean;
+  // Language
+  primaryLanguage: SupportedCharacterLanguage;
+  supportedLanguages: SupportedCharacterLanguage[];
+  // Speech
+  speechAccent: string;
+  pitch: 'Low' | 'Medium-Low' | 'Medium' | 'Medium-High' | 'High';
+  tone: string;
+  defaultEmotion: string;
+  speakingSpeed: number;
+  deliveryStyle: string;
+  // Expressions
+  activeExpression: CharacterExpression;
+  expressionSheetUrls: Record<string, string>;
+  // Clothing & Props Continuity Links
+  defaultWardrobeId: string | null;
+  assignedWardrobeIds: string[];
+  assignedPropIds: string[];
+  // Consistency
+  consistencyLock: boolean;
+  continuityNotes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WardrobeCategory =
+  | 'Formal'
+  | 'Casual'
+  | 'Traditional'
+  | 'Corporate'
+  | 'Futuristic'
+  | 'Costume'
+  | 'Streetwear'
+  | 'Tactical';
+
+export interface WardrobeItem {
+  id: string;
+  wardrobeCode: string; // e.g. WRD-ID-104A
+  userId: string;
+  name: string;
+  category: WardrobeCategory;
+  description: string;
+  garments: string;
+  shoes: string;
+  accessories: string;
+  jewellery: string;
+  hairstyleOverride: string;
+  colorPalette: string;
+  referenceImageUrl: string;
+  assignedCharacterIds: string[];
+  sceneContinuityLock: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PropCategory =
+  | 'Cars & Vehicles'
+  | 'Phones & Tech'
+  | 'Furniture'
+  | 'Weapons & Action'
+  | 'Bags & Luggage'
+  | 'Tools & Equipment'
+  | 'Household Objects'
+  | 'Hero Artifacts';
+
+export interface PropItem {
+  id: string;
+  propCode: string; // e.g. PRP-ID-309B
+  userId: string;
+  name: string;
+  category: PropCategory;
+  description: string;
+  materialAndFinish: string;
+  scaleAndDimensions: string;
+  referenceImageUrl: string;
+  assignedCharacterIds: string[];
+  assignedSceneIds: string[];
+  appearanceLock: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LocationCategory =
+  | 'Houses'
+  | 'Offices'
+  | 'Streets'
+  | 'Villages'
+  | 'Cities'
+  | 'Landscapes'
+  | 'Studios & Sets'
+  | 'Sci-Fi & Fantasy';
+
+export interface LocationCameraAngleRef {
+  id: string;
+  angleLabel: string;
+  lens: string;
+  imageUrl: string;
+  promptNotes: string;
+}
+
+export interface LocationItem {
+  id: string;
+  locationCode: string; // e.g. LOC-ID-712C
+  userId: string;
+  name: string;
+  category: LocationCategory;
+  settingType: 'INT.' | 'EXT.' | 'INT./EXT.';
+  timeOfDay: 'Day' | 'Night' | 'Sunset' | 'Golden Hour' | 'Dawn' | 'Blue Hour';
+  weather: 'Clear' | 'Rain' | 'Fog' | 'Harmattan Dust' | 'Overcast' | 'Storm' | 'Snow';
+  description: string;
+  lightingAndMood: string;
+  primaryImageUrl: string;
+  cameraAngleReferences: LocationCameraAngleRef[];
+  continuityLock: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MotionCategory =
+  | 'Walking'
+  | 'Running'
+  | 'Dancing'
+  | 'Fighting'
+  | 'Dialogue Gesture'
+  | 'Stunt & Action'
+  | 'Camera Choreography'
+  | 'Reference Video Transfer';
+
+export interface MotionKeyframe {
+  timeSec: number;
+  x: number; // 0-100
+  y: number; // 0-100
+  poseNote: string;
+  expression: CharacterExpression;
+}
+
+export interface MotionTemplateItem {
+  id: string;
+  motionCode: string; // e.g. MOT-ID-501D
+  userId: string;
+  name: string;
+  movementCategory: MotionCategory;
+  referenceVideoUrl: string;
+  sourceImageUrl: string;
+  targetCharacterId: string | null;
+  preserveAppearanceLock: boolean;
+  bodyPoseTransfer: boolean;
+  facialExpressionTransfer: boolean;
+  handGestureControl: boolean;
+  cameraMovement: string;
+  keyframes: MotionKeyframe[];
+  motionPrompt: string;
+  outputGenerationId?: string;
+  outputVideoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CinemaProductionType =
+  | 'Movies'
+  | 'Music Videos'
+  | 'UGC'
+  | 'Interviews'
+  | 'Documentaries'
+  | 'Explainer Videos'
+  | 'Montages'
+  | 'Commercials'
+  | 'Trailers'
+  | 'Short Films';
+
+export type ShotSizeType =
+  | 'Extreme Wide'
+  | 'Wide'
+  | 'Medium Wide'
+  | 'Medium'
+  | 'Medium Close-Up'
+  | 'Close-Up'
+  | 'Extreme Close-Up';
+
+export type CameraAngleType =
+  | 'Eye Level'
+  | 'Low Angle'
+  | 'High Angle'
+  | 'Over-the-Shoulder'
+  | 'POV'
+  | 'Dutch Angle'
+  | 'Aerial Drone';
+
+export interface SceneDialogueLine {
+  id: string;
+  characterId: string | null;
+  characterName: string;
+  language: SupportedCharacterLanguage | string;
+  emotion: string;
+  parenthetical?: string;
+  text: string;
+  audioUrl?: string;
+  generationId?: string;
+}
+
+export interface ProductionShot {
+  id: string;
+  shotNumber: string;
+  shotSize: ShotSizeType;
+  cameraAngle: CameraAngleType;
+  cameraMovement: string;
+  lens: string;
+  durationSec: number;
+  characterIds: string[];
+  wardrobeId?: string | null;
+  propIds: string[];
+  locationId: string | null;
+  motionTemplateId?: string | null;
+  actionPrompt: string;
+  dialogueSnippet?: string;
+  voiceLanguage?: string;
+  sfxNotes?: string;
+  continuityVerified: boolean;
+  storyboardImageUrl?: string;
+  storyboardGenerationId?: string;
+  shotVideoUrl?: string;
+  shotVideoGenerationId?: string;
+  lipSyncVideoUrl?: string;
+  audioDialogueUrl?: string;
+}
+
+export interface ProductionScene {
+  id: string;
+  sceneNumber: number;
+  slugline: string;
+  locationId: string | null;
+  timeOfDay: string;
+  weather: string;
+  summary: string;
+  actionDescription: string;
+  characterIds: string[];
+  wardrobeAssignments: Record<string, string>; // characterId -> wardrobeId
+  propIds: string[];
+  dialogueLines: SceneDialogueLine[];
+  shots: ProductionShot[];
+}
+
+export interface CanvasWorkflowNode {
+  id: string;
+  type:
+    | 'character'
+    | 'wardrobe'
+    | 'location'
+    | 'prop'
+    | 'motion'
+    | 'image_gen'
+    | 'video_gen'
+    | 'lipsync'
+    | 'assembly';
+  label: string;
+  assetId?: string;
+  modelId?: string;
+  prompt?: string;
+  x: number;
+  y: number;
+  connectedTo: string[];
+  outputUrl?: string;
+  status?: 'idle' | 'running' | 'completed';
+}
+
+export interface TimelineAssemblyTrackSet {
+  videoClips: Array<{
+    id: string;
+    shotId?: string;
+    label: string;
+    url: string;
+    durationSec: number;
+    characterNames?: string;
+    transition: 'Cut' | 'Cross Dissolve' | 'Dip to Black' | 'Whip Pan';
+  }>;
+  dialogueClips: Array<{
+    id: string;
+    characterName: string;
+    language: string;
+    text: string;
+    url?: string;
+    startSec: number;
+    durationSec: number;
+  }>;
+  musicClips: Array<{
+    id: string;
+    label: string;
+    url?: string;
+    startSec: number;
+    durationSec: number;
+    volume: number;
+  }>;
+  sfxClips: Array<{
+    id: string;
+    label: string;
+    url?: string;
+    startSec: number;
+    durationSec: number;
+  }>;
+}
+
+export type MusicVideoGenerationMode = 'lip_sync' | 'b_roll';
+
+export type MusicVideoLipSyncPipeline = 'native_audio' | 'two_stage';
+
+export type MusicVideoBRollPreset =
+  | 'establishing'
+  | 'dance_choreography'
+  | 'slow_motion'
+  | 'artistic_cutaway'
+  | 'cinematic_closeup'
+  | 'lifestyle_story'
+  | 'transition_insert';
+
+export interface MusicVideoAudioTrack {
+  id: string;
+  title: string;
+  sourceType: 'upload' | 'url';
+  sourceUrl: string;
+  originalUrl?: string;
+  contentType: string;
+  durationSec: number;
+  waveform: number[];
+  bytes?: number;
+}
+
+export interface MusicVideoScene {
+  id: string;
+  title: string;
+  order: number;
+  mode: MusicVideoGenerationMode;
+  lipSyncPipeline: MusicVideoLipSyncPipeline;
+  characterId: string | null;
+  wardrobeId: string | null;
+  sceneSource: 'generate' | 'upload';
+  scenePrompt: string;
+  environmentPrompt: string;
+  cameraAngle: string;
+  cameraMovement: string;
+  lightingStyle: string;
+  visualStyle: string;
+  // Performance / Lip-sync direction
+  performanceDirection: string;
+  facialExpression: string;
+  gesturesAndBody: string;
+  // B-Roll direction
+  bRollPreset: MusicVideoBRollPreset;
+  bRollMotionPrompt: string;
+  // Audio segment mapping (non-destructive)
+  audioStartSec: number;
+  audioEndSec: number;
+  // Output settings
+  aspectRatio: string;
+  resolution: string;
+  durationSec: number;
+  sceneImageModelId: string;
+  animationModelId: string;
+  lipSyncModelId: string;
+  modelSettings: Record<string, string | number | boolean>;
+  // Generated / uploaded assets
+  referenceImageUrl?: string;
+  referenceImageGenerationId?: string;
+  stage1VideoUrl?: string;
+  stage1GenerationId?: string;
+  finalVideoUrl?: string;
+  finalVideoGenerationId?: string;
+  status: 'draft' | 'generating_image' | 'generating_video' | 'generating_lipsync' | 'ready' | 'error';
+  errorMessage?: string;
+}
+
+export interface MusicVideoProjectData {
+  audioTrack: MusicVideoAudioTrack | null;
+  defaultAspectRatio: string;
+  scenes: MusicVideoScene[];
+  updatedAt: string;
+}
+
+export interface CinemaProductionProject {
+  id: string;
+  userId: string;
+  title: string;
+  productionType: CinemaProductionType;
+  logline: string;
+  aspectRatio: '16:9' | '21:9' | '9:16' | '1:1';
+  screenplayRaw: string;
+  castCharacterIds: string[];
+  wardrobeIds: string[];
+  propIds: string[];
+  locationIds: string[];
+  musicTrackUrl?: string;
+  musicBpm?: number;
+  musicVideoData?: MusicVideoProjectData;
+  scenes: ProductionScene[];
+  canvasNodes: CanvasWorkflowNode[];
+  timelineTracks: TimelineAssemblyTrackSet;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActiveContinuityContext {
+  projectId: string | null;
+  characterIds: string[];
+  wardrobeId: string | null;
+  propIds: string[];
+  locationId: string | null;
+  motionTemplateId: string | null;
+}
+

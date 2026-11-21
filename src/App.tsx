@@ -28,6 +28,20 @@ import {
   PricingPage,
 } from './components/StudioPages';
 import {
+  CanvasStudioView,
+  CharacterStudioView,
+  CinemaStudioView,
+  EditingStudioView,
+  LipSyncStudioView,
+  LocationStudioView,
+  MarketingStudioView,
+  MotionStudioView,
+  PropsStudioView,
+  SPACI6X_STUDIOS,
+  StoryboardStudioView,
+  WardrobeStudioView,
+} from './components/ContinuityStudiosView';
+import {
   AuthMagicLinkModal,
   GenerationDetailModal,
   UpgradeCreditsModal,
@@ -37,11 +51,11 @@ import { SpacixLogo } from './components/ProviderBrandIcon';
 
 const NAV_ITEMS: { route: RoutePath; label: string }[] = [
   { route: 'explore', label: 'Explore' },
-  { route: 'image', label: 'Image' },
-  { route: 'video', label: 'Video' },
-  { route: 'audio', label: 'Audio' },
-  { route: 'effects', label: 'Effects' },
-  { route: 'community', label: 'Community' },
+  { route: 'cinema', label: 'Cinema Studio' },
+  { route: 'character', label: 'Characters' },
+  { route: 'motion', label: 'Motion' },
+  { route: 'wardrobe', label: 'Wardrobe' },
+  { route: 'assets', label: 'Asset Vault' },
   { route: 'pricing', label: 'Pricing' },
 ];
 
@@ -431,8 +445,29 @@ const StudioShell: React.FC = () => {
 
       {/* Mobile Navigation Sheet */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#111114] border-b border-white/10 px-4 py-4 space-y-2.5">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="lg:hidden bg-[#111114] border-b border-white/10 px-4 py-4 space-y-3">
+          <div className="text-[10px] font-mono-tabular uppercase tracking-wider text-[#46ecd5]">
+            SPACI6X 12 Production Studios
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {SPACI6X_STUDIOS.map((st) => (
+              <button
+                key={st.id}
+                onClick={() => {
+                  navigate(st.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`px-2.5 py-2 rounded-lg text-xs font-semibold uppercase text-left truncate ${
+                  route === st.id
+                    ? 'bg-[#46ecd5] text-zinc-950 font-bold'
+                    : 'bg-zinc-900 text-zinc-300'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+          <div className="pt-2 border-t border-white/10 grid grid-cols-2 gap-2">
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.route}
@@ -451,16 +486,55 @@ const StudioShell: React.FC = () => {
             ))}
             <button
               onClick={() => {
-                navigate('assets');
+                navigate('image');
                 setMobileMenuOpen(false);
               }}
               className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
-                route === 'assets'
+                route === 'image'
                   ? 'bg-[#46ecd5] text-zinc-950'
                   : 'bg-zinc-900 text-zinc-300'
               }`}
             >
-              Assets Library
+              Image Generator
+            </button>
+            <button
+              onClick={() => {
+                navigate('video');
+                setMobileMenuOpen(false);
+              }}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
+                route === 'video'
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'bg-zinc-900 text-zinc-300'
+              }`}
+            >
+              Video Generator
+            </button>
+            <button
+              onClick={() => {
+                navigate('audio');
+                setMobileMenuOpen(false);
+              }}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
+                route === 'audio'
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'bg-zinc-900 text-zinc-300'
+              }`}
+            >
+              Audio & Foley
+            </button>
+            <button
+              onClick={() => {
+                navigate('community');
+                setMobileMenuOpen(false);
+              }}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold uppercase text-left ${
+                route === 'community'
+                  ? 'bg-[#46ecd5] text-zinc-950'
+                  : 'bg-zinc-900 text-zinc-300'
+              }`}
+            >
+              Community Feed
             </button>
             <button
               onClick={() => {
@@ -511,6 +585,17 @@ const StudioShell: React.FC = () => {
       {/* =================================================================== */}
       <main className="flex-1 w-full max-w-full overflow-x-hidden">
         {route === 'explore' && <ExplorePage />}
+        {route === 'cinema' && <CinemaStudioView />}
+        {route === 'character' && <CharacterStudioView />}
+        {route === 'motion' && <MotionStudioView />}
+        {route === 'wardrobe' && <WardrobeStudioView />}
+        {route === 'props' && <PropsStudioView />}
+        {route === 'location' && <LocationStudioView />}
+        {route === 'storyboard' && <StoryboardStudioView />}
+        {route === 'marketing' && <MarketingStudioView />}
+        {route === 'lipsync' && <LipSyncStudioView />}
+        {route === 'canvas' && <CanvasStudioView />}
+        {route === 'editing' && <EditingStudioView />}
         {route === 'image' && <StudioGeneratorView surface="image" />}
         {route === 'video' && <StudioGeneratorView surface="video" />}
         {route === 'audio' && <StudioGeneratorView surface="audio" />}

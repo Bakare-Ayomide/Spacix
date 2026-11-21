@@ -6,10 +6,10 @@
  * Server:   localhost / 127.0.0.1 / 102.203.116.13 (Port 3306)
  */
 
-define('SPACIX_DB_NAME', getenv('DB_NAME') ?: 'aixdqvdz_spacix');
-define('SPACIX_DB_USER', getenv('DB_USER') ?: 'aixdqvdz_spacix');
-define('SPACIX_DB_PASS', getenv('DB_PASS') ?: '@f33rinimi');
-define('SPACIX_DB_PORT', getenv('DB_PORT') ?: '3306');
+define('SPACIX_DB_NAME', 'aixdqvdz_spacix');
+define('SPACIX_DB_USER', 'aixdqvdz_spacix');
+define('SPACIX_DB_PASS', '@f33rinimi');
+define('SPACIX_DB_PORT', '3306');
 
 /**
  * PBKDF2-SHA256 Password Hashing (100% compatible between Node.js and PHP 8)
@@ -82,6 +82,11 @@ function spacix_get_pdo(): PDO {
  * Ensures all MySQL tables and columns exist, purges legacy mock records, and seeds real bootstrap state
  */
 function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): array {
+    $readyFlag = __DIR__ . '/.schema_ready_v2';
+    if (!$forceMigrate && file_exists($readyFlag)) {
+        return ['migrated' => false, 'cached' => true];
+    }
+
     $schemaPath = __DIR__ . '/schema.sql';
     if (file_exists($schemaPath)) {
         $sql = file_get_contents($schemaPath);
@@ -116,6 +121,7 @@ function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): ar
     }
 
     if ($secretCount > 0 && !$forceMigrate) {
+        @file_put_contents($readyFlag, gmdate('c'));
         $userCount = (int) $pdo->query('SELECT COUNT(*) FROM `spacix_users`')->fetchColumn();
         return ['migrated' => false, 'users' => $userCount, 'secrets' => $secretCount];
     }
@@ -342,6 +348,7 @@ function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): ar
         }
 
         $pdo->commit();
+        @file_put_contents($readyFlag, gmdate('c'));
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

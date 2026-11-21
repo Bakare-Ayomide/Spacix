@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg-canvas: #09090B;
+  --bg-surface: #111114;
+  --bg-elevated: #18181C;
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  --primary: #46ecd5;
+  --primary-ink: #09090B;
+  --font-display: 'Big Shoulders Display', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  background-color: var(--bg-canvas);
+  color: #FAFAFA;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.quanta-dot-bg {
+  background-image: radial-gradient(rgba(70, 236, 213, 0.11) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
