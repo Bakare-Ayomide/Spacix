@@ -61,6 +61,7 @@ import {
   StudioId,
 } from '../types/studio';
 import { StoryStudioView } from './StoryStudioView';
+import { MusicVideoStudio } from './MusicVideoStudio';
 import { SPACI6X_STUDIOS } from './ContinuityStudiosView';
 
 // ============================================================================
@@ -408,13 +409,16 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
     composeContinuityPrompt,
     saveCinemaProject,
     navigate,
+    routeParams,
     showToast,
   } = useRuns();
 
   // ==========================================================================
   // WORKSPACE MODE & NAVIGATION STATE
   // ==========================================================================
-  const [workingMode, setWorkingMode] = useState<'director' | 'production'>('director');
+  const [workingMode, setWorkingMode] = useState<'director' | 'music_video' | 'production'>(() =>
+    routeParams?.mode === 'music_video' ? 'music_video' : 'director'
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'home' | 'elements' | 'favorites' | 'project'>('home');
   const [projectSearch, setProjectSearch] = useState('');
@@ -1073,7 +1077,7 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
           })}
         </div>
 
-        {/* Two Working Modes Toggle: DIRECTOR MODE vs PRODUCTION MODE */}
+        {/* Three Working Modes Toggle: DIRECTOR MODE vs MUSIC VIDEO vs PRODUCTION MODE */}
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center p-0.5 rounded-xl bg-[#141519] border border-white/10">
             <button
@@ -1090,6 +1094,18 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
             </button>
             <button
               type="button"
+              onClick={() => setWorkingMode('music_video')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                workingMode === 'music_video'
+                  ? 'bg-[#46ecd5] text-zinc-950 shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Music className="w-3.5 h-3.5" />
+              <span>MUSIC VIDEO</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setWorkingMode('production')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 workingMode === 'production'
@@ -1098,22 +1114,24 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
               }`}
             >
               <Film className="w-3.5 h-3.5" />
-              <span>PRODUCTION MODE (4-Stage Pipeline)</span>
+              <span>PRODUCTION MODE</span>
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setAiDirectorOpen((v) => !v)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
-              aiDirectorOpen
-                ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-[#46ecd5]'
-                : 'bg-[#141519] border-white/10 text-zinc-200 hover:border-white/25'
-            }`}
-          >
-            <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
-            <span>AI Director</span>
-          </button>
+          {workingMode === 'director' && (
+            <button
+              type="button"
+              onClick={() => setAiDirectorOpen((v) => !v)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                aiDirectorOpen
+                  ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-[#46ecd5]'
+                  : 'bg-[#141519] border-white/10 text-zinc-200 hover:border-white/25'
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
+              <span>AI Director</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1124,6 +1142,8 @@ export const HiggsfieldCinemaStudio: React.FC = () => {
         <div className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-4">
           <StoryStudioView onSwitchToLegacyCinema={() => setWorkingMode('director')} />
         </div>
+      ) : workingMode === 'music_video' ? (
+        <MusicVideoStudio projectId={selectedProjId} projectTitle={projectTitle} />
       ) : (
         <div className="flex-1 flex relative overflow-hidden">
           {/* ================================================================

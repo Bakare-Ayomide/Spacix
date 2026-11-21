@@ -62,42 +62,42 @@
       "userId": "usr_admin_spacix",
       "rememberMe": true,
       "expiresAt": 1796683407401,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     },
     {
       "token": "sess_1794123585623_af5108390ef591b5",
       "userId": "usr_admin_owner",
       "rememberMe": true,
       "expiresAt": 1796715585623,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     },
     {
       "token": "sess_1794225559168_f6695757d3788746",
       "userId": "usr_admin_spacix",
       "rememberMe": true,
       "expiresAt": 1796817559168,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     },
     {
       "token": "sess_1794225599074_4a85afb95ef4b13e",
       "userId": "usr_admin_spacix",
       "rememberMe": true,
       "expiresAt": 1796817599074,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     },
     {
       "token": "sess_1794225721838_435a18d076c33040",
       "userId": "usr_admin_spacix",
       "rememberMe": true,
       "expiresAt": 1796817721838,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     },
     {
       "token": "sess_1794226853825_ff2c46d8dfd00678da47c736f887aa210a45",
       "userId": "usr_1794092333666_f7b03",
       "rememberMe": true,
       "expiresAt": 1796818853825,
-      "createdAt": "2026-11-21T14:22:35.172Z"
+      "createdAt": "2026-11-21T14:54:18.013Z"
     }
   ],
   "passwordResets": [],
@@ -120,7 +120,7 @@
       "secretMasked": "Mw9FXf••••••••ef7U",
       "hasValue": true,
       "description": "Primary Runware v1 Bearer token synced with the Runware provider gateway.",
-      "updatedAt": "2026-11-21T14:22:35.172Z"
+      "updatedAt": "2026-11-21T14:54:38.319Z"
     },
     {
       "key": "FAL_KEY",
@@ -130,7 +130,7 @@
       "secretMasked": "No secret configured",
       "hasValue": false,
       "description": "Primary fal.ai API key synced with the fal.ai provider gateway.",
-      "updatedAt": "2026-11-21T14:22:35.172Z"
+      "updatedAt": "2026-11-21T14:54:38.319Z"
     },
     {
       "key": "HF_CREDENTIALS",
@@ -140,7 +140,7 @@
       "secretMasked": "No secret configured",
       "hasValue": false,
       "description": "Primary Higgsfield key_id:key_secret synced with the Higgsfield provider gateway.",
-      "updatedAt": "2026-11-21T14:22:35.172Z"
+      "updatedAt": "2026-11-21T14:54:38.319Z"
     },
     {
       "key": "MUAPI_KEY",
@@ -150,7 +150,7 @@
       "secretMasked": "No secret configured",
       "hasValue": false,
       "description": "Primary Muapi.ai Bearer key synced with the Muapi provider gateway.",
-      "updatedAt": "2026-11-21T14:22:35.172Z"
+      "updatedAt": "2026-11-21T14:54:38.319Z"
     },
     {
       "key": "WEBHOOK_HMAC_SECRET",
@@ -615,6 +615,55 @@
         "runware"
       ],
       "customEndpoint": "higgsfield-ai/dop/lite"
+    },
+    {
+      "modelId": "omnihuman-1-5",
+      "enabled": true,
+      "baseHfUsd": 0.14,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": "klingai:kling-video@3-4k"
+    },
+    {
+      "modelId": "kling-lipsync-audio",
+      "enabled": true,
+      "baseHfUsd": 0.09,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "higgsfield",
+        "muapi"
+      ],
+      "customEndpoint": "klingai:kling-video@3-4k"
+    },
+    {
+      "modelId": "sync-lipsync-v2",
+      "enabled": true,
+      "baseHfUsd": 0.11,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "muapi"
+      ],
+      "customEndpoint": "klingai:kling-video@3-4k"
+    },
+    {
+      "modelId": "latentsync-v1",
+      "enabled": true,
+      "baseHfUsd": 0.055,
+      "preferredProvider": "runware",
+      "allowedProviders": [
+        "runware",
+        "fal"
+      ],
+      "customEndpoint": "bytedance:latentsync@1"
     },
     {
       "modelId": "sonilo-music-v2",
@@ -1353,5 +1402,5 @@
     ],
     "excludedModels": []
   },
-  "savedAt": "2026-11-21T14:22:35.173Z"
+  "savedAt": "2026-11-21T14:54:38.320Z"
 }
