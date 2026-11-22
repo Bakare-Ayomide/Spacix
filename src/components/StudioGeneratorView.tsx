@@ -44,6 +44,8 @@ import {
 import { ContinuityStudioBar } from './ContinuityStudiosView';
 import { Badge, Button, Textarea, Tooltip, TooltipContent, TooltipTrigger } from './ui/primitives';
 import { AnimatedPillTabs, BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
+import { GearVisual } from './GearVisual';
+import { getSettingOptionVisual } from '../catalog/cinemaGearVisuals';
 
 const SAMPLE_PROMPTS: Record<Surface, string[]> = {
   video: [
@@ -688,32 +690,39 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
             <div className="grid grid-cols-2 gap-2">
               {headlineEnums.slice(0, 2).map((def) => {
                 if (def.type !== 'enum') return null;
+                const val = String(dockDraft.settings[def.key] ?? def.defaultValue);
+                const selectedOpt = def.options.find((o) => o.value === val);
+                const visual = getSettingOptionVisual(
+                  def.key,
+                  selectedOpt?.label || val
+                );
                 return (
                   <div key={def.key} className="space-y-1">
                     <label className="text-[11px] text-zinc-500 block">
                       {def.label}
                     </label>
-                    <select
-                      value={String(
-                        dockDraft.settings[def.key] ?? def.defaultValue
-                      )}
-                      onChange={(e) =>
-                        setDockDraft((prev) => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            [def.key]: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-full px-2.5 py-2 text-xs bg-[#16161A] border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#46ecd5]"
-                    >
-                      {def.options.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1.5">
+                      {visual && <GearVisual spec={visual} size="sm" />}
+                      <select
+                        value={val}
+                        onChange={(e) =>
+                          setDockDraft((prev) => ({
+                            ...prev,
+                            settings: {
+                              ...prev.settings,
+                              [def.key]: e.target.value,
+                            },
+                          }))
+                        }
+                        className="flex-1 min-w-0 px-2.5 py-2 text-xs bg-[#16161A] border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#46ecd5]"
+                      >
+                        {def.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 );
               })}

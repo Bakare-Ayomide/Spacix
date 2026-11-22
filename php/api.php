@@ -5,7 +5,7 @@
  * Powered by MySQL (`aixdqvdz_spacix`) and cURL for Runware.ai v1, fal.ai, Higgsfield & Muapi.
  */
 
-require_once __DIR__ . '/config.php';
+require_once file_exists(__DIR__ . '/config.php') ? __DIR__ . '/config.php' : dirname(__DIR__) . '/config.php';
 
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Content-Type-Options: nosniff');
@@ -580,6 +580,151 @@ function send_runware_tasks(array $tasks, string $apiKey, string $baseUrl = 'htt
     return $decoded;
 }
 
+function spacix_public_base_url(): string {
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $scheme = $https ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'spacix.ticketplaster.com';
+    return $scheme . '://' . $host;
+}
+
+function spacix_external_media_url(?string $url): string {
+    $clean = trim((string) $url);
+    if ($clean === '') return '';
+    if (strpos($clean, '/') === 0) {
+        return spacix_public_base_url() . $clean;
+    }
+    return $clean;
+}
+
+function spacix_is_private_ip(string $ip): bool {
+    if ($ip === '') return true;
+    $clean = preg_replace('/^::ffff:/i', '', strtolower(trim($ip)));
+    if ($clean === '::1' || $clean === '0:0:0:0:0:0:0:1' || strpos($clean, 'fe80:') === 0 || strpos($clean, 'fc') === 0 || strpos($clean, 'fd') === 0) {
+        return true;
+    }
+    if (filter_var($clean, FILTER_VALIDATE_IP) === false) {
+        return true;
+    }
+    if (filter_var($clean, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+        return true;
+    }
+    return false;
+}
+
+function spacix_assert_public_audio_url(string $rawUrl): array {
+    $trimmed = trim($rawUrl);
+    $parts = parse_url($trimmed);
+    if (!$parts || empty($parts['scheme']) || empty($parts['host'])) {
+        throw new RuntimeException('Enter a valid http:// or https:// audio file URL.');
+    }
+    $scheme = strtolower((string) $parts['scheme']);
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        throw new RuntimeException('Only HTTP and HTTPS direct audio URLs are supported.');
+    }
+    $host = strtolower((string) $parts['host']);
+    if (
+        $host === 'localhost' ||
+        str_ends_with($host, '.local') ||
+        str_ends_with($host, '.internal') ||
+        $host === '0.0.0.0'
+    ) {
+        throw new RuntimeException('Local or private network URLs are not permitted.');
+    }
+    if (filter_var($host, FILTER_VALIDATE_IP)) {
+        if (spacix_is_private_ip($host)) {
+            throw new RuntimeException('Private IP addresses are not permitted.');
+        }
+        return ['url' => $trimmed, 'path' => (string) ($parts['path'] ?? '')];
+    }
+    $ips = @gethostbynamel($host);
+    if (!$ips || count($ips) === 0) {
+        throw new RuntimeException('Could not resolve audio host. Check that the URL is reachable.');
+    }
+    foreach ($ips as $ip) {
+        if (spacix_is_private_ip($ip)) {
+            throw new RuntimeException('Target host resolves to a restricted private network address.');
+        }
+    }
+    return ['url' => $trimmed, 'path' => (string) ($parts['path'] ?? '')];
+}
+
+function resolve_normalized_upload_type(string $rawType, string $label): string {
+    static $allowed = [
+        'image/jpeg' => true,
+        'image/png' => true,
+        'image/webp' => true,
+        'image/gif' => true,
+        'image/svg+xml' => true,
+        'video/mp4' => true,
+        'video/webm' => true,
+        'audio/wav' => true,
+        'audio/x-wav' => true,
+        'audio/wave' => true,
+        'audio/mpeg' => true,
+        'audio/mp3' => true,
+        'audio/ogg' => true,
+        'audio/aac' => true,
+        'audio/mp4' => true,
+        'audio/x-m4a' => true,
+        'audio/m4a' => true,
+        'audio/webm' => true,
+        'audio/flac' => true,
+        'audio/x-flac' => true,
+    ];
+    static $extMap = [
+        'mp3' => 'audio/mpeg',
+        'wav' => 'audio/wav',
+        'm4a' => 'audio/mp4',
+        'aac' => 'audio/aac',
+        'ogg' => 'audio/ogg',
+        'opus' => 'audio/ogg',
+        'flac' => 'audio/flac',
+        'webm' => 'audio/webm',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'mp4' => 'video/mp4',
+    ];
+    $clean = strtolower(trim(explode(';', $rawType)[0] ?? ''));
+    if (isset($allowed[$clean])) {
+        return $clean;
+    }
+    $ext = strtolower(pathinfo($label, PATHINFO_EXTENSION));
+    if ($ext !== '' && isset($extMap[$ext])) {
+        return $extMap[$ext];
+    }
+    return $clean;
+}
+
+function upload_ext_from_mime(string $mime): string {
+    static $map = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'image/svg+xml' => 'svg',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'audio/wav' => 'wav',
+        'audio/x-wav' => 'wav',
+        'audio/wave' => 'wav',
+        'audio/mpeg' => 'mp3',
+        'audio/mp3' => 'mp3',
+        'audio/ogg' => 'ogg',
+        'audio/aac' => 'aac',
+        'audio/mp4' => 'm4a',
+        'audio/x-m4a' => 'm4a',
+        'audio/m4a' => 'm4a',
+        'audio/webm' => 'webm',
+        'audio/flac' => 'flac',
+        'audio/x-flac' => 'flac',
+    ];
+    return $map[strtolower($mime)] ?? 'bin';
+}
+
 function resolve_runware_model_air(string $surface, string $rawIdentifier): string {
     $id = trim($rawIdentifier);
     if ($id === '' || $id === 'auto') {
@@ -641,6 +786,30 @@ function compute_runware_dimensions(string $surface, array $settings): array {
     return ['width' => 1920, 'height' => 1080];
 }
 
+function send_provider_http_json(string $method, string $url, array $headers, ?array $body = null): array {
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 65,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ];
+    if ($body !== null) {
+        $opts[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_SLASHES);
+    }
+    curl_setopt_array($ch, $opts);
+    $raw = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $decoded = is_string($raw) ? json_decode($raw, true) : null;
+    return [
+        'status' => $status,
+        'raw' => is_string($raw) ? $raw : '',
+        'data' => is_array($decoded) ? $decoded : [],
+    ];
+}
+
 function finalize_generation_run(PDO $pdo, string $generationId): ?array {
     $gen = get_generation_by_id($pdo, $generationId);
     if (!$gen) return null;
@@ -652,10 +821,11 @@ function finalize_generation_run(PDO $pdo, string $generationId): ?array {
 
     $createdAtTs = strtotime($gen['createdAt'] ?? 'now') ?: time();
     $ageSec = max(0, time() - $createdAtTs);
+    $provider = $gen['apiProvider'] ?? '';
+    $providers = get_all_providers($pdo);
 
     // Poll Runware getResponse when running on Runware
-    if (($gen['apiProvider'] ?? '') === 'runware' && !empty($gen['hfRequestId'])) {
-        $providers = get_all_providers($pdo);
+    if ($provider === 'runware' && !empty($gen['hfRequestId'])) {
         $rwGw = $providers['runware'] ?? null;
         $rwSecret = ($rwGw['rawSecret'] ?? '') ?: get_secret_value($pdo, 'RUNWARE_API_KEY');
         if (is_real_external_secret($rwSecret)) {
@@ -703,6 +873,69 @@ function finalize_generation_run(PDO $pdo, string $generationId): ?array {
                 return $gen;
             }
 
+            if ($ageSec < 180) {
+                $gen['status'] = 'in_progress';
+                $gen['updatedAt'] = gmdate('c');
+                save_generation($pdo, $gen);
+                return $gen;
+            }
+        }
+    }
+
+    // Poll fal.ai, Higgsfield, or Muapi status URLs
+    if (in_array($provider, ['fal', 'higgsfield', 'muapi'], true) && !empty($gen['statusUrl'])) {
+        $gw = $providers[$provider] ?? null;
+        $secretKey = $provider === 'fal' ? 'FAL_KEY' : ($provider === 'higgsfield' ? 'HF_CREDENTIALS' : 'MUAPI_KEY');
+        $secret = ($gw['rawSecret'] ?? '') ?: get_secret_value($pdo, $secretKey);
+        if (is_real_external_secret($secret)) {
+            $authHdr = $provider === 'muapi' ? ('Authorization: Bearer ' . $secret) : ('Authorization: Key ' . $secret);
+            $poll = send_provider_http_json('GET', (string) $gen['statusUrl'], [$authHdr, 'Content-Type: application/json']);
+            $d = $poll['data'];
+            $upStatus = strtoupper((string) ($d['status'] ?? ''));
+            if ($upStatus === 'COMPLETED' || $upStatus === 'SUCCEEDED' || $upStatus === 'SUCCESS') {
+                $resultData = $d;
+                if (!empty($d['response_url'])) {
+                    $resFetch = send_provider_http_json('GET', (string) $d['response_url'], [$authHdr, 'Content-Type: application/json']);
+                    if (!empty($resFetch['data'])) {
+                        $resultData = $resFetch['data'];
+                    }
+                }
+                $mediaUrl = $resultData['video']['url']
+                    ?? $resultData['images'][0]['url']
+                    ?? $resultData['image']['url']
+                    ?? $resultData['audio']['url']
+                    ?? $resultData['audio_file']['url']
+                    ?? $resultData['outputs'][0]
+                    ?? $resultData['output']
+                    ?? $resultData['url']
+                    ?? null;
+                if (is_string($mediaUrl) && $mediaUrl !== '') {
+                    $surface = $gen['surface'] ?? 'video';
+                    $ext = $surface === 'video' ? 'mp4' : ($surface === 'audio' ? 'mp3' : 'jpg');
+                    $gen['outputs'] = [[
+                        'kind' => $surface,
+                        'url' => $mediaUrl,
+                        'r2Key' => sprintf('u/%s/%s/0.%s', $gen['userId'], $gen['id'], $ext),
+                        'width' => 1280,
+                        'height' => 720,
+                        'durationSec' => $surface === 'image' ? null : 8,
+                    ]];
+                    $gen['status'] = 'completed';
+                    $gen['finishedAt'] = gmdate('c');
+                    $gen['updatedAt'] = $gen['finishedAt'];
+                    save_generation($pdo, $gen);
+                    return $gen;
+                }
+            }
+            if ($upStatus === 'FAILED' || $upStatus === 'ERROR' || $upStatus === 'NSFW') {
+                $gen['status'] = $upStatus === 'NSFW' ? 'nsfw' : 'failed';
+                $gen['error'] = (string) ($d['error'] ?? $d['message'] ?? 'Provider reported failure. Credits refunded.');
+                $gen['finishedAt'] = gmdate('c');
+                $gen['updatedAt'] = $gen['finishedAt'];
+                refund_generation_credits($pdo, $gen['userId'], $gen['id'], (int) $gen['cost'], 'Provider error refund');
+                save_generation($pdo, $gen);
+                return $gen;
+            }
             if ($ageSec < 180) {
                 $gen['status'] = 'in_progress';
                 $gen['updatedAt'] = gmdate('c');
@@ -1052,7 +1285,19 @@ if ($path === '/api/catalog' && $method === 'GET') {
             $filteredSpecs = $baseSpecs;
         }
 
-        $defaultApiProvider = $ov['preferredProvider'] ?? ($m['defaultApiProvider'] ?? 'runware');
+        $prefProv = $ov['preferredProvider'] ?? null;
+        $hasPrefInFiltered = false;
+        if ($prefProv) {
+            foreach ($filteredSpecs as $fs) {
+                if (($fs['providerId'] ?? '') === $prefProv) {
+                    $hasPrefInFiltered = true;
+                    break;
+                }
+            }
+        }
+        $defaultApiProvider = $hasPrefInFiltered
+            ? $prefProv
+            : ($filteredSpecs[0]['providerId'] ?? ($m['defaultApiProvider'] ?? 'runware'));
 
         $item = [
             'id' => $m['id'],
@@ -1069,6 +1314,7 @@ if ($path === '/api/catalog' && $method === 'GET') {
             'roles' => $m['roles'],
             'requirePrompt' => $m['requirePrompt'],
             'supportsEnhancePrompt' => $m['supportsEnhancePrompt'],
+            'capabilities' => $m['capabilities'] ?? null,
             'settings' => $m['settings'],
             'baseHfUsd' => $effectiveUsd,
             'billingUnit' => $m['billingUnit'],
@@ -1302,11 +1548,48 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
         ], 400);
     }
 
+    // Resolve normalized media URLs (converting local /uploads_media/... & /api/audio/proxy/... paths to full external URLs)
+    $startFrameUrl = '';
+    $videoInputUrl = '';
+    $audioInputUrl = '';
+    $referenceUrls = [];
+    foreach ($media as $slot) {
+        if (!is_array($slot) || empty($slot['url'])) continue;
+        $role = (string) ($slot['role'] ?? 'reference');
+        $absUrl = spacix_external_media_url((string) $slot['url']);
+        if ($role === 'start' && $startFrameUrl === '') {
+            $startFrameUrl = $absUrl;
+        } elseif ($role === 'video' && $videoInputUrl === '') {
+            $videoInputUrl = $absUrl;
+        } elseif ($role === 'audio' && $audioInputUrl === '') {
+            $audioInputUrl = $absUrl;
+        } else {
+            $referenceUrls[] = $absUrl;
+        }
+    }
+
+    // Determine effective provider-specific endpoint from supportedProviders if present
+    $specEndpoint = $effectiveEndpoint;
+    foreach (($model['effectiveProviders'] ?? $model['supportedProviders'] ?? []) as $sp) {
+        if (($sp['providerId'] ?? '') === $effectiveProviderId) {
+            if ($mode !== '' && (stripos($mode, 'Edit') !== false || stripos($mode, 'Clone') !== false || stripos($mode, 'Sound Effects') !== false) && !empty($sp['editEndpoint'])) {
+                $specEndpoint = (string) $sp['editEndpoint'];
+            } elseif (!empty($sp['endpoint'])) {
+                $specEndpoint = (string) $sp['endpoint'];
+            }
+            break;
+        }
+    }
+    if (!empty($pricingOverride['customEndpoint']) && $effectiveProviderId === ($pricingOverride['preferredProvider'] ?? '')) {
+        $specEndpoint = (string) $pricingOverride['customEndpoint'];
+    }
+    $record['modelPath'] = $specEndpoint;
+
     if ($effectiveProviderId === 'runware') {
         $taskUUID = uuidv4();
         $surface = $model['surface'];
         $dims = compute_runware_dimensions($surface, $settings);
-        $resolvedModel = resolve_runware_model_air($surface, $effectiveEndpoint);
+        $resolvedModel = resolve_runware_model_air($surface, $specEndpoint);
         $rwRouter = kv_get($pdo, 'runwareRoutingConfig', []);
         if (!empty($rwRouter['enabled'])) {
             $resolvedModel = 'auto';
@@ -1330,7 +1613,7 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
                 'taskType' => 'videoInference',
                 'taskUUID' => $taskUUID,
                 'model' => $resolvedModel,
-                'positivePrompt' => $prompt,
+                'positivePrompt' => $prompt ?: 'Cinematic studio motion performance, dramatic lighting',
                 'duration' => (int) ($settings['duration'] ?? 5),
                 'deliveryMethod' => 'async',
                 'includeCost' => true,
@@ -1338,6 +1621,22 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
             if ($resolvedModel !== 'auto') {
                 $task['width'] = $dims['width'];
                 $task['height'] = $dims['height'];
+            }
+            $rwInputs = [];
+            if ($startFrameUrl !== '') {
+                $rwInputs['frameImages'] = [['inputImage' => $startFrameUrl, 'frame' => 'first']];
+            }
+            if (!empty($referenceUrls)) {
+                $rwInputs['referenceImages'] = $referenceUrls;
+            }
+            if ($audioInputUrl !== '') {
+                $rwInputs['audio'] = $audioInputUrl;
+            }
+            if ($videoInputUrl !== '') {
+                $rwInputs['video'] = $videoInputUrl;
+            }
+            if (!empty($rwInputs)) {
+                $task['inputs'] = $rwInputs;
             }
         } else {
             $safeW = min(2048, max(512, (int) round($dims['width'] / 64) * 64)) ?: 1024;
@@ -1351,11 +1650,16 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
                 'height' => $safeH,
                 'includeCost' => true,
             ];
+            if (!empty($referenceUrls) || $startFrameUrl !== '') {
+                $refs = $referenceUrls;
+                if ($startFrameUrl !== '') array_unshift($refs, $startFrameUrl);
+                $task['inputs'] = ['referenceImages' => array_values(array_unique($refs))];
+            }
         }
 
         $rwRes = send_runware_tasks([$task], $rawSecret, $activeGw['baseUrl'] ?? 'https://api.runware.ai/v1');
 
-        // Automatic fallback if specific model AIR was rejected
+        // Automatic fallback if specific model AIR or input field was rejected
         if (!empty($rwRes['errors'][0])) {
             $errCode = strtolower((string) ($rwRes['errors'][0]['code'] ?? ''));
             $isAuthErr = strpos($errCode, 'auth') !== false || strpos($errCode, 'key') !== false || strpos($errCode, 'credit') !== false || ($rwRes['status'] ?? 200) === 401;
@@ -1376,11 +1680,14 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
                         'taskType' => 'videoInference',
                         'taskUUID' => $taskUUID,
                         'model' => 'auto',
-                        'positivePrompt' => $prompt,
+                        'positivePrompt' => $prompt ?: 'Cinematic studio motion performance, dramatic lighting',
                         'duration' => 5,
                         'deliveryMethod' => 'async',
                         'includeCost' => true,
                     ];
+                    if ($startFrameUrl !== '') {
+                        $task['inputs'] = ['frameImages' => [['inputImage' => $startFrameUrl, 'frame' => 'first']]];
+                    }
                 } else {
                     $task = [
                         'taskType' => 'audioInference',
@@ -1437,6 +1744,89 @@ if ($path === '/api/generations/submit' && $method === 'POST') {
             ]];
             $record['status'] = 'completed';
             $record['finishedAt'] = gmdate('c');
+        }
+    } else {
+        // fal.ai, Higgsfield, or Muapi.ai dispatch
+        $cleanPath = ltrim($specEndpoint, '/');
+        $providerBody = $settings;
+        if ($prompt !== '') {
+            $providerBody['prompt'] = $prompt;
+        }
+        if ($startFrameUrl !== '') {
+            $providerBody['image_url'] = $startFrameUrl;
+        }
+        if ($audioInputUrl !== '') {
+            $providerBody['audio_url'] = $audioInputUrl;
+        }
+        if ($videoInputUrl !== '') {
+            $providerBody['video_url'] = $videoInputUrl;
+        }
+        if (!empty($referenceUrls)) {
+            $providerBody['references'] = $referenceUrls;
+        }
+
+        if ($effectiveProviderId === 'fal') {
+            $baseUrl = rtrim((string) ($activeGw['baseUrl'] ?? 'https://queue.fal.run'), '/');
+            $subRes = send_provider_http_json(
+                'POST',
+                $baseUrl . '/' . $cleanPath,
+                ['Authorization: Key ' . $rawSecret, 'Content-Type: application/json'],
+                $providerBody
+            );
+            if ($subRes['status'] >= 400 || $subRes['status'] === 0) {
+                $record['status'] = 'failed';
+                $record['error'] = sprintf('fal.ai HTTP %d: %s. Credits refunded.', $subRes['status'], substr($subRes['raw'], 0, 220));
+                $record['finishedAt'] = gmdate('c');
+                save_generation($pdo, $record);
+                refund_generation_credits($pdo, $user['id'], $generationId, $cost, 'fal submit error refund');
+                $freshUser = get_user_by_id($pdo, $user['id']) ?: $user;
+                json_response(['generation' => $record, 'credits' => $freshUser['credits']]);
+            }
+            $reqId = (string) ($subRes['data']['request_id'] ?? ('fal_' . $generationId));
+            $record['hfRequestId'] = $reqId;
+            $record['statusUrl'] = (string) ($subRes['data']['status_url'] ?? ($baseUrl . '/' . $cleanPath . '/requests/' . $reqId . '/status'));
+            $record['cancelUrl'] = (string) ($subRes['data']['cancel_url'] ?? ($baseUrl . '/' . $cleanPath . '/requests/' . $reqId . '/cancel'));
+        } elseif ($effectiveProviderId === 'higgsfield') {
+            $baseUrl = rtrim((string) ($activeGw['baseUrl'] ?? 'https://api.higgsfield.ai'), '/');
+            $subRes = send_provider_http_json(
+                'POST',
+                $baseUrl . '/' . $cleanPath,
+                ['Authorization: Key ' . $rawSecret, 'Content-Type: application/json', 'Idempotency-Key: ' . $generationId],
+                $providerBody
+            );
+            if ($subRes['status'] >= 400 || $subRes['status'] === 0) {
+                $record['status'] = 'failed';
+                $record['error'] = sprintf('Higgsfield HTTP %d: %s. Credits refunded.', $subRes['status'], substr($subRes['raw'], 0, 220));
+                $record['finishedAt'] = gmdate('c');
+                save_generation($pdo, $record);
+                refund_generation_credits($pdo, $user['id'], $generationId, $cost, 'HF submit error refund');
+                $freshUser = get_user_by_id($pdo, $user['id']) ?: $user;
+                json_response(['generation' => $record, 'credits' => $freshUser['credits']]);
+            }
+            $record['hfRequestId'] = (string) ($subRes['data']['request_id'] ?? ('hf_' . $generationId));
+            $record['statusUrl'] = (string) ($subRes['data']['status_url'] ?? '');
+            $record['cancelUrl'] = (string) ($subRes['data']['cancel_url'] ?? '');
+        } elseif ($effectiveProviderId === 'muapi') {
+            $baseUrl = rtrim((string) ($activeGw['baseUrl'] ?? 'https://api.muapi.ai/v1'), '/');
+            $subRes = send_provider_http_json(
+                'POST',
+                $baseUrl . '/predictions',
+                ['Authorization: Bearer ' . $rawSecret, 'Content-Type: application/json'],
+                ['model' => $cleanPath, 'input' => $providerBody]
+            );
+            if ($subRes['status'] >= 400 || $subRes['status'] === 0) {
+                $record['status'] = 'failed';
+                $record['error'] = sprintf('Muapi HTTP %d: %s. Credits refunded.', $subRes['status'], substr($subRes['raw'], 0, 220));
+                $record['finishedAt'] = gmdate('c');
+                save_generation($pdo, $record);
+                refund_generation_credits($pdo, $user['id'], $generationId, $cost, 'Muapi submit error refund');
+                $freshUser = get_user_by_id($pdo, $user['id']) ?: $user;
+                json_response(['generation' => $record, 'credits' => $freshUser['credits']]);
+            }
+            $reqId = (string) ($subRes['data']['id'] ?? ('muapi_' . $generationId));
+            $record['hfRequestId'] = $reqId;
+            $record['statusUrl'] = $baseUrl . '/predictions/' . $reqId;
+            $record['cancelUrl'] = $baseUrl . '/predictions/' . $reqId . '/cancel';
         }
     }
 
@@ -1564,19 +1954,44 @@ if ($path === '/api/uploads' && $method === 'GET') {
 if ($path === '/api/upload' && $method === 'POST') {
     $user = get_session_user($pdo);
     if (!$user) json_response(['error' => 'Sign in to upload reference files.'], 401);
-    $contentType = (string) ($reqBody['contentType'] ?? 'image/png');
+    $rawContentType = (string) ($reqBody['contentType'] ?? 'image/png');
     $label = (string) ($reqBody['label'] ?? 'Reference Asset');
     $bytes = (int) ($reqBody['bytes'] ?? 1024);
     $dataUrl = (string) ($reqBody['dataUrl'] ?? '');
+
+    $contentType = resolve_normalized_upload_type($rawContentType, $label);
+    if ($bytes > 50 * 1024 * 1024) {
+        json_response(['error' => 'File exceeds 50 MB upload limit.'], 400);
+    }
+
     $kind = strpos($contentType, 'video/') === 0 ? 'video' : (strpos($contentType, 'audio/') === 0 ? 'audio' : 'image');
     $id = 'upl_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 5);
+    $publicUrl = $dataUrl ?: '/src/assets/images/hero_cinema_rig_1793997850142.jpg';
+
+    // Persist base64 payloads on disk in /uploads_media so audio/video/images stay fast, Range-seekable, and safe for MySQL packet limits
+    if ($dataUrl !== '' && preg_match('#^data:([^;]+);base64,(.+)$#s', $dataUrl, $dm)) {
+        $decoded = base64_decode($dm[2], true);
+        if ($decoded !== false && strlen($decoded) > 0) {
+            $uploadDir = __DIR__ . '/uploads_media';
+            if (!is_dir($uploadDir)) {
+                @mkdir($uploadDir, 0755, true);
+            }
+            $ext = upload_ext_from_mime($contentType ?: $dm[1]);
+            $filename = $id . '.' . $ext;
+            if (@file_put_contents($uploadDir . '/' . $filename, $decoded) !== false) {
+                $publicUrl = '/uploads_media/' . $filename;
+                $bytes = strlen($decoded);
+            }
+        }
+    }
+
     $record = [
         'id' => $id,
         'userId' => $user['id'],
         'kind' => $kind,
         'label' => $label,
-        'publicUrl' => $dataUrl ?: '/src/assets/images/hero_cinema_rig_1793997850142.jpg',
-        'contentType' => $contentType,
+        'publicUrl' => $publicUrl,
+        'contentType' => $contentType ?: $rawContentType,
         'bytes' => $bytes,
         'createdAt' => gmdate('c'),
     ];
@@ -1586,8 +2001,170 @@ if ($path === '/api/upload' && $method === 'POST') {
         'upload' => $record,
         'upload_url' => $record['publicUrl'],
         'public_url' => $record['publicUrl'],
-        'upload_headers' => ['Content-Type' => $contentType],
+        'upload_headers' => ['Content-Type' => $record['contentType']],
     ]);
+}
+
+// 4B. SAFE AUDIO URL IMPORT & CORS/RANGE PROXY FOR MUSIC VIDEO STUDIO
+if ($path === '/api/audio/import-url' && $method === 'POST') {
+    $user = get_session_user($pdo);
+    if (!$user) {
+        json_response(['error' => 'Sign in to import audio tracks.'], 401);
+    }
+    $rawUrl = trim((string) ($reqBody['url'] ?? ''));
+    if ($rawUrl === '') {
+        json_response(['error' => 'Paste a direct audio URL (.mp3, .wav, .m4a, .ogg, .aac, .flac).'], 400);
+    }
+
+    try {
+        $target = spacix_assert_public_audio_url($rawUrl);
+    } catch (Throwable $e) {
+        json_response(['error' => $e->getMessage()], 400);
+    }
+
+    $ch = curl_init($target['url']);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ['Accept: audio/*,*/*;q=0.8'],
+        CURLOPT_USERAGENT => 'SPACIX-Studio-AudioImporter/1.0',
+    ]);
+    $bytes = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $rawMime = strtolower(trim(explode(';', (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE))[0] ?? ''));
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($bytes === false || $httpCode < 200 || $httpCode >= 300) {
+        $msg = $httpCode > 0
+            ? "Audio source returned HTTP {$httpCode}. Verify the file URL is publicly accessible."
+            : ('Could not retrieve audio from that URL. ' . ($curlErr ?: 'Ensure it is publicly reachable.'));
+        json_response(['error' => $msg], 400);
+    }
+
+    if (strpos($rawMime, 'text/html') !== false || strpos($rawMime, 'application/json') !== false || strpos($rawMime, 'text/plain') !== false) {
+        json_response(['error' => 'This link points to a web page rather than an accessible audio file. Provide a direct .mp3, .wav, .m4a, .ogg, or .flac URL.'], 400);
+    }
+
+    $extMap = [
+        'mp3' => 'audio/mpeg',
+        'wav' => 'audio/wav',
+        'm4a' => 'audio/mp4',
+        'aac' => 'audio/aac',
+        'ogg' => 'audio/ogg',
+        'opus' => 'audio/ogg',
+        'flac' => 'audio/flac',
+        'webm' => 'audio/webm',
+    ];
+    $ext = strtolower(pathinfo((string) ($target['path'] ?? ''), PATHINFO_EXTENSION));
+    $inferredMime = $extMap[$ext] ?? '';
+
+    $isSupportedMime = strpos($rawMime, 'audio/') === 0
+        || $rawMime === 'application/ogg'
+        || (($rawMime === '' || $rawMime === 'application/octet-stream' || $rawMime === 'binary/octet-stream') && $inferredMime !== '');
+
+    if (!$isSupportedMime) {
+        json_response(['error' => sprintf('Unsupported source format (%s). Only direct accessible audio files (.mp3, .wav, .m4a, .aac, .ogg, .flac) are supported.', $rawMime ?: 'unknown')], 400);
+    }
+
+    $byteLen = strlen($bytes);
+    if ($byteLen === 0) {
+        json_response(['error' => 'Remote audio URL returned an empty file.'], 400);
+    }
+    if ($byteLen > 35 * 1024 * 1024) {
+        json_response(['error' => 'Remote audio file exceeds the 35 MB import limit.'], 400);
+    }
+
+    $finalMime = strpos($rawMime, 'audio/') === 0 ? $rawMime : ($inferredMime ?: 'audio/mpeg');
+    $token = bin2hex(random_bytes(16));
+    $baseName = rawurldecode(basename((string) ($target['path'] ?? '')) ?: 'Imported Audio Track');
+    $cleanTitle = preg_replace('/\.[a-z0-9]+$/i', '', $baseName) ?: 'Imported Audio Track';
+
+    $cacheDir = __DIR__ . '/tmp_audio_cache';
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0755, true);
+    }
+    // Prune stale cache entries > 6h
+    foreach (glob($cacheDir . '/*.json') ?: [] as $mf) {
+        if (time() - (@filemtime($mf) ?: time()) > 21600) {
+            @unlink($mf);
+            @unlink(str_replace('.json', '.bin', $mf));
+        }
+    }
+
+    @file_put_contents($cacheDir . '/' . $token . '.bin', $bytes);
+    @file_put_contents($cacheDir . '/' . $token . '.json', json_encode([
+        'contentType' => $finalMime,
+        'title' => $cleanTitle,
+        'sourceUrl' => $target['url'],
+        'bytes' => $byteLen,
+        'createdAt' => time(),
+    ], JSON_UNESCAPED_SLASHES));
+
+    json_response([
+        'ok' => true,
+        'title' => $baseName,
+        'contentType' => $finalMime,
+        'bytes' => $byteLen,
+        'proxyUrl' => '/api/audio/proxy/' . $token,
+        'sourceUrl' => $target['url'],
+    ]);
+}
+
+if (preg_match('#^/api/audio/proxy/([a-f0-9]{16,64})$#', $path, $am) && ($method === 'GET' || $method === 'HEAD')) {
+    $token = $am[1];
+    $cacheDir = __DIR__ . '/tmp_audio_cache';
+    $binPath = $cacheDir . '/' . $token . '.bin';
+    $metaPath = $cacheDir . '/' . $token . '.json';
+    if (!file_exists($binPath) || !file_exists($metaPath)) {
+        json_response(['error' => 'Audio stream expired or not found.'], 404);
+    }
+    $meta = json_decode((string) file_get_contents($metaPath), true) ?: [];
+    $contentType = (string) ($meta['contentType'] ?? 'audio/mpeg');
+    $total = filesize($binPath);
+    if ($total === false || $total <= 0) {
+        json_response(['error' => 'Audio stream empty.'], 404);
+    }
+
+    header('Content-Type: ' . $contentType);
+    header('Accept-Ranges: bytes');
+    header('Access-Control-Allow-Origin: *');
+    header('Cache-Control: private, max-age=3600');
+
+    $range = $_SERVER['HTTP_RANGE'] ?? '';
+    if ($range !== '' && strpos($range, 'bytes=') === 0) {
+        $rangeSpec = explode(',', substr($range, 6))[0];
+        [$startStr, $endStr] = array_pad(explode('-', trim($rangeSpec), 2), 2, '');
+        $start = $startStr !== '' ? max(0, (int) $startStr) : 0;
+        $end = $endStr !== '' ? min($total - 1, (int) $endStr) : ($total - 1);
+        if ($start >= $total || $start > $end) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $total);
+            exit;
+        }
+        $length = $end - $start + 1;
+        http_response_code(206);
+        header("Content-Range: bytes {$start}-{$end}/{$total}");
+        header('Content-Length: ' . $length);
+        if ($method !== 'HEAD') {
+            $fp = fopen($binPath, 'rb');
+            if ($fp) {
+                fseek($fp, $start);
+                echo fread($fp, $length);
+                fclose($fp);
+            }
+        }
+        exit;
+    }
+
+    header('Content-Length: ' . $total);
+    if ($method !== 'HEAD') {
+        readfile($binPath);
+    }
+    exit;
 }
 
 if ($path === '/api/projects' && $method === 'GET') {

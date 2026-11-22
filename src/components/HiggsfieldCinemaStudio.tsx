@@ -66,6 +66,16 @@ import {
 } from '../types/studio';
 import { StoryStudioView } from './StoryStudioView';
 import { AutomaticProductionWorkflow } from './AutomaticProductionWorkflow';
+import { MusicVideoStudioView } from './MusicVideoStudioView';
+import { GearVisual } from './GearVisual';
+import {
+  getApertureVisual,
+  getCameraAngleVisual,
+  getCameraBodyVisual,
+  getCameraMovementVisual,
+  getColorGradeVisual,
+  getLensOpticVisual,
+} from '../catalog/cinemaGearVisuals';
 import {
   CINEMA_TOOL_CATEGORIES,
   CINEMA_TOOL_LIST,
@@ -680,7 +690,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   // ==========================================================================
   // WORKSPACE MODE, CONTEXTUAL TOOL & NAVIGATION STATE
   // ==========================================================================
-  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'production'>('director');
+  const [workingMode, setWorkingMode] = useState<'director' | 'auto_production' | 'music_video' | 'production'>('director');
   const [activeCategory, setActiveCategory] = useState<CinemaToolCategoryId>('media_generation');
   const [activeToolId, setActiveToolId] = useState<CinemaToolId>('video_creation');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -734,6 +744,8 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   useEffect(() => {
     if (routeParams?.mode === 'auto_production') {
       setWorkingMode('auto_production');
+    } else if (routeParams?.mode === 'music_video') {
+      setWorkingMode('music_video');
     } else if (routeParams?.mode === 'production') {
       setWorkingMode('production');
     }
@@ -1869,6 +1881,26 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkingMode('music_video');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                  workingMode === 'music_video'
+                    ? 'bg-[#46ecd5]/15 text-[#46ecd5] shadow-inner border border-[#46ecd5]/40'
+                    : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-xl bg-gradient-to-b from-[#46ecd5]/35 to-teal-700/40 border border-[#46ecd5]/50 flex items-center justify-center shrink-0 shadow">
+                    <Music className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  </span>
+                  {!sidebarCollapsed && <span>Music Video Studio</span>}
+                </div>
+              </button>
             </nav>
 
             {/* Projects Section with Search, Sorting & New Project */}
@@ -2116,6 +2148,23 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                 <Button
                   type="button"
+                  variant={workingMode === 'music_video' ? 'default' : 'accent'}
+                  size="sm"
+                  onClick={() =>
+                    setWorkingMode((prev) =>
+                      prev === 'music_video' ? 'director' : 'music_video'
+                    )
+                  }
+                  className="whitespace-nowrap"
+                >
+                  <Music className="w-3.5 h-3.5" />
+                  <span>
+                    {workingMode === 'music_video' ? '← Director' : 'Music Video'}
+                  </span>
+                </Button>
+
+                <Button
+                  type="button"
                   variant={workingMode === 'auto_production' ? 'default' : 'accent'}
                   size="sm"
                   onClick={() =>
@@ -2224,7 +2273,16 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
             )}
           </div>
 
-          {workingMode === 'auto_production' ? (
+          {workingMode === 'music_video' ? (
+            /* DEDICATED MUSIC VIDEO PRODUCTION STUDIO INSIDE CINEMA STUDIO */
+            <MusicVideoStudioView
+              projectId={selectedProjId}
+              projectTitle={projectTitle}
+              activeAspectRatio={aspectRatio}
+              onProjectTitleChange={(t) => setProjectTitle(t)}
+              onBackToDirector={() => setWorkingMode('director')}
+            />
+          ) : workingMode === 'auto_production' ? (
             /* 4-STAGE GUIDED AUTOMATIC FILM PRODUCTION WORKFLOW */
             <div className="flex-1 w-full max-w-[1480px] mx-auto px-3 sm:px-6 py-4 overflow-x-hidden">
               <AutomaticProductionWorkflow
@@ -3703,7 +3761,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                     <ChevronUp className="w-3.5 h-3.5" />
                                   </button>
 
-                                  <div className="w-full px-3 space-y-2">
+                                  <div className="w-full px-2.5 space-y-2">
                                     {CAMERA_BODIES.map((cam) => {
                                       const active = cameraOptics.camera === cam.id;
                                       return (
@@ -3716,14 +3774,21 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                               camera: cam.id,
                                             }))
                                           }
-                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                          className={`w-full py-2 px-3 rounded-2xl transition-all flex items-center gap-2.5 text-left ${
                                             active
-                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-[1.03]'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-400 hover:text-zinc-200 opacity-80 hover:opacity-100'
                                           }`}
                                         >
-                                          <span className="text-xs font-bold">{cam.label}</span>
-                                          <span className="text-[10px] opacity-75">{cam.sub}</span>
+                                          <GearVisual
+                                            spec={getCameraBodyVisual(cam.id)}
+                                            size="md"
+                                            className="shrink-0"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <div className="text-xs font-bold truncate">{cam.label}</div>
+                                            <div className="text-[10px] opacity-75 truncate">{cam.sub}</div>
+                                          </div>
                                         </button>
                                       );
                                     })}
@@ -3761,7 +3826,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                     <ChevronUp className="w-3.5 h-3.5" />
                                   </button>
 
-                                  <div className="w-full px-3 space-y-2">
+                                  <div className="w-full px-2.5 space-y-2">
                                     {LENS_OPTICS.map((lens) => {
                                       const active = cameraOptics.lens === lens.id;
                                       return (
@@ -3774,14 +3839,21 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                               lens: lens.id,
                                             }))
                                           }
-                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                          className={`w-full py-2 px-3 rounded-2xl transition-all flex items-center gap-2.5 text-left ${
                                             active
-                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-[1.03]'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-400 hover:text-zinc-200 opacity-80 hover:opacity-100'
                                           }`}
                                         >
-                                          <span className="text-xs font-bold">{lens.label}</span>
-                                          <span className="text-[10px] opacity-75">{lens.sub}</span>
+                                          <GearVisual
+                                            spec={getLensOpticVisual(lens.id)}
+                                            size="md"
+                                            className="shrink-0"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <div className="text-xs font-bold truncate">{lens.label}</div>
+                                            <div className="text-[10px] opacity-75 truncate">{lens.sub}</div>
+                                          </div>
                                         </button>
                                       );
                                     })}
@@ -3823,7 +3895,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                     <ChevronUp className="w-3.5 h-3.5" />
                                   </button>
 
-                                  <div className="w-full px-3 space-y-2">
+                                  <div className="w-full px-2.5 space-y-2">
                                     {APERTURE_STOPS.map((ap) => {
                                       const active = cameraOptics.aperture === ap.id;
                                       return (
@@ -3836,14 +3908,21 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                               aperture: ap.id,
                                             }))
                                           }
-                                          className={`w-full py-2.5 px-3 rounded-full transition-all flex flex-col items-center text-center ${
+                                          className={`w-full py-2 px-3 rounded-2xl transition-all flex items-center gap-2.5 text-left ${
                                             active
-                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-105'
-                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-500 hover:text-zinc-300 opacity-70'
+                                              ? 'bg-[#2A2D35] border-2 border-white text-white shadow-lg scale-[1.03]'
+                                              : 'bg-[#1D1F25] border border-white/5 text-zinc-400 hover:text-zinc-200 opacity-80 hover:opacity-100'
                                           }`}
                                         >
-                                          <span className="text-xs font-bold">{ap.label}</span>
-                                          <span className="text-[10px] opacity-75">{ap.sub}</span>
+                                          <GearVisual
+                                            spec={getApertureVisual(ap.id)}
+                                            size="sm"
+                                            className="shrink-0"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <div className="text-xs font-bold truncate">{ap.label}</div>
+                                            <div className="text-[10px] opacity-75 truncate">{ap.sub}</div>
+                                          </div>
                                         </button>
                                       );
                                     })}
@@ -3912,14 +3991,14 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                         <div
                                           className={`aspect-[4/3] rounded-2xl bg-gradient-to-br ${
                                             move.gradient
-                                          } border transition-all p-3 flex flex-col justify-between relative overflow-hidden ${
+                                          } border transition-all p-2.5 flex flex-col justify-between relative overflow-hidden ${
                                             isSelected
                                               ? 'border-lime-400 ring-2 ring-lime-400/30'
                                               : 'border-white/10 group-hover:border-white/30'
                                           }`}
                                         >
-                                          <div className="flex items-center justify-between">
-                                            <span className="px-1.5 py-0.5 rounded bg-black/50 text-[10px] font-mono text-lime-300">
+                                          <div className="flex items-center justify-between relative z-10">
+                                            <span className="px-1.5 py-0.5 rounded bg-black/55 text-[10px] font-mono text-lime-300">
                                               #{move.label.replace(/\s+/g, '')}
                                             </span>
                                             {isSelected && (
@@ -3928,7 +4007,14 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                               </span>
                                             )}
                                           </div>
-                                          <div className="text-[11px] text-zinc-200 text-left">
+                                          <div className="flex items-center justify-center py-0.5">
+                                            <GearVisual
+                                              spec={getCameraMovementVisual(move.label)}
+                                              size="lg"
+                                              className="group-hover:scale-110 transition-transform"
+                                            />
+                                          </div>
+                                          <div className="text-[10px] text-zinc-200 text-left line-clamp-1 relative z-10">
                                             {move.desc}
                                           </div>
                                         </div>
@@ -4048,9 +4134,14 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                     }`}
                                   >
                                     <div
-                                      className={`h-24 bg-gradient-to-br ${pal.previewGradient} p-2.5 flex items-end text-left`}
+                                      className={`h-24 bg-gradient-to-br ${pal.previewGradient} p-2 flex items-center gap-2 text-left`}
                                     >
-                                      <span className="text-[10px] text-zinc-200 line-clamp-2 drop-shadow">
+                                      <GearVisual
+                                        spec={getColorGradeVisual(pal.name)}
+                                        size="lg"
+                                        className="group-hover:scale-110 transition-transform"
+                                      />
+                                      <span className="text-[10px] text-zinc-200 line-clamp-3 drop-shadow">
                                         {pal.description}
                                       </span>
                                     </div>
@@ -4527,18 +4618,25 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         onClick={() =>
                           setActivePopover(activePopover === 'camera' ? null : 'camera')
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2 transition-all ${
                           activePopover === 'camera'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500/35 to-indigo-950 border border-white/15 flex items-center justify-center shrink-0">
-                          <Camera className="w-4 h-4 text-sky-300" />
-                        </span>
+                        <div className="flex items-center -space-x-2 shrink-0">
+                          <GearVisual
+                            spec={getCameraBodyVisual(cameraOptics.camera)}
+                            size="sm"
+                          />
+                          <GearVisual
+                            spec={getLensOpticVisual(cameraOptics.lens)}
+                            size="xs"
+                          />
+                        </div>
                         <div className="min-w-0">
                           <div className="text-[10px] text-zinc-400 truncate">
-                            Camera
+                            Camera · Optics
                           </div>
                           <div className="text-xs font-bold text-white truncate">
                             {cameraSummary}
@@ -4554,17 +4652,16 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             activePopover === 'color_palette' ? null : 'color_palette'
                           )
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2 transition-all ${
                           activePopover === 'color_palette'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span
-                          className={`w-8 h-8 rounded-xl bg-gradient-to-br ${activePalette.previewGradient} border border-white/15 flex items-center justify-center shrink-0`}
-                        >
-                          <Palette className="w-4 h-4 text-lime-300" />
-                        </span>
+                        <GearVisual
+                          spec={getColorGradeVisual(activePalette.name)}
+                          size="sm"
+                        />
                         <div className="min-w-0">
                           <div className="text-[10px] text-zinc-400">Color palette</div>
                           <div className="text-xs font-bold text-white truncate">
@@ -4893,11 +4990,17 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         key={shot.shotNumber}
                         className="p-3 space-y-2 text-xs"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono-tabular font-bold text-[#46ecd5]">
-                            SHOT {shot.shotNumber} · {shot.camera}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono-tabular font-bold text-[#46ecd5] flex items-center gap-1.5">
+                            <GearVisual spec={getCameraAngleVisual(shot.camera)} size="xs" />
+                            <span>
+                              SHOT {shot.shotNumber} · {shot.camera}
+                            </span>
                           </span>
-                          <Badge variant="outline">#{shot.movement}</Badge>
+                          <Badge variant="outline" className="gap-1">
+                            <GearVisual spec={getCameraMovementVisual(shot.movement)} size="xs" />
+                            <span>#{shot.movement}</span>
+                          </Badge>
                         </div>
                         <p className="text-zinc-200 text-[11px] leading-relaxed">
                           {shot.action}
@@ -4949,6 +5052,15 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
           <CommandList>
             <CommandEmpty>No matching Cinema Studio tools or engines found.</CommandEmpty>
             <CommandGroup heading="Workflows & Studio Modes">
+              <CommandItem
+                onSelect={() => {
+                  setWorkingMode('music_video');
+                  setCommandPaletteOpen(false);
+                }}
+              >
+                <Music className="w-4 h-4 text-[#46ecd5]" />
+                <span>Music Video Production Studio (Lip Sync & B-Roll)</span>
+              </CommandItem>
               <CommandItem
                 onSelect={() => {
                   setWorkingMode('auto_production');

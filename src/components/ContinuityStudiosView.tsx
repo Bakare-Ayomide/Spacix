@@ -53,6 +53,12 @@ import {
 } from '../types/studio';
 import { RoutePath, useRuns } from '../lib/useRuns';
 import { GenerationTile } from './StudioGeneratorView';
+import { GearVisual } from './GearVisual';
+import {
+  getCameraAngleVisual,
+  getCameraMovementVisual,
+  getLensOpticVisual,
+} from '../catalog/cinemaGearVisuals';
 import { StoryStudioView } from './StoryStudioView';
 import { HiggsfieldCinemaStudio } from './HiggsfieldCinemaStudio';
 
@@ -1608,7 +1614,10 @@ export const MotionStudioView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-zinc-400 mb-1">Camera Movement Control</label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="block text-zinc-400">Camera Movement Control</label>
+                    <GearVisual spec={getCameraMovementVisual(cameraMovement)} size="sm" />
+                  </div>
                   <select
                     value={cameraMovement}
                     onChange={(e) => setCameraMovement(e.target.value)}
@@ -3520,12 +3529,19 @@ export const CinemaStudioView: React.FC = () => {
                               className="p-3.5 rounded-xl bg-[#09090C] border border-white/10 space-y-2.5 flex flex-col justify-between"
                             >
                               <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-mono-tabular font-bold text-[#46ecd5]">
-                                    SHOT {shot.shotNumber} · {shot.shotSize}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono-tabular font-bold text-[#46ecd5] flex items-center gap-1.5">
+                                    <GearVisual spec={getCameraAngleVisual(shot.shotSize)} size="xs" />
+                                    <span>
+                                      SHOT {shot.shotNumber} · {shot.shotSize}
+                                    </span>
                                   </span>
-                                  <span className="text-[11px] text-zinc-400">
-                                    {shot.cameraAngle} · {shot.lens}
+                                  <span className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                                    <GearVisual spec={getCameraAngleVisual(shot.cameraAngle)} size="xs" />
+                                    <span>{shot.cameraAngle}</span>
+                                    <span>·</span>
+                                    <GearVisual spec={getLensOpticVisual(shot.lens)} size="xs" />
+                                    <span>{shot.lens}</span>
                                   </span>
                                 </div>
 

@@ -53,6 +53,12 @@ import {
   ShimmerButton,
   SpotlightCard,
 } from './ui/aceternity-magic';
+import { GearVisual } from './GearVisual';
+import {
+  getCameraAngleVisual,
+  getCameraMovementVisual,
+  getLensOpticVisual,
+} from '../catalog/cinemaGearVisuals';
 
 export type AutoProdStageId = 1 | 2 | 3 | 4;
 
@@ -2128,12 +2134,18 @@ export const AutomaticProductionWorkflow: React.FC<{
                               )}
                             </div>
 
-                            {/* Camera Framing & Movement Controls */}
-                            <div className="grid grid-cols-2 gap-2 text-[11px]">
-                              <div>
-                                <label className="block text-[9px] font-mono uppercase text-zinc-400 mb-0.5">
-                                  Camera Angle / Framing
-                                </label>
+                            {/* Camera Framing & Movement Controls with Real Transparent Gear Graphics */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                              <div className="p-2 rounded-lg bg-[#13161E] border border-white/5 space-y-1.5">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <label className="block text-[9px] font-mono uppercase text-zinc-400">
+                                    Camera Angle / Framing
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <GearVisual spec={getCameraAngleVisual(shot.cameraFraming)} size="sm" />
+                                    <GearVisual spec={getLensOpticVisual(shot.lens)} size="xs" />
+                                  </div>
+                                </div>
                                 <select
                                   value={shot.cameraFraming}
                                   onChange={(e) => {
@@ -2156,10 +2168,13 @@ export const AutomaticProductionWorkflow: React.FC<{
                                 </select>
                               </div>
 
-                              <div>
-                                <label className="block text-[9px] font-mono uppercase text-zinc-400 mb-0.5">
-                                  Camera Movement
-                                </label>
+                              <div className="p-2 rounded-lg bg-[#13161E] border border-white/5 space-y-1.5">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <label className="block text-[9px] font-mono uppercase text-zinc-400">
+                                    Camera Movement
+                                  </label>
+                                  <GearVisual spec={getCameraMovementVisual(shot.cameraMovement)} size="sm" />
+                                </div>
                                 <select
                                   value={shot.cameraMovement}
                                   onChange={(e) => {

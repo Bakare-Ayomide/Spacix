@@ -94,11 +94,11 @@ const VIDEO_MODEL_IDS = [
   'kling-3-0-pro',
   'flux-3-max-video',
   'kling-o3-frames',
-  'veo-3-1',
+  'minimax-h3',
   'wan-3-0-prime',
-  'hailuo-03-director',
-  'ltx-video-2',
+  'ltx-2-5-pro',
   'kling-3-0-turbo',
+  'seedance-2-0-fast',
   'higgsfield-dop-lite',
 ];
 
@@ -109,16 +109,16 @@ const MOTION_VIDEO_MODEL_IDS = [
   'seedance-2-5',
   'kling-3-0-pro',
   'kling-o3-frames',
-  'hailuo-03-director',
+  'minimax-h3',
 ];
 
 // Lip sync & speech-driven character performance video models
 const LIP_SYNC_MODEL_IDS = [
+  'omnihuman-1-5',
+  'kling-lipsync-audio',
+  'sync-lipsync-v2-pro',
   'seedance-2-5',
   'kling-3-0-pro',
-  'wan-3-0-prime',
-  'veo-3-1',
-  'ltx-video-2',
 ];
 
 // Voice creation & Speech/Dialogue TTS models
@@ -361,8 +361,8 @@ export const CINEMA_TOOLS: Record<CinemaToolId, CinemaToolSpec> = {
     shortLabel: 'Lip Sync',
     description: 'Synchronize spoken dialogue and facial expressions onto character video shots.',
     targetSurface: 'video',
-    defaultModelId: 'seedance-2-5',
-    defaultMode: 'Create Video',
+    defaultModelId: 'omnihuman-1-5',
+    defaultMode: 'Audio-Driven Lip Sync',
     compatibleModelIds: LIP_SYNC_MODEL_IDS,
     promptPlaceholder:
       'Describe character close-up performance and spoken line — use @ to lock speaking character...',
@@ -581,3 +581,153 @@ export function resolveCompatibleModel(
   const defaultMatch = compatible.find((m) => m.id === spec.defaultModelId);
   return defaultMatch || compatible[0] || allModels[0];
 }
+
+// ===========================================================================
+// MUSIC VIDEO STUDIO INTELLIGENT MODEL CAPABILITY SELECTORS
+// ===========================================================================
+
+/**
+ * Returns image models suited for Character Portrait & Scene Frame creation.
+ */
+export function getMusicVideoSceneImageModels(
+  allModels: ModelEntry[] = MODEL_CATALOG
+): ModelEntry[] {
+  const images = allModels.filter((m) => m.surface === 'image');
+  const preferredOrder = [
+    'soul-2-standard',
+    'soul-cinema',
+    'flux-kontext-pro',
+    'nano-banana-2-1',
+    'fal-nano-banana-pro',
+    'flux-2-pro',
+    'grok-imagine-image-2',
+    'grok-imagine-2-0',
+  ];
+  return [...images].sort((a, b) => {
+    const ai = preferredOrder.indexOf(a.id);
+    const bi = preferredOrder.indexOf(b.id);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+}
+
+/**
+ * Returns video models genuinely capable of generating B-Roll shots (text/image/motion to video),
+ * strictly excluding dedicated post-process lip-sync processors that require an existing video.
+ */
+export function getMusicVideoBRollModels(
+  allModels: ModelEntry[] = MODEL_CATALOG
+): ModelEntry[] {
+  return allModels.filter((m) => {
+    if (m.surface !== 'video') return false;
+    if (m.capabilities?.requiresBaseVideoForLipSync) return false;
+    if (m.capabilities?.lipSyncType === 'dedicated_lip_sync_step') return false;
+    return true;
+  });
+}
+
+/**
+ * Returns video models suited for animating a still scene/character reference image into motion video
+ * (usable standalone for B-Roll or as Stage 1 of a 2-step Scene Animation -> Lip-Sync pipeline).
+ */
+export function getMusicVideoAnimationModels(
+  allModels: ModelEntry[] = MODEL_CATALOG
+): ModelEntry[] {
+  return allModels.filter((m) => {
+    if (m.surface !== 'video') return false;
+    if (m.capabilities?.requiresBaseVideoForLipSync) return false;
+    if (m.capabilities?.lipSyncType === 'dedicated_lip_sync_step') return false;
+    const cats = m.capabilities?.generationCategories;
+    if (cats && cats.length > 0) {
+      return cats.includes('image_to_video') || cats.includes('reference_to_video') || cats.includes('motion_transfer');
+    }
+    return m.roles.some((r) => r.kind === 'image');
+  });
+}
+
+/**
+ * Returns models supporting 1-step Native Audio-Driven Lip Sync directly from a character/scene image + audio.
+ */
+export function getMusicVideoNativeLipSyncModels(
+  allModels: ModelEntry[] = MODEL_CATALOG
+): ModelEntry[] {
+  return allModels.filter(
+    (m) => m.surface === 'video' && m.capabilities?.lipSyncType === 'native_audio'
+  );
+}
+
+/**
+ * Returns dedicated Video + Audio Lip-Sync processor models used in a 2-step pipeline:
+ * Base Animated Scene Video + Trimmed Audio Track -> Lip-Synced Output Video.
+ */
+export function getMusicVideoDedicatedLipSyncModels(
+  allModels: ModelEntry[] = MODEL_CATALOG
+): ModelEntry[] {
+  return allModels.filter(
+    (m) =>
+      m.surface === 'video' &&
+      m.capabilities?.lipSyncType === 'dedicated_lip_sync_step'
+  );
+}
+
+/**
+ * Returns the exact settings supported by a model along with its safe defaults,
+ * merging any compatible user overrides without keeping unsupported values.
+ */
+export function sanitizeSettingsForModel(
+  model: ModelEntry | undefined,
+  prevSettings: Record<string, string | number | boolean> = {},
+  preferredAspectRatio?: string
+): Record<string, string | number | boolean> {
+  if (!model) return {};
+  const next: Record<string, string | number | boolean> = {};
+  for (const def of model.settings) {
+    const candidate =
+      def.key === 'aspect_ratio' && preferredAspectRatio
+        ? preferredAspectRatio
+        : prevSettings[def.key];
+
+    if (def.type === 'enum') {
+      const candidateStr = candidate !== undefined ? String(candidate) : '';
+      const valid = def.options.some((opt) => opt.value === candidateStr);
+      next[def.key] = valid ? candidateStr : def.defaultValue;
+    } else if (def.type === 'range') {
+      const num = Number(candidate);
+      next[def.key] =
+        candidate !== undefined && !Number.isNaN(num)
+          ? Math.min(def.max, Math.max(def.min, num))
+          : def.defaultValue;
+    } else if (def.type === 'boolean') {
+      next[def.key] =
+        candidate !== undefined ? Boolean(candidate) : def.defaultValue;
+    }
+  }
+  return next;
+}
+
+/**
+ * Picks the closest supported duration (in seconds) exposed by a model's settings,
+ * matching a target audio segment duration.
+ */
+export function getClosestModelDuration(
+  model: ModelEntry | undefined,
+  targetDurationSec: number
+): string | undefined {
+  if (!model) return undefined;
+  const durSetting = model.settings.find((s) => s.key === 'duration');
+  if (!durSetting || durSetting.type !== 'enum' || durSetting.options.length === 0) {
+    return undefined;
+  }
+  let best = durSetting.options[0].value;
+  let bestDiff = Infinity;
+  for (const opt of durSetting.options) {
+    const val = Number(opt.value);
+    if (Number.isNaN(val)) continue;
+    const diff = Math.abs(val - targetDurationSec);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = opt.value;
+    }
+  }
+  return best;
+}
+

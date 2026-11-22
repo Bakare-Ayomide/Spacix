@@ -637,6 +637,42 @@
         "fal"
       ],
       "customEndpoint": "fishaudio:s2.1@pro"
+    },
+    {
+      "modelId": "omnihuman-1-5",
+      "enabled": true,
+      "baseHfUsd": 0.14,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "higgsfield"
+      ],
+      "customEndpoint": "fal-ai/bytedance/omnihuman/v1.5"
+    },
+    {
+      "modelId": "kling-lipsync-audio",
+      "enabled": true,
+      "baseHfUsd": 0.08,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "higgsfield"
+      ],
+      "customEndpoint": "fal-ai/kling-video/lipsync/audio-to-video"
+    },
+    {
+      "modelId": "sync-lipsync-v2-pro",
+      "enabled": true,
+      "baseHfUsd": 0.1,
+      "preferredProvider": "fal",
+      "allowedProviders": [
+        "runware",
+        "fal",
+        "muapi"
+      ],
+      "customEndpoint": "fal-ai/sync-lipsync/v2/pro"
     }
   ],
   "plans": [
@@ -844,7 +880,7 @@
     ],
     "excludedModels": []
   },
-  "savedAt": "2026-11-07T22:41:57.914Z",
+  "savedAt": "2026-11-22T11:30:31.480Z",
   "catalogModels": [
     {
       "id": "nano-banana-2-1",
@@ -920,6 +956,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.035,
       "billingUnit": "per_image",
       "previewGradient": "from-amber-400/25 via-yellow-950/70 to-zinc-950",
@@ -1117,6 +1161,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.05,
       "billingUnit": "per_image",
       "previewGradient": "from-[#46ecd5]/25 via-amber-950/60 to-zinc-950",
@@ -1262,6 +1314,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.04,
       "billingUnit": "per_image",
       "previewGradient": "from-[#46ecd5]/25 via-teal-950/60 to-zinc-950",
@@ -1424,6 +1484,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.06,
       "billingUnit": "per_image",
       "previewGradient": "from-amber-500/20 via-stone-900/70 to-zinc-950",
@@ -1606,6 +1674,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.05,
       "billingUnit": "per_image",
       "previewGradient": "from-[#46ecd5]/25 via-sky-950/70 to-zinc-950",
@@ -1770,6 +1846,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "image_edit"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.045,
       "billingUnit": "per_image",
       "previewGradient": "from-sky-400/20 via-slate-900/70 to-zinc-950",
@@ -1930,6 +2013,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.05,
       "billingUnit": "per_image",
       "previewGradient": "from-emerald-400/20 via-zinc-900/80 to-zinc-950",
@@ -2078,6 +2168,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.055,
       "billingUnit": "per_image",
       "previewGradient": "from-rose-500/20 via-zinc-900/80 to-zinc-950",
@@ -2221,6 +2318,12 @@
       "roles": [],
       "requirePrompt": true,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.04,
       "billingUnit": "per_image",
       "previewGradient": "from-teal-400/20 via-zinc-900/80 to-zinc-950",
@@ -2361,6 +2464,12 @@
       "roles": [],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.02,
       "billingUnit": "per_image",
       "previewGradient": "from-cyan-400/20 via-zinc-900/80 to-zinc-950",
@@ -2497,6 +2606,12 @@
       "roles": [],
       "requirePrompt": true,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.01,
       "billingUnit": "per_image",
       "previewGradient": "from-[#46ecd5]/20 via-zinc-900/80 to-zinc-950",
@@ -2658,6 +2773,15 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video",
+          "first_last_frame"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.06,
       "billingUnit": "per_second",
       "previewGradient": "from-[#46ecd5]/30 via-teal-950/70 to-zinc-950",
@@ -2879,6 +3003,15 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video",
+          "first_last_frame"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.075,
       "billingUnit": "per_second",
       "previewGradient": "from-amber-400/25 via-zinc-900/80 to-zinc-950",
@@ -3046,6 +3179,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.07,
       "billingUnit": "per_second",
       "previewGradient": "from-[#46ecd5]/25 via-sky-950/75 to-zinc-950",
@@ -3207,6 +3347,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "image_to_video",
+          "first_last_frame"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.065,
       "billingUnit": "per_second",
       "previewGradient": "from-yellow-400/20 via-zinc-900/80 to-zinc-950",
@@ -3370,6 +3517,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.05,
       "billingUnit": "per_second",
       "previewGradient": "from-rose-400/20 via-zinc-900/80 to-zinc-950",
@@ -3533,6 +3687,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.035,
       "billingUnit": "per_second",
       "previewGradient": "from-teal-400/20 via-zinc-900/80 to-zinc-950",
@@ -3681,6 +3842,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.025,
       "billingUnit": "per_second",
       "previewGradient": "from-emerald-400/25 via-zinc-900/75 to-zinc-950",
@@ -3833,6 +4001,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.035,
       "billingUnit": "per_second",
       "previewGradient": "from-orange-400/20 via-zinc-900/80 to-zinc-950",
@@ -3993,6 +4168,13 @@
       ],
       "requirePrompt": false,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "image_to_video",
+          "motion_transfer"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.09,
       "billingUnit": "per_second",
       "previewGradient": "from-[#46ecd5]/25 via-teal-950/70 to-zinc-950",
@@ -4140,6 +4322,14 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.055,
       "billingUnit": "per_second",
       "previewGradient": "from-sky-400/25 via-zinc-900/80 to-zinc-950",
@@ -4293,6 +4483,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "image_to_video",
+          "motion_transfer"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.25,
       "billingUnit": "per_generation",
       "previewGradient": "from-[#46ecd5]/30 via-zinc-900/80 to-zinc-950",
@@ -4404,6 +4601,514 @@
       ]
     },
     {
+      "id": "omnihuman-1-5",
+      "surface": "video",
+      "family": "OmniHuman",
+      "provider": "ByteDance",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/bytedance/omnihuman/v1.5",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.14,
+          "latencyBadge": "Fal Audio-Driven Avatar",
+          "docsUrl": "https://fal.ai/models/fal-ai/bytedance/omnihuman/v1.5"
+        },
+        {
+          "providerId": "higgsfield",
+          "label": "Higgsfield",
+          "endpoint": "bytedance/omnihuman-1.5",
+          "callingPattern": "queue",
+          "baseUsd": 0.15,
+          "latencyBadge": "HF Lip-Sync Queue"
+        },
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "bytedance:omnihuman@1.5",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.12,
+          "latencyBadge": "Sonic Video Task"
+        }
+      ],
+      "label": "OmniHuman 1.5 Native Lip Sync",
+      "category": "CINEMATIC",
+      "description": "Audio-driven character performance model generating expressive singing, vocal delivery, head turns, and body gestures directly from a character/scene image and music segment.",
+      "bestFor": "1-step singing & vocal lip-sync directly from character/scene frame + audio",
+      "badges": [
+        "NEW",
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/bytedance/omnihuman/v1.5",
+      "modes": [
+        "Audio Lip Sync"
+      ],
+      "roles": [
+        {
+          "role": "start",
+          "kind": "image",
+          "label": "Character / Scene Reference",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Music / Vocal Audio",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "image_to_video",
+          "native_lip_sync"
+        ],
+        "lipSyncType": "native_audio",
+        "requiresBaseVideoForLipSync": false,
+        "acceptsAudioInput": true,
+        "maxAudioDurationSec": 30
+      },
+      "baseHfUsd": 0.14,
+      "billingUnit": "per_second",
+      "previewGradient": "from-[#46ecd5]/30 via-emerald-950/75 to-zinc-950",
+      "previewAccent": "#46ecd5",
+      "restPaths": {
+        "default": "fal-ai/bytedance/omnihuman/v1.5"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "resolution",
+          "label": "Resolution",
+          "headline": true,
+          "defaultValue": "1080p",
+          "options": [
+            {
+              "value": "720p",
+              "label": "720p HD"
+            },
+            {
+              "value": "1080p",
+              "label": "1080p Full HD"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "duration",
+          "label": "Clip Duration",
+          "headline": true,
+          "defaultValue": "5",
+          "options": [
+            {
+              "value": "5",
+              "label": "5s"
+            },
+            {
+              "value": "10",
+              "label": "10s"
+            },
+            {
+              "value": "15",
+              "label": "15s"
+            }
+          ]
+        },
+        {
+          "type": "boolean",
+          "key": "turbo_mode",
+          "label": "Turbo Lip-Sync Pass",
+          "description": "Prioritize rapid performance rendering while keeping mouth alignment crisp",
+          "defaultValue": false
+        }
+      ],
+      "effectiveProviders": [
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "bytedance:omnihuman@1.5",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.12,
+          "latencyBadge": "Sonic Video Task"
+        },
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/bytedance/omnihuman/v1.5",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.14,
+          "latencyBadge": "Fal Audio-Driven Avatar",
+          "docsUrl": "https://fal.ai/models/fal-ai/bytedance/omnihuman/v1.5"
+        },
+        {
+          "providerId": "higgsfield",
+          "label": "Higgsfield",
+          "endpoint": "bytedance/omnihuman-1.5",
+          "callingPattern": "queue",
+          "baseUsd": 0.15,
+          "latencyBadge": "HF Lip-Sync Queue"
+        }
+      ]
+    },
+    {
+      "id": "kling-lipsync-audio",
+      "surface": "video",
+      "family": "Kling",
+      "provider": "Kuaishou Kling",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/kling-video/lipsync/audio-to-video",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.08,
+          "latencyBadge": "Fal Kling LipSync",
+          "docsUrl": "https://fal.ai/models/fal-ai/kling-video/lipsync/audio-to-video"
+        },
+        {
+          "providerId": "higgsfield",
+          "label": "Higgsfield",
+          "endpoint": "kling-video/lipsync/audio-to-video",
+          "callingPattern": "queue",
+          "baseUsd": 0.085,
+          "latencyBadge": "HF Lip-Sync Queue"
+        },
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "klingai:lipsync@audio",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.075,
+          "latencyBadge": "Sonic Video Task"
+        }
+      ],
+      "label": "Kling LipSync Audio-Sync",
+      "category": "CINEMATIC",
+      "description": "Dedicated video-plus-audio lip synchronization processor. Synchronizes a performer’s mouth and jaw articulation in an animated video clip to a trimmed music/vocal track.",
+      "bestFor": "Step 2 lip-sync pass on animated Kling / Seedance / Wan scene clips",
+      "badges": [
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/kling-video/lipsync/audio-to-video",
+      "modes": [
+        "Video + Audio Lip Sync"
+      ],
+      "roles": [
+        {
+          "role": "video",
+          "kind": "video",
+          "label": "Base Animated Scene Video",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Music / Vocal Audio",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "dedicated_lip_sync"
+        ],
+        "lipSyncType": "dedicated_lip_sync_step",
+        "requiresBaseVideoForLipSync": true,
+        "acceptsAudioInput": true,
+        "maxAudioDurationSec": 15
+      },
+      "baseHfUsd": 0.08,
+      "billingUnit": "per_second",
+      "previewGradient": "from-amber-400/25 via-zinc-900/80 to-zinc-950",
+      "previewAccent": "#FBBF24",
+      "restPaths": {
+        "default": "fal-ai/kling-video/lipsync/audio-to-video"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "duration",
+          "label": "Sync Duration",
+          "headline": true,
+          "defaultValue": "5",
+          "options": [
+            {
+              "value": "5",
+              "label": "5s"
+            },
+            {
+              "value": "10",
+              "label": "10s"
+            }
+          ]
+        }
+      ],
+      "effectiveProviders": [
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "klingai:lipsync@audio",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.075,
+          "latencyBadge": "Sonic Video Task"
+        },
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/kling-video/lipsync/audio-to-video",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.08,
+          "latencyBadge": "Fal Kling LipSync",
+          "docsUrl": "https://fal.ai/models/fal-ai/kling-video/lipsync/audio-to-video"
+        },
+        {
+          "providerId": "higgsfield",
+          "label": "Higgsfield",
+          "endpoint": "kling-video/lipsync/audio-to-video",
+          "callingPattern": "queue",
+          "baseUsd": 0.085,
+          "latencyBadge": "HF Lip-Sync Queue"
+        }
+      ]
+    },
+    {
+      "id": "sync-lipsync-v2-pro",
+      "surface": "video",
+      "family": "Sync",
+      "provider": "Sync Labs",
+      "defaultApiProvider": "fal",
+      "supportedProviders": [
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/sync-lipsync/v2/pro",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.1,
+          "latencyBadge": "Fal Sync v2 Pro",
+          "docsUrl": "https://fal.ai/models/fal-ai/sync-lipsync/v2/pro"
+        },
+        {
+          "providerId": "muapi",
+          "label": "Muapi.ai",
+          "endpoint": "muapi/sync/lipsync-v2-pro",
+          "callingPattern": "queue",
+          "baseUsd": 0.095,
+          "latencyBadge": "Muapi Router"
+        },
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "sync:lipsync@v2-pro",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.09,
+          "latencyBadge": "Sonic Video Task"
+        }
+      ],
+      "label": "Sync Lipsync 2.0 Pro",
+      "category": "CINEMATIC",
+      "description": "Studio-grade high-definition vocal & singing lip synchronization engine preserving skin pores, facial lighting, and camera motion across animated video clips.",
+      "bestFor": "Precision singing & close-up vocal sync on animated music-video clips",
+      "badges": [
+        "NEW",
+        "TOP",
+        "AUDIO"
+      ],
+      "docsUrl": "https://fal.ai/models/fal-ai/sync-lipsync/v2/pro",
+      "modes": [
+        "Video + Audio Lip Sync"
+      ],
+      "roles": [
+        {
+          "role": "video",
+          "kind": "video",
+          "label": "Base Animated Scene Video",
+          "maxCount": 1,
+          "required": true
+        },
+        {
+          "role": "audio",
+          "kind": "audio",
+          "label": "Trimmed Music / Vocal Audio",
+          "maxCount": 1,
+          "required": true
+        }
+      ],
+      "requirePrompt": false,
+      "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "dedicated_lip_sync"
+        ],
+        "lipSyncType": "dedicated_lip_sync_step",
+        "requiresBaseVideoForLipSync": true,
+        "acceptsAudioInput": true,
+        "maxAudioDurationSec": 30
+      },
+      "baseHfUsd": 0.1,
+      "billingUnit": "per_second",
+      "previewGradient": "from-cyan-400/25 via-teal-950/75 to-zinc-950",
+      "previewAccent": "#22D3EE",
+      "restPaths": {
+        "default": "fal-ai/sync-lipsync/v2/pro"
+      },
+      "settings": [
+        {
+          "type": "enum",
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "headline": true,
+          "defaultValue": "16:9",
+          "options": [
+            {
+              "value": "16:9",
+              "label": "16:9 Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "9:16 Portrait"
+            },
+            {
+              "value": "1:1",
+              "label": "1:1 Square"
+            },
+            {
+              "value": "4:3",
+              "label": "4:3 Classic"
+            },
+            {
+              "value": "3:4",
+              "label": "3:4 Portrait"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "duration",
+          "label": "Sync Duration",
+          "headline": true,
+          "defaultValue": "5",
+          "options": [
+            {
+              "value": "5",
+              "label": "5s"
+            },
+            {
+              "value": "10",
+              "label": "10s"
+            },
+            {
+              "value": "15",
+              "label": "15s"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "key": "sync_mode",
+          "label": "Timing Alignment Mode",
+          "defaultValue": "cut_off",
+          "options": [
+            {
+              "value": "cut_off",
+              "label": "Exact Trim Match (Cut Off)"
+            },
+            {
+              "value": "loop",
+              "label": "Loop Video to Audio"
+            },
+            {
+              "value": "bounce",
+              "label": "Bounce Video to Audio"
+            },
+            {
+              "value": "silence",
+              "label": "Pad Remaining Frames"
+            }
+          ]
+        }
+      ],
+      "effectiveProviders": [
+        {
+          "providerId": "runware",
+          "label": "Runware.ai",
+          "endpoint": "sync:lipsync@v2-pro",
+          "callingPattern": "task_stream",
+          "baseUsd": 0.09,
+          "latencyBadge": "Sonic Video Task"
+        },
+        {
+          "providerId": "fal",
+          "label": "fal.ai",
+          "endpoint": "fal-ai/sync-lipsync/v2/pro",
+          "callingPattern": "subscribe",
+          "baseUsd": 0.1,
+          "latencyBadge": "Fal Sync v2 Pro",
+          "docsUrl": "https://fal.ai/models/fal-ai/sync-lipsync/v2/pro"
+        },
+        {
+          "providerId": "muapi",
+          "label": "Muapi.ai",
+          "endpoint": "muapi/sync/lipsync-v2-pro",
+          "callingPattern": "queue",
+          "baseUsd": 0.095,
+          "latencyBadge": "Muapi Router"
+        }
+      ]
+    },
+    {
       "id": "sonilo-music-v2",
       "surface": "audio",
       "family": "Sonilo",
@@ -4449,6 +5154,12 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "audio_music"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.05,
       "billingUnit": "per_generation",
       "previewGradient": "from-[#46ecd5]/25 via-teal-950/70 to-zinc-950",
@@ -4578,6 +5289,12 @@
       "roles": [],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "audio_music"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.06,
       "billingUnit": "per_generation",
       "previewGradient": "from-[#46ecd5]/25 via-zinc-900/80 to-zinc-950",
@@ -4684,6 +5401,12 @@
       "roles": [],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "audio_music"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.035,
       "billingUnit": "per_generation",
       "previewGradient": "from-cyan-400/20 via-zinc-900/80 to-zinc-950",
@@ -4786,6 +5509,12 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "audio_tts"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.02,
       "billingUnit": "per_generation",
       "previewGradient": "from-emerald-400/20 via-zinc-900/80 to-zinc-950",
@@ -4881,6 +5610,12 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "audio_tts"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.015,
       "billingUnit": "per_generation",
       "previewGradient": "from-amber-400/20 via-zinc-900/80 to-zinc-950",
@@ -5006,6 +5741,12 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "audio_music"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.02,
       "billingUnit": "per_generation",
       "previewGradient": "from-cyan-400/20 via-zinc-900/80 to-zinc-950",
@@ -5136,6 +5877,13 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": true,
+      "capabilities": {
+        "generationCategories": [
+          "text_to_image",
+          "character_reference"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.03,
       "billingUnit": "per_image",
       "previewGradient": "from-teal-400/25 via-slate-900/80 to-zinc-950",
@@ -5281,6 +6029,12 @@
       ],
       "requirePrompt": true,
       "supportsEnhancePrompt": false,
+      "capabilities": {
+        "generationCategories": [
+          "audio_tts"
+        ],
+        "lipSyncType": "none"
+      },
       "baseHfUsd": 0.015,
       "billingUnit": "per_generation",
       "previewGradient": "from-[#46ecd5]/20 via-zinc-900/80 to-zinc-950",

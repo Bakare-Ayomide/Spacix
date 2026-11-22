@@ -45,6 +45,8 @@ import {
   ShimmerButton,
   SpotlightCard,
 } from './ui/aceternity-magic';
+import { GearVisual } from './GearVisual';
+import { getSettingOptionVisual } from '../catalog/cinemaGearVisuals';
 
 // ============================================================================
 // 1. MODEL PICKER MODAL (Radix Dialog + AnimatedPillTabs + SpotlightCard)
@@ -225,18 +227,22 @@ export const SettingsDialog: React.FC<{
                     <Badge variant="outline" className="font-mono-tabular">{String(val)}</Badge>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {def.options.map((opt) => (
-                      <Button
-                        key={opt.value}
-                        type="button"
-                        variant={String(val) === opt.value ? 'cyanGhost' : 'secondary'}
-                        size="sm"
-                        onClick={() => onChangeSetting(def.key, opt.value)}
-                        className="justify-start truncate"
-                      >
-                        {opt.label}
-                      </Button>
-                    ))}
+                    {def.options.map((opt) => {
+                      const optVisual = getSettingOptionVisual(def.key, opt.label || opt.value);
+                      return (
+                        <Button
+                          key={opt.value}
+                          type="button"
+                          variant={String(val) === opt.value ? 'cyanGhost' : 'secondary'}
+                          size="sm"
+                          onClick={() => onChangeSetting(def.key, opt.value)}
+                          className="justify-start gap-2 h-auto py-1.5"
+                        >
+                          {optVisual && <GearVisual spec={optVisual} size="sm" />}
+                          <span className="truncate">{opt.label}</span>
+                        </Button>
+                      );
+                    })}
                   </div>
                 </div>
               );

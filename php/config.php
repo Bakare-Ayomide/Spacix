@@ -82,7 +82,7 @@ function spacix_get_pdo(): PDO {
  * Ensures all MySQL tables and columns exist, purges legacy mock records, and seeds real bootstrap state
  */
 function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): array {
-    $readyFlag = __DIR__ . '/.schema_ready_v2';
+    $readyFlag = __DIR__ . '/.schema_ready_v3';
     if (!$forceMigrate && file_exists($readyFlag)) {
         return ['migrated' => false, 'cached' => true];
     }
@@ -113,19 +113,6 @@ function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): ar
         }
     }
 
-    $secretCount = 0;
-    try {
-        $secretCount = (int) $pdo->query('SELECT COUNT(*) FROM `spacix_secrets`')->fetchColumn();
-    } catch (Throwable $e) {
-        $secretCount = 0;
-    }
-
-    if ($secretCount > 0 && !$forceMigrate) {
-        @file_put_contents($readyFlag, gmdate('c'));
-        $userCount = (int) $pdo->query('SELECT COUNT(*) FROM `spacix_users`')->fetchColumn();
-        return ['migrated' => false, 'users' => $userCount, 'secrets' => $secretCount];
-    }
-
     $seedFile = __DIR__ . '/seed_data.json';
     if (!file_exists($seedFile)) {
         return ['migrated' => false, 'error' => 'seed_data.json not found'];
@@ -134,6 +121,69 @@ function spacix_ensure_schema_and_seed(PDO $pdo, bool $forceMigrate = false): ar
     $seed = json_decode(file_get_contents($seedFile), true);
     if (!is_array($seed)) {
         return ['migrated' => false, 'error' => 'Invalid seed_data.json'];
+    }
+
+    $secretCount = 0;
+    try {
+        $secretCount = (int) $pdo->query('SELECT COUNT(*) FROM `spacix_secrets`')->fetchColumn();
+    } catch (Throwable $e) {
+        $secretCount = 0;
+    }
+
+    // Safe non-destructive upgrade path when production DB is already populated
+    if ($secretCount > 0) {
+        $pdo->beginTransaction();
+        try {
+            $stmtModel = $pdo->prepare('
+                INSERT IGNORE INTO `spacix_model_pricing`
+                (`model_id`, `enabled`, `base_hf_usd`, `preferred_provider`, `custom_endpoint`, `payload_json`)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ');
+            foreach ($seed['modelPricing'] ?? [] as $m) {
+                $stmtModel->execute([
+                    $m['modelId'],
+                    !empty($m['enabled']) ? 1 : 0,
+                    (float) ($m['baseHfUsd'] ?? 0.05),
+                    $m['preferredProvider'] ?? 'runware',
+                    $m['customEndpoint'] ?? null,
+                    json_encode($m, JSON_UNESCAPED_SLASHES),
+                ]);
+            }
+
+            $stmtKv = $pdo->prepare('
+                INSERT INTO `spacix_kv_store` (`k`, `v`)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE `v` = VALUES(`v`)
+            ');
+            $kvPairs = [
+                'catalogModels' => $seed['catalogModels'] ?? [],
+                'initialPresets' => $seed['initialPresets'] ?? [],
+                'plans' => $seed['plans'] ?? [],
+                'topups' => $seed['topups'] ?? [],
+            ];
+            if (!empty($seed['runwareSearchCatalog'])) {
+                $kvPairs['runwareSearchCatalog'] = $seed['runwareSearchCatalog'];
+            }
+            foreach ($kvPairs as $k => $v) {
+                $stmtKv->execute([$k, json_encode($v, JSON_UNESCAPED_SLASHES)]);
+            }
+
+            $pdo->commit();
+            @file_put_contents($readyFlag, gmdate('c'));
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        return [
+            'migrated' => true,
+            'catalogUpgraded' => true,
+            'users' => (int) $pdo->query('SELECT COUNT(*) FROM `spacix_users`')->fetchColumn(),
+            'secrets' => $secretCount,
+            'models' => (int) $pdo->query('SELECT COUNT(*) FROM `spacix_model_pricing`')->fetchColumn(),
+        ];
     }
 
     $pdo->beginTransaction();

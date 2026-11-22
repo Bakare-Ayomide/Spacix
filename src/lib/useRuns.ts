@@ -123,11 +123,17 @@ interface StudioContextValue {
   ) => void;
   applyPresetToDock: (preset: PresetEffect) => void;
   reuseGenerationInDock: (gen: GenerationRecord, animateAsVideo?: boolean) => void;
-  submitGeneration: (overrideDraft?: Partial<DockDraftState>) => Promise<{
+  submitGeneration: (
+    overrideDraft?: Partial<DockDraftState> & { skipContinuityMerge?: boolean }
+  ) => Promise<{
     ok: boolean;
     error?: string;
     generation?: GenerationRecord;
   }>;
+  pollGenerationUntilDone: (
+    generationId: string,
+    timeoutMs?: number
+  ) => Promise<GenerationRecord | null>;
   cancelGeneration: (id: string) => Promise<void>;
   togglePublishGeneration: (id: string, isPublic: boolean) => Promise<void>;
   moveGenerationToProject: (id: string, projectId: string | null) => Promise<void>;
@@ -763,9 +769,14 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const submitGeneration = useCallback(
-    async (overrideDraft?: Partial<DockDraftState>) => {
-      const activeDraft = { ...dockDraft, ...overrideDraft };
-      const composed = composeContinuityPrompt(activeDraft.prompt, undefined, activeDraft.media);
+    async (
+      overrideDraft?: Partial<DockDraftState> & { skipContinuityMerge?: boolean }
+    ) => {
+      const { skipContinuityMerge, ...draftOverrides } = overrideDraft || {};
+      const activeDraft = { ...dockDraft, ...draftOverrides };
+      const composed = skipContinuityMerge
+        ? { prompt: activeDraft.prompt.trim(), media: activeDraft.media }
+        : composeContinuityPrompt(activeDraft.prompt, undefined, activeDraft.media);
 
       if (!user) {
         setAuthModalOpen(true);
@@ -825,6 +836,80 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     },
     [dockDraft, composeContinuityPrompt, user, authHeaders, routeParams.projectId, activeContinuity.projectId, showToast]
+  );
+
+  const pollGenerationUntilDone = useCallback(
+    async (generationId: string, timeoutMs = 130_000): Promise<GenerationRecord | null> => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetch(
+            `/api/generations/status?ids=${encodeURIComponent(generationId)}`,
+            { headers: authHeaders() }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.credits) {
+              setUser((prev) => (prev ? { ...prev, credits: data.credits } : prev));
+            }
+            const item = Array.isArray(data.items)
+              ? data.items.find((it: { id: string }) => it.id === generationId)
+              : undefined;
+            if (item) {
+              let matchedRecord: GenerationRecord | null = null;
+              setGenerations((prev) =>
+                prev.map((g) => {
+                  if (g.id !== generationId) return g;
+                  const updated: GenerationRecord = {
+                    ...g,
+                    status: item.status,
+                    outputs: item.outputs || g.outputs,
+                    error: item.error,
+                    finishedAt: item.finishedAt || g.finishedAt,
+                  };
+                  matchedRecord = updated;
+                  return updated;
+                })
+              );
+              if (
+                item.status === 'completed' ||
+                item.status === 'failed' ||
+                item.status === 'nsfw' ||
+                item.status === 'canceled'
+              ) {
+                if (matchedRecord) return matchedRecord;
+                return {
+                  id: generationId,
+                  userId: user?.id || '',
+                  userName: user?.name || '',
+                  projectId: null,
+                  surface: 'video',
+                  modelId: '',
+                  modelLabel: '',
+                  modelPath: '',
+                  prompt: '',
+                  settings: {},
+                  media: [],
+                  status: item.status,
+                  cost: 0,
+                  outputs: item.outputs || [],
+                  error: item.error,
+                  isPublic: false,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  finishedAt: item.finishedAt,
+                };
+              }
+            }
+          }
+        } catch {
+          // Continue polling until deadline
+        }
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      return null;
+    },
+    [authHeaders, user?.id, user?.name]
   );
 
   const saveCharacter = useCallback(
@@ -1726,6 +1811,7 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         applyPresetToDock,
         reuseGenerationInDock,
         submitGeneration,
+        pollGenerationUntilDone,
         cancelGeneration,
         togglePublishGeneration,
         moveGenerationToProject,

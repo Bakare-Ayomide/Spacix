@@ -86,6 +86,9 @@ export interface RunwareTaskRequest {
   messages?: { role: string; content: string }[];
   inputs?: {
     referenceImages?: string[];
+    frameImages?: Array<{ inputImage: string; frame?: 'first' | 'last' }>;
+    audio?: string;
+    video?: string;
   };
   deliveryMethod?: 'sync' | 'async';
   webhookURL?: string;
@@ -451,6 +454,23 @@ export function buildRunwareTaskPayload(params: {
   }
 
   if (surface === 'video') {
+    const frameUrl = String(
+      body.image_url || body.first_frame_image || ''
+    ).trim();
+    const audioUrl = String(body.audio_url || '').trim();
+    const videoUrl = String(body.video_url || '').trim();
+    const videoInputs =
+      frameUrl || audioUrl || videoUrl || (referenceMediaUUIDs && referenceMediaUUIDs.length > 0)
+        ? {
+            ...(referenceMediaUUIDs && referenceMediaUUIDs.length > 0
+              ? { referenceImages: referenceMediaUUIDs }
+              : {}),
+            ...(frameUrl ? { frameImages: [{ inputImage: frameUrl, frame: 'first' as const }] } : {}),
+            ...(audioUrl ? { audio: audioUrl } : {}),
+            ...(videoUrl ? { video: videoUrl } : {}),
+          }
+        : undefined;
+
     return [
       {
         taskType: 'videoInference',
@@ -460,6 +480,7 @@ export function buildRunwareTaskPayload(params: {
         ...(resolvedModel === 'auto' ? {} : { width, height }),
         duration: Number(body.duration || 5),
         ...sharedFields,
+        ...(videoInputs ? { inputs: videoInputs } : {}),
       },
     ];
   }

@@ -76,6 +76,12 @@ import {
   VideoTimelineClip,
   writeSyncMirror,
 } from '../lib/storageVault';
+import { GearVisual } from './GearVisual';
+import {
+  getCameraAngleVisual,
+  getColorGradeVisual,
+  getLensOpticVisual,
+} from '../catalog/cinemaGearVisuals';
 
 interface RollingQueueTask {
   id: string;
@@ -1205,9 +1211,12 @@ export const StoryStudioView: React.FC<{
           {/* Left Column: Stable Scene UUID Outline & Global Visual Style */}
           <aside className="lg:col-span-3 bg-[#111114] border border-white/10 rounded-xl p-4 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-mono-tabular uppercase tracking-wider text-[#46ecd5] block">
-                Global Visual Style Anchor
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[11px] font-mono-tabular uppercase tracking-wider text-[#46ecd5] block">
+                  Global Visual Style Anchor
+                </label>
+                <GearVisual spec={getColorGradeVisual(project.globalStyle)} size="sm" />
+              </div>
               <select
                 value={project.globalStyle}
                 onChange={(e) =>
@@ -2044,11 +2053,17 @@ export const StoryStudioView: React.FC<{
                 {CINEMATOGRAPHY_TAXONOMY.map((tax) => (
                   <div
                     key={tax.id}
-                    className="p-3 rounded-lg bg-zinc-900/90 border border-white/10 space-y-1"
+                    className="p-3 rounded-lg bg-zinc-900/90 border border-white/10 space-y-1.5"
                   >
-                    <div className="flex items-center justify-between text-[10px] font-mono-tabular text-[#46ecd5]">
-                      <span className="font-bold">{tax.shortCode}</span>
-                      <span>{tax.focalLength}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <GearVisual spec={getCameraAngleVisual(tax.label)} size="md" />
+                        <GearVisual spec={getLensOpticVisual(tax.focalLength)} size="sm" />
+                      </div>
+                      <div className="text-right text-[10px] font-mono-tabular text-[#46ecd5]">
+                        <div className="font-bold">{tax.shortCode}</div>
+                        <div>{tax.focalLength}</div>
+                      </div>
                     </div>
                     <div className="text-xs font-bold text-white">{tax.label}</div>
                     <p className="text-[11px] text-zinc-400 leading-relaxed">
@@ -2158,7 +2173,11 @@ export const StoryStudioView: React.FC<{
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="p-4 text-center space-y-1.5">
+                              <div className="p-4 text-center space-y-2 flex flex-col items-center">
+                                <div className="flex items-center gap-2">
+                                  <GearVisual spec={getCameraAngleVisual(taxSpec.label)} size="lg" />
+                                  <GearVisual spec={getLensOpticVisual(taxSpec.focalLength)} size="md" />
+                                </div>
                                 <div className="text-[10px] font-mono-tabular text-[#46ecd5] uppercase">
                                   {taxSpec.shortCode} · {taxSpec.focalLength}
                                 </div>
@@ -2169,8 +2188,11 @@ export const StoryStudioView: React.FC<{
                             )}
 
                             <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                              <span className="px-2 py-0.5 rounded bg-black/85 border border-white/15 text-[10px] font-mono-tabular font-bold text-[#46ecd5]">
-                                SHOT #{frame.shotNumber} · {taxSpec.shortCode}
+                              <span className="px-2 py-0.5 rounded bg-black/85 border border-white/15 text-[10px] font-mono-tabular font-bold text-[#46ecd5] flex items-center gap-1">
+                                <GearVisual spec={getCameraAngleVisual(taxSpec.label)} size="xs" />
+                                <span>
+                                  SHOT #{frame.shotNumber} · {taxSpec.shortCode}
+                                </span>
                               </span>
                               <span className="px-2 py-0.5 rounded bg-black/80 text-[10px] font-mono-tabular text-zinc-300">
                                 {frame.durationSec}s

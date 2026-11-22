@@ -1,5 +1,8 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import dns from 'dns/promises';
+import net from 'net';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -212,7 +215,7 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '15mb' }));
+  app.use(express.json({ limit: '45mb' }));
 
   // Support POST-tunneling for PATCH & DELETE so reverse proxies / iframe gateways never block non-POST mutations
   app.use((req, res, next) => {
@@ -583,6 +586,7 @@ async function startServer() {
         roles: m.roles,
         requirePrompt: m.requirePrompt,
         supportsEnhancePrompt: m.supportsEnhancePrompt,
+        capabilities: m.capabilities,
         settings: m.settings,
         baseHfUsd: effectiveUsd,
         billingUnit: m.billingUnit,
@@ -1201,9 +1205,44 @@ async function startServer() {
     'image/gif',
     'image/svg+xml',
     'video/mp4',
+    'video/webm',
     'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
     'audio/mpeg',
+    'audio/mp3',
+    'audio/ogg',
+    'audio/aac',
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/m4a',
+    'audio/webm',
+    'audio/flac',
+    'audio/x-flac',
   ]);
+
+  const AUDIO_EXT_TO_MIME: Record<string, string> = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac',
+    '.ogg': 'audio/ogg',
+    '.opus': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.webm': 'audio/webm',
+  };
+
+  function resolveNormalizedContentType(rawType: string, label: string): string {
+    const clean = String(rawType || '').split(';')[0].trim().toLowerCase();
+    if (ALLOWED_UPLOAD_TYPES.has(clean)) return clean;
+    const ext = path.extname(String(label || '').toLowerCase());
+    if (AUDIO_EXT_TO_MIME[ext]) return AUDIO_EXT_TO_MIME[ext];
+    if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+    if (ext === '.png') return 'image/png';
+    if (ext === '.webp') return 'image/webp';
+    if (ext === '.mp4') return 'video/mp4';
+    return clean;
+  }
 
   app.get('/api/uploads', (req: Request, res: Response) => {
     const user = getSessionUser(req);
@@ -1224,15 +1263,17 @@ async function startServer() {
       return;
     }
 
-    if (!db.checkRateLimit(`upload:${user.id}`, 25, 60_000)) {
+    if (!db.checkRateLimit(`upload:${user.id}`, 35, 60_000)) {
       res.status(429).json({ error: 'Upload rate limit exceeded. Try again in a moment.' });
       return;
     }
 
-    const { contentType, label, bytes = 1024, dataUrl } = req.body || {};
-    if (!ALLOWED_UPLOAD_TYPES.has(String(contentType))) {
+    const { contentType, label = '', bytes = 1024, dataUrl } = req.body || {};
+    const normalizedType = resolveNormalizedContentType(String(contentType || ''), String(label));
+    if (!ALLOWED_UPLOAD_TYPES.has(normalizedType)) {
       res.status(400).json({
-        error: 'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, WAV.',
+        error:
+          'Unsupported file type. Allowed: JPEG, PNG, WebP, GIF, MP4, MP3, WAV, M4A, AAC, OGG, FLAC.',
       });
       return;
     }
@@ -1242,10 +1283,10 @@ async function startServer() {
       return;
     }
 
-    const signed = await createSignedUploadUrl(String(contentType));
-    const kind: MediaKind = String(contentType).startsWith('video/')
+    const signed = await createSignedUploadUrl(normalizedType);
+    const kind: MediaKind = normalizedType.startsWith('video/')
       ? 'video'
-      : String(contentType).startsWith('audio/')
+      : normalizedType.startsWith('audio/')
       ? 'audio'
       : 'image';
 
@@ -1258,7 +1299,7 @@ async function startServer() {
       kind,
       label: String(label || `Reference ${kind}`),
       publicUrl: storedUrl,
-      contentType: String(contentType),
+      contentType: normalizedType,
       bytes: Number(bytes || 1024),
       createdAt: new Date().toISOString(),
     };
@@ -1270,6 +1311,221 @@ async function startServer() {
       public_url: storedUrl,
       upload_headers: signed.upload_headers,
     });
+  });
+
+  // ===========================================================================
+  // 5b. SAFE AUDIO URL VALIDATION & CORS/RANGE PROXY FOR MUSIC VIDEO STUDIO
+  // ===========================================================================
+  const proxiedAudioCache = new Map<
+    string,
+    { buffer: Buffer; contentType: string; title: string; sourceUrl: string; createdAt: number }
+  >();
+
+  function isPrivateOrBlockedIp(ip: string): boolean {
+    if (!ip) return true;
+    const clean = ip.replace(/^::ffff:/, '').toLowerCase();
+    if (clean === '::1' || clean === '0:0:0:0:0:0:0:1' || clean.startsWith('fe80:') || clean.startsWith('fc') || clean.startsWith('fd')) {
+      return true;
+    }
+    if (net.isIPv4(clean)) {
+      const parts = clean.split('.').map(Number);
+      if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+      const [a, b] = parts;
+      if (a === 0 || a === 10 || a === 127) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+    }
+    return false;
+  }
+
+  async function assertPublicAudioTarget(rawUrl: string): Promise<URL> {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl.trim());
+    } catch {
+      throw new Error('Enter a valid http:// or https:// audio file URL.');
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Only HTTP and HTTPS direct audio URLs are supported.');
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      host === '0.0.0.0'
+    ) {
+      throw new Error('Local or private network URLs are not permitted.');
+    }
+    if (net.isIP(host)) {
+      if (isPrivateOrBlockedIp(host)) {
+        throw new Error('Private IP addresses are not permitted.');
+      }
+      return parsed;
+    }
+    const resolved = await dns.lookup(host, { all: true }).catch(() => []);
+    if (resolved.length === 0) {
+      throw new Error('Could not resolve audio host. Check that the URL is reachable.');
+    }
+    for (const addr of resolved) {
+      if (isPrivateOrBlockedIp(addr.address)) {
+        throw new Error('Target host resolves to a restricted private network address.');
+      }
+    }
+    return parsed;
+  }
+
+  app.post('/api/audio/import-url', async (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Sign in to import audio tracks.' });
+      return;
+    }
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      res.status(400).json({ error: 'Paste a direct audio URL (.mp3, .wav, .m4a, .ogg, .aac, .flac).' });
+      return;
+    }
+
+    let targetUrl: URL;
+    try {
+      targetUrl = await assertPublicAudioTarget(rawUrl);
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 18_000);
+    try {
+      const upstream = await fetch(targetUrl.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          Accept: 'audio/*,*/*;q=0.8',
+        },
+      });
+      clearTimeout(timeoutId);
+
+      if (!upstream.ok) {
+        res.status(400).json({
+          error: `Audio source returned HTTP ${upstream.status}. Verify the file URL is publicly accessible.`,
+        });
+        return;
+      }
+
+      const rawMime = String(upstream.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      const pathnameExt = path.extname(targetUrl.pathname.toLowerCase());
+      const inferredFromExt = AUDIO_EXT_TO_MIME[pathnameExt];
+
+      if (rawMime.includes('text/html') || rawMime.includes('application/json') || rawMime.includes('text/plain')) {
+        res.status(400).json({
+          error:
+            'This link points to a web page rather than an accessible audio file. Provide a direct .mp3, .wav, .m4a, .ogg, or .flac URL.',
+        });
+        return;
+      }
+
+      const isSupportedMime =
+        rawMime.startsWith('audio/') ||
+        rawMime === 'application/ogg' ||
+        ((rawMime === '' || rawMime === 'application/octet-stream' || rawMime === 'binary/octet-stream') &&
+          Boolean(inferredFromExt));
+
+      if (!isSupportedMime) {
+        res.status(400).json({
+          error: `Unsupported source format (${rawMime || 'unknown'}). Only direct accessible audio files (.mp3, .wav, .m4a, .aac, .ogg, .flac) are supported.`,
+        });
+        return;
+      }
+
+      const contentLength = Number(upstream.headers.get('content-length') || 0);
+      if (contentLength > 35 * 1024 * 1024) {
+        res.status(400).json({ error: 'Remote audio file exceeds the 35 MB import limit.' });
+        return;
+      }
+
+      const arrayBuf = await upstream.arrayBuffer();
+      if (arrayBuf.byteLength === 0) {
+        res.status(400).json({ error: 'Remote audio URL returned an empty file.' });
+        return;
+      }
+      if (arrayBuf.byteLength > 35 * 1024 * 1024) {
+        res.status(400).json({ error: 'Remote audio file exceeds the 35 MB import limit.' });
+        return;
+      }
+
+      const finalMime = rawMime.startsWith('audio/')
+        ? rawMime
+        : inferredFromExt || 'audio/mpeg';
+      const token = crypto.randomBytes(16).toString('hex');
+      const fileName = decodeURIComponent(path.basename(targetUrl.pathname) || 'Imported Audio Track');
+
+      if (proxiedAudioCache.size >= 24) {
+        const oldestKey = proxiedAudioCache.keys().next().value;
+        if (oldestKey) proxiedAudioCache.delete(oldestKey);
+      }
+
+      proxiedAudioCache.set(token, {
+        buffer: Buffer.from(arrayBuf),
+        contentType: finalMime,
+        title: fileName.replace(/\.[a-z0-9]+$/i, '') || 'Imported Audio Track',
+        sourceUrl: targetUrl.toString(),
+        createdAt: Date.now(),
+      });
+
+      res.json({
+        ok: true,
+        title: fileName,
+        contentType: finalMime,
+        bytes: arrayBuf.byteLength,
+        proxyUrl: `/api/audio/proxy/${token}`,
+        sourceUrl: targetUrl.toString(),
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const msg = (err as Error).name === 'AbortError'
+        ? 'Timed out retrieving remote audio URL.'
+        : 'Could not retrieve audio from that URL. Ensure it is publicly reachable.';
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  app.get('/api/audio/proxy/:token', (req: Request, res: Response) => {
+    const entry = proxiedAudioCache.get(req.params.token);
+    if (!entry) {
+      res.status(404).json({ error: 'Audio stream expired or not found.' });
+      return;
+    }
+    const buf = entry.buffer;
+    const total = buf.length;
+    res.setHeader('Content-Type', entry.contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    const range = req.headers.range;
+    if (range && range.startsWith('bytes=')) {
+      const [startStr, endStr] = range.replace('bytes=', '').split('-');
+      const start = Math.max(0, parseInt(startStr || '0', 10) || 0);
+      const end = endStr ? Math.min(total - 1, parseInt(endStr, 10)) : total - 1;
+      if (start >= total || start > end) {
+        res.status(416).setHeader('Content-Range', `bytes */${total}`).end();
+        return;
+      }
+      const chunk = buf.subarray(start, end + 1);
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+      res.setHeader('Content-Length', chunk.length);
+      res.send(chunk);
+      return;
+    }
+
+    res.setHeader('Content-Length', total);
+    res.send(buf);
   });
 
   // ===========================================================================
@@ -1767,6 +2023,10 @@ async function startServer() {
               musicClips: [],
               sfxClips: [],
             },
+      musicVideo:
+        body.musicVideo && typeof body.musicVideo === 'object'
+          ? body.musicVideo
+          : existing?.musicVideo,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };

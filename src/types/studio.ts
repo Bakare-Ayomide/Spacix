@@ -89,6 +89,30 @@ export interface ModelRoleSpec {
   required?: boolean;
 }
 
+export type ModelGenerationCapability =
+  | 'text_to_image'
+  | 'image_edit'
+  | 'character_reference'
+  | 'text_to_video'
+  | 'image_to_video'
+  | 'reference_to_video'
+  | 'first_last_frame'
+  | 'motion_transfer'
+  | 'native_lip_sync'
+  | 'dedicated_lip_sync'
+  | 'audio_music'
+  | 'audio_tts';
+
+export type LipSyncSupportType = 'native_audio' | 'dedicated_lip_sync_step' | 'none';
+
+export interface ModelCapabilities {
+  generationCategories: ModelGenerationCapability[];
+  lipSyncType: LipSyncSupportType;
+  requiresBaseVideoForLipSync?: boolean;
+  acceptsAudioInput?: boolean;
+  maxAudioDurationSec?: number;
+}
+
 export interface ModelEntry {
   id: string;
   surface: Surface;
@@ -107,6 +131,7 @@ export interface ModelEntry {
   requirePrompt: boolean;
   supportsEnhancePrompt: boolean;
   settings: SettingDefinition[];
+  capabilities?: ModelCapabilities;
   baseHfUsd: number;
   billingUnit: 'per_image' | 'per_second' | 'per_generation';
   previewGradient: string;
@@ -715,6 +740,83 @@ export interface TimelineAssemblyTrackSet {
   }>;
 }
 
+export type MusicVideoSceneMode = 'lip_sync' | 'b_roll';
+
+export type MusicVideoBRollType =
+  | 'environmental'
+  | 'performance_no_lipsync'
+  | 'dance_choreography'
+  | 'slow_motion'
+  | 'establishing'
+  | 'artistic_cutaway'
+  | 'cinematic_closeup'
+  | 'lifestyle_story'
+  | 'creative_transition';
+
+export interface MusicVideoAudioTrack {
+  id: string;
+  title: string;
+  sourceType: 'upload' | 'url';
+  originalUrl: string;
+  playbackUrl: string;
+  contentType: string;
+  durationSec: number;
+  bytes?: number;
+  waveformPeaks?: number[];
+  importedAt: string;
+}
+
+export interface MusicVideoTrimSegment {
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+}
+
+export interface MusicVideoSceneItem {
+  id: string;
+  order: number;
+  title: string;
+  mode: MusicVideoSceneMode;
+  bRollType?: MusicVideoBRollType;
+  characterId: string | null;
+  wardrobeId: string | null;
+  locationId: string | null;
+  sceneDescription: string;
+  environmentAtmosphere: string;
+  cameraFraming: string;
+  cameraMovement: string;
+  lightingMood: string;
+  visualStyle: string;
+  performanceDirection: string;
+  facialExpression: string;
+  gesturesAndBody: string;
+  sceneReferenceSource: 'generated' | 'uploaded';
+  sceneReferenceUrl?: string;
+  sceneReferenceGenId?: string;
+  audioSegment: MusicVideoTrimSegment;
+  pipelineStrategy: 'native_lip_sync' | 'animate_then_lipsync' | 'b_roll_video';
+  imageModelId?: string;
+  animationModelId: string;
+  lipSyncModelId?: string;
+  aspectRatio: string;
+  modelSettings: Record<string, string | number | boolean>;
+  generatedBaseVideoUrl?: string;
+  generatedBaseVideoGenId?: string;
+  finalVideoUrl?: string;
+  finalVideoGenId?: string;
+  status: 'draft' | 'generating_ref' | 'animating' | 'syncing_lips' | 'completed' | 'failed';
+  error?: string;
+  updatedAt: string;
+}
+
+export interface MusicVideoProductionState {
+  audioTrack: MusicVideoAudioTrack | null;
+  activeTrim: MusicVideoTrimSegment;
+  defaultAspectRatio: string;
+  scenes: MusicVideoSceneItem[];
+  updatedAt: string;
+}
+
 export interface CinemaProductionProject {
   id: string;
   userId: string;
@@ -732,6 +834,7 @@ export interface CinemaProductionProject {
   scenes: ProductionScene[];
   canvasNodes: CanvasWorkflowNode[];
   timelineTracks: TimelineAssemblyTrackSet;
+  musicVideo?: MusicVideoProductionState;
   createdAt: string;
   updatedAt: string;
 }
