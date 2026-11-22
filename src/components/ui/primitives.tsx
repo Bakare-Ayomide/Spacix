@@ -43,6 +43,8 @@ export const buttonVariants = cva(
           'bg-[#46ecd5]/12 text-[#46ecd5] border border-[#46ecd5]/35 hover:bg-[#46ecd5] hover:text-zinc-950',
         accent:
           'bg-[#46ecd5]/12 text-[#46ecd5] border border-[#46ecd5]/35 hover:bg-[#46ecd5] hover:text-zinc-950',
+        link:
+          'text-[#46ecd5] underline-offset-4 hover:underline',
       },
       size: {
         default: 'h-9 px-3.5 py-2',

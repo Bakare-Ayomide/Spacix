@@ -85,7 +85,8 @@ export const BorderBeam: React.FC<BorderBeamProps> = ({
 // 3. ACETERNITY / MOTION PRIMITIVES — SPRING SLIDING PILL TABS
 // ============================================================================
 export interface AnimatedPillTabItem<T extends string = string> {
-  id: T;
+  id?: T;
+  value?: T;
   label: string;
   shortLabel?: string;
   icon?: React.ReactNode;
@@ -95,7 +96,8 @@ export interface AnimatedPillTabItem<T extends string = string> {
 
 export interface AnimatedPillTabsProps<T extends string = string> {
   items: AnimatedPillTabItem<T>[];
-  activeId: T | string;
+  activeId?: T | string;
+  value?: T | string;
   onChange: (id: T) => void;
   layoutGroupId?: string;
   layoutId?: string;
@@ -106,6 +108,7 @@ export interface AnimatedPillTabsProps<T extends string = string> {
 export function AnimatedPillTabs<T extends string = string>({
   items,
   activeId,
+  value,
   onChange,
   layoutGroupId,
   layoutId,
@@ -113,6 +116,7 @@ export function AnimatedPillTabs<T extends string = string>({
   size = 'sm',
 }: AnimatedPillTabsProps<T>) {
   const effectiveLayoutId = layoutId || layoutGroupId || 'animated-pill-tab';
+  const currentActive = activeId !== undefined ? activeId : value;
   return (
     <div
       className={cn(
@@ -121,13 +125,14 @@ export function AnimatedPillTabs<T extends string = string>({
       )}
     >
       {items.map((item) => {
-        const isActive = item.id === activeId;
+        const itemId = (item.id !== undefined ? item.id : item.value) as T;
+        const isActive = itemId === currentActive;
         const badgeValue = item.badge !== undefined ? item.badge : item.count;
         return (
           <button
-            key={item.id}
+            key={itemId}
             type="button"
-            onClick={() => onChange(item.id)}
+            onClick={() => onChange(itemId)}
             className={cn(
               'relative inline-flex items-center gap-1.5 rounded-lg font-bold transition-colors whitespace-nowrap select-none cursor-pointer z-10',
               size === 'sm' ? 'px-2.5 py-1 text-[11px]' : 'px-3.5 py-1.5 text-xs',

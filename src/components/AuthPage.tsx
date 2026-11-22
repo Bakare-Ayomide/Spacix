@@ -14,6 +14,18 @@ import {
 } from 'lucide-react';
 import { useRuns } from '../lib/useRuns';
 import { SpacixLogo } from './ProviderBrandIcon';
+import {
+  Badge,
+  Button,
+  Input,
+  Progress,
+} from './ui/primitives';
+import {
+  AnimatedPillTabs,
+  BorderBeam,
+  ShimmerButton,
+  SpotlightCard,
+} from './ui/aceternity-magic';
 
 export type AuthViewMode = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -167,7 +179,8 @@ export const AuthFormCard: React.FC<{
       : 3;
 
   return (
-    <div className="w-full max-w-md bg-[#111114] border border-white/12 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-5">
+    <SpotlightCard className="w-full max-w-md bg-[#111114] border border-white/12 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-5 relative">
+      <BorderBeam />
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1.5 min-w-0">
@@ -190,44 +203,32 @@ export const AuthFormCard: React.FC<{
           </p>
         </div>
 
-        {onClose && (
-          <button
+        {onClose && !isModal && (
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label="Close authentication dialog"
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg shrink-0"
+            className="shrink-0"
           >
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Mode Switch Tabs (Sign In / Sign Up) */}
       {(mode === 'login' || mode === 'register') && (
-        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-zinc-950 border border-white/10">
-          <button
-            type="button"
-            onClick={() => switchMode('login')}
-            className={`py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              mode === 'login'
-                ? 'bg-[#46ecd5] text-zinc-950 shadow'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('register')}
-            className={`py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              mode === 'register'
-                ? 'bg-[#46ecd5] text-zinc-950 shadow'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Create Account
-          </button>
-        </div>
+        <AnimatedPillTabs
+          layoutGroupId="auth-mode-tabs"
+          value={mode}
+          onChange={(v) => switchMode(v as AuthViewMode)}
+          className="grid grid-cols-2 w-full"
+          items={[
+            { value: 'login', label: 'Sign In' },
+            { value: 'register', label: 'Create Account' },
+          ]}
+        />
       )}
 
       {error && (
@@ -255,15 +256,15 @@ export const AuthFormCard: React.FC<{
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="email"
                 required
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@domain.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 h-10 text-sm"
               />
             </div>
           </div>
@@ -271,24 +272,26 @@ export const AuthFormCard: React.FC<{
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-zinc-300">Password</label>
-              <button
+              <Button
                 type="button"
+                variant="link"
+                size="sm"
                 onClick={() => switchMode('forgot')}
-                className="text-xs text-[#46ecd5] hover:underline font-medium"
+                className="h-auto p-0 text-xs"
               >
                 Forgot password?
-              </button>
+              </Button>
             </div>
             <div className="relative">
-              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type={showPassword ? 'text' : 'password'}
                 required
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
-                className="w-full pl-10 pr-10 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 pr-10 h-10 text-sm"
               />
               <button
                 type="button"
@@ -313,23 +316,25 @@ export const AuthFormCard: React.FC<{
             </label>
           </div>
 
-          <button
+          <ShimmerButton
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 text-xs font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all disabled:opacity-50"
+            className="w-full py-3 px-4 text-xs"
           >
             {loading ? 'Signing In...' : 'Sign In to SPACIX'}
-          </button>
+          </ShimmerButton>
 
           <div className="pt-3 border-t border-white/10 text-center text-xs text-zinc-400">
             Don&apos;t have an account yet?{' '}
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={() => switchMode('register')}
-              className="text-[#46ecd5] hover:underline font-semibold"
+              className="h-auto p-0 text-xs font-semibold"
             >
               Create Account
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -342,15 +347,15 @@ export const AuthFormCard: React.FC<{
               Full Name
             </label>
             <div className="relative">
-              <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="text"
                 required
                 autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your full name or studio alias"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 h-10 text-sm"
               />
             </div>
           </div>
@@ -360,15 +365,15 @@ export const AuthFormCard: React.FC<{
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="email"
                 required
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@domain.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 h-10 text-sm"
               />
             </div>
           </div>
@@ -379,8 +384,8 @@ export const AuthFormCard: React.FC<{
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
+                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+                <Input
                   type={showPassword ? 'text' : 'password'}
                   required
                   minLength={6}
@@ -388,7 +393,7 @@ export const AuthFormCard: React.FC<{
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 6 chars"
-                  className="w-full pl-10 pr-9 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                  className="w-full pl-10 pr-9 h-10 text-sm"
                 />
                 <button
                   type="button"
@@ -405,8 +410,8 @@ export const AuthFormCard: React.FC<{
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
+                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+                <Input
                   type={showPassword ? 'text' : 'password'}
                   required
                   minLength={6}
@@ -414,24 +419,15 @@ export const AuthFormCard: React.FC<{
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat password"
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                  className="w-full pl-10 h-10 text-sm"
                 />
               </div>
             </div>
           </div>
 
           {password.length > 0 && (
-            <div className="space-y-1">
-              <div className="grid grid-cols-4 gap-1.5">
-                {[1, 2, 3, 4].map((lvl) => (
-                  <div
-                    key={lvl}
-                    className={`h-1 rounded-full ${
-                      passwordStrength >= lvl ? 'bg-[#46ecd5]' : 'bg-zinc-800'
-                    }`}
-                  />
-                ))}
-              </div>
+            <div className="space-y-1.5">
+              <Progress value={passwordStrength * 25} />
               <div className="text-[11px] text-zinc-400">
                 Password strength:{' '}
                 {passwordStrength <= 1
@@ -491,23 +487,25 @@ export const AuthFormCard: React.FC<{
             </label>
           </div>
 
-          <button
+          <ShimmerButton
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 text-xs font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all disabled:opacity-50"
+            className="w-full py-3 px-4 text-xs"
           >
             {loading ? 'Creating Account...' : 'Create SPACIX Account'}
-          </button>
+          </ShimmerButton>
 
           <div className="pt-3 border-t border-white/10 text-center text-xs text-zinc-400">
             Already have an account?{' '}
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={() => switchMode('login')}
-              className="text-[#46ecd5] hover:underline font-semibold"
+              className="h-auto p-0 text-xs font-semibold"
             >
               Sign In
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -520,42 +518,45 @@ export const AuthFormCard: React.FC<{
               Account Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your registered email"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 h-10 text-sm"
               />
             </div>
           </div>
 
-          <button
+          <ShimmerButton
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 text-xs font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all disabled:opacity-50"
+            className="w-full py-3 px-4 text-xs"
           >
             {loading ? 'Generating Reset Code...' : 'Send Password Reset Code'}
-          </button>
+          </ShimmerButton>
 
           <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs text-zinc-400">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => switchMode('login')}
-              className="inline-flex items-center gap-1.5 text-zinc-300 hover:text-white"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Sign In</span>
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={() => switchMode('reset')}
-              className="text-[#46ecd5] hover:underline"
+              className="h-auto p-0 text-xs"
             >
               Already have a code?
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -567,12 +568,12 @@ export const AuthFormCard: React.FC<{
             <label className="block text-xs font-medium text-zinc-300 mb-1.5">
               Account Email Address
             </label>
-            <input
+            <Input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+              className="w-full h-10 text-sm"
             />
           </div>
 
@@ -581,14 +582,14 @@ export const AuthFormCard: React.FC<{
               6-Digit Verification Code
             </label>
             <div className="relative">
-              <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+              <Input
                 type="text"
                 required
                 value={resetCode}
                 onChange={(e) => setResetCode(e.target.value)}
                 placeholder="123456"
-                className="w-full pl-10 pr-4 py-2.5 text-sm font-mono-tabular tracking-widest bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full pl-10 h-10 text-sm font-mono-tabular tracking-widest"
               />
             </div>
           </div>
@@ -598,55 +599,58 @@ export const AuthFormCard: React.FC<{
               <label className="block text-xs font-medium text-zinc-300 mb-1.5">
                 New Password
               </label>
-              <input
+              <Input
                 type={showPassword ? 'text' : 'password'}
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min. 6 chars"
-                className="w-full px-3.5 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full h-10 text-sm"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1.5">
                 Confirm New Password
               </label>
-              <input
+              <Input
                 type={showPassword ? 'text' : 'password'}
                 required
                 minLength={6}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat password"
-                className="w-full px-3.5 py-2.5 text-sm bg-zinc-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#46ecd5]"
+                className="w-full h-10 text-sm"
               />
             </div>
           </div>
 
-          <button
+          <ShimmerButton
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 text-xs font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-xl hover:brightness-105 transition-all disabled:opacity-50"
+            className="w-full py-3 px-4 text-xs"
           >
             {loading ? 'Updating Password...' : 'Reset Password & Sign In'}
-          </button>
+          </ShimmerButton>
 
           <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs text-zinc-400">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => switchMode('forgot')}
-              className="text-zinc-300 hover:text-white"
             >
               ← Request another code
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={() => switchMode('login')}
-              className="text-[#46ecd5] hover:underline"
+              className="h-auto p-0 text-xs"
             >
               Back to Sign In
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -657,7 +661,7 @@ export const AuthFormCard: React.FC<{
           <span>PBKDF2-SHA256 encrypted credentials · Persistent MySQL session store</span>
         </div>
       )}
-    </div>
+    </SpotlightCard>
   );
 };
 
@@ -670,10 +674,10 @@ export const AuthPage: React.FC<{ initialMode?: AuthViewMode }> = ({ initialMode
       <div className="max-w-[1160px] w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center relative z-10">
         {/* Left Cinema Brand Pitch */}
         <div className="lg:col-span-6 space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#46ecd5]/10 border border-[#46ecd5]/30 text-xs font-mono-tabular text-[#46ecd5]">
+          <Badge variant="default" className="px-3 py-1 font-mono-tabular">
             <Sparkles className="w-3.5 h-3.5" />
             <span>PRODUCTION STUDIO AUTHENTICATION</span>
-          </div>
+          </Badge>
 
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white leading-[0.95]">
             DIRECT, ARCHIVE & SCALE YOUR AI CINEMA PIPELINE

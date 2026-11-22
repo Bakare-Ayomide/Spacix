@@ -54,6 +54,8 @@ import {
   ProviderBrandIcon,
   SpacixLogo,
 } from './ProviderBrandIcon';
+import { Badge, Button } from './ui/primitives';
+import { AnimatedPillTabs, BorderBeam, SpotlightCard } from './ui/aceternity-magic';
 
 type AdminTabId =
   | 'providers'
@@ -1190,37 +1192,39 @@ export const AdminDashboardView: React.FC = () => {
       {/* =================================================================== */}
       {/* TOP COMMAND HEADER & KPI METRICS                                    */}
       {/* =================================================================== */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-[#111114] border border-white/10 space-y-5 sm:space-y-6">
+      <SpotlightCard className="p-4 sm:p-6 rounded-2xl bg-[#111114] border border-white/10 space-y-5 sm:space-y-6 relative">
+        <BorderBeam />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
             <SpacixLogo size="md" />
             <div className="h-8 w-px bg-white/10 hidden sm:block" />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] sm:text-[11px] font-mono-tabular uppercase tracking-widest text-[#46ecd5] break-words">
+                <Badge variant="default" className="font-mono-tabular uppercase tracking-widest">
                   ENTERPRISE CONTROL PLANE · RBAC: {currentAdmin.adminSubRole?.toUpperCase() || 'SUPER_ADMIN'}
-                </span>
+                </Badge>
               </div>
-              <h1 className="font-display text-2xl sm:text-4xl font-black uppercase tracking-wide text-white break-words">
+              <h1 className="font-display text-2xl sm:text-4xl font-black uppercase tracking-wide text-white break-words mt-1">
                 SPACIX Admin Operations Center
               </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={loadAdminOverview}
-              className="px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-semibold text-zinc-200 flex items-center gap-2 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#46ecd5] ${loading ? 'animate-spin' : ''}`} />
               <span>Sync State</span>
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Active API Gateways</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-[#46ecd5] mt-0.5">
               {enabledProvidersCount} / 4 Online
@@ -1228,9 +1232,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               fal · Higgsfield · Muapi · Runware
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Enabled Catalog Models</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {enabledModelsCount} / {MODEL_CATALOG.length}
@@ -1238,9 +1242,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               Multi-provider routed
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Registered Accounts</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {users.length} Users
@@ -1248,9 +1252,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {users.filter((u) => u.plan !== 'free').length} Paid Subscribers
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Circulating Wallet Credits</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-[#46ecd5] mt-0.5">
               ✦ {totalPlatformCredits.toLocaleString()}
@@ -1258,9 +1262,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               Markup {billingConfig.creditMarkup}x · ${billingConfig.creditUsdValue}/cr
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Total Studio Runs</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-white mt-0.5">
               {generations.length} Runs
@@ -1268,9 +1272,9 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {generations.filter((g) => g.isPublic).length} Public in Community
             </div>
-          </div>
+          </SpotlightCard>
 
-          <div className="p-3.5 rounded-xl bg-[#16161B] border border-white/10">
+          <SpotlightCard className="p-3.5 bg-[#16161B]">
             <div className="text-[11px] text-zinc-400">Support & Trust Queue</div>
             <div className="font-display text-2xl font-black font-mono-tabular text-amber-400 mt-0.5">
               {openTicketsCount} Open Tickets
@@ -1278,41 +1282,24 @@ export const AdminDashboardView: React.FC = () => {
             <div className="text-[10px] text-zinc-500 font-mono-tabular mt-0.5">
               {teamMembers.length} Active Team Admins
             </div>
-          </div>
+          </SpotlightCard>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-white/10">
-          {ADMIN_TABS.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all ${
-                  active
-                    ? 'bg-[#46ecd5] text-zinc-950 shadow-lg shadow-[#46ecd5]/15'
-                    : 'bg-[#16161B] text-zinc-400 hover:text-white border border-white/5'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tab.badge !== undefined && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono-tabular ${
-                      active
-                        ? 'bg-zinc-950/20 text-zinc-950 font-extrabold'
-                        : 'bg-white/10 text-zinc-300'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="pt-2 border-t border-white/10">
+          <AnimatedPillTabs
+            layoutGroupId="admin-dashboard-tabs"
+            value={activeTab}
+            onChange={(v) => setActiveTab(v as AdminTabId)}
+            items={ADMIN_TABS.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              icon: tab.icon,
+              badge: tab.badge,
+            }))}
+          />
         </div>
-      </div>
+      </SpotlightCard>
 
       {/* =================================================================== */}
       {/* TAB 1: PROVIDER API KEYS LIST (ADD, EDIT, DELETE, ENABLE/DISABLE)   */}

@@ -36,8 +36,8 @@ import {
   SPACI6X_STUDIOS,
 } from './ContinuityStudiosView';
 import { HiggsfieldCinemaStudio } from './HiggsfieldCinemaStudio';
-import { Badge, Button } from './ui/primitives';
-import { BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
+import { Badge, Button, Input, Textarea, Tooltip, TooltipContent, TooltipTrigger } from './ui/primitives';
+import { AnimatedPillTabs, BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
 
 // ============================================================================
 // 1. EXPLORE / HOME PAGE (`/`)
@@ -254,13 +254,14 @@ export const ExplorePage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="cyanGhost"
+              size="sm"
               onClick={() => navigate('video')}
-              className="text-xs font-semibold text-[#46ecd5] hover:underline inline-flex items-center gap-1 shrink-0"
             >
               <span>Explore all {models.length} models</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -271,14 +272,14 @@ export const ExplorePage: React.FC = () => {
             const cost = calculateTokenCost(model.id, defaultSettings, []);
 
             return (
-              <div
+              <SpotlightCard
                 key={model.id}
                 onClick={() =>
                   navigate(model.surface, {
                     model: model.id,
                   })
                 }
-                className={`group cursor-pointer p-5 rounded-xl border border-white/10 hover:border-[#46ecd5]/60 bg-gradient-to-br ${model.previewGradient} flex flex-col justify-between gap-5 transition-all`}
+                className={`group cursor-pointer p-5 border-white/10 hover:border-[#46ecd5]/60 bg-gradient-to-br ${model.previewGradient} flex flex-col justify-between gap-5 transition-all`}
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-zinc-300">
@@ -286,9 +287,9 @@ export const ExplorePage: React.FC = () => {
                       <ProviderBrandIcon provider={model.provider} size={15} />
                       <span>{model.provider} · {model.surface.toUpperCase()}</span>
                     </span>
-                    <span className="font-mono-tabular text-[#46ecd5]">
+                    <Badge variant="default" className="font-mono-tabular">
                       from ✦ {cost}
-                    </span>
+                    </Badge>
                   </div>
                   <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-white group-hover:text-[#46ecd5] transition-colors">
                     {model.label}
@@ -301,12 +302,9 @@ export const ExplorePage: React.FC = () => {
                 <div className="space-y-2.5 pt-3 border-t border-white/10">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {model.badges.map((badge) => (
-                      <span
-                        key={badge}
-                        className="inline-flex items-center px-2 py-0.5 rounded bg-black/50 border border-white/10 text-[11px] font-mono-tabular text-[#46ecd5]"
-                      >
+                      <Badge key={badge} variant="secondary" className="font-mono-tabular text-[#46ecd5]">
                         {badge}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                   <div className="flex items-center justify-between text-xs">
@@ -318,7 +316,7 @@ export const ExplorePage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>
@@ -335,20 +333,21 @@ export const ExplorePage: React.FC = () => {
               Pre-configured lens choreography, Nano Banana architectural twilight, and probe macro templates
             </p>
           </div>
-          <button
+          <Button
+            variant="cyanGhost"
+            size="sm"
             onClick={() => navigate('effects')}
-            className="text-xs font-semibold text-[#46ecd5] hover:underline inline-flex items-center gap-1 shrink-0"
           >
             <span>All Effects</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {presets.slice(0, 3).map((preset) => (
-            <div
+            <SpotlightCard
               key={preset.id}
-              className="rounded-xl bg-[#111114] border border-white/10 hover:border-white/25 overflow-hidden flex flex-col justify-between transition-all"
+              className="overflow-hidden flex flex-col justify-between transition-all p-0"
             >
               <div className="aspect-video bg-zinc-950 relative overflow-hidden">
                 <img
@@ -360,26 +359,25 @@ export const ExplorePage: React.FC = () => {
               </div>
               <div className="p-4 space-y-3">
                 <div>
-                  <div className="text-[11px] text-zinc-400">
-                    <span>{preset.category}</span>
-                    <span className="mx-1.5">·</span>
-                    <span>{preset.surface.toUpperCase()}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                    <Badge variant="outline" className="text-[10px]">{preset.category}</Badge>
+                    <Badge variant="default" className="text-[10px]">{preset.surface.toUpperCase()}</Badge>
                   </div>
-                  <h3 className="text-base font-bold text-white mt-0.5">
+                  <h3 className="text-base font-bold text-white mt-1.5">
                     {preset.title}
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
                     {preset.description}
                   </p>
                 </div>
-                <button
+                <ShimmerButton
                   onClick={() => applyPresetToDock(preset)}
-                  className="w-full py-2 px-3 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
+                  className="w-full py-2 text-xs"
                 >
                   Use Effect in Studio
-                </button>
+                </ShimmerButton>
               </div>
-            </div>
+            </SpotlightCard>
           ))}
         </div>
       </section>
@@ -395,13 +393,14 @@ export const ExplorePage: React.FC = () => {
               Recent R2-archived masters published by SPACIX directors — click any work to inspect or recreate
             </p>
           </div>
-          <button
+          <Button
+            variant="cyanGhost"
+            size="sm"
             onClick={() => navigate('community')}
-            className="text-xs font-semibold text-[#46ecd5] hover:underline inline-flex items-center gap-1 shrink-0"
           >
             <span>Open Community Feed</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -453,25 +452,17 @@ export const EffectsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-[#111114] border border-white/10 rounded-lg max-w-full overflow-x-auto no-scrollbar">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                categoryFilter === cat
-                  ? 'bg-[#46ecd5] text-zinc-950'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        <AnimatedPillTabs
+          layoutGroupId="effects-category-tabs"
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          items={categories.map((cat) => ({ value: cat, label: cat }))}
+        />
       </div>
 
       {selectedPreset && (
-        <div className="p-6 rounded-xl bg-[#111114] border border-[#46ecd5]/50 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <SpotlightCard className="p-6 border-[#46ecd5]/50 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center relative">
+          <BorderBeam />
           <div className="lg:col-span-5 aspect-video rounded-lg overflow-hidden bg-zinc-950 border border-white/10">
             <img
               src={selectedPreset.previewSvgDataUrl}
@@ -482,15 +473,16 @@ export const EffectsPage: React.FC = () => {
           </div>
           <div className="lg:col-span-7 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-xs text-[#46ecd5] font-mono-tabular">
+              <Badge variant="default" className="font-mono-tabular">
                 {selectedPreset.category.toUpperCase()} · {selectedPreset.surface.toUpperCase()}
-              </div>
-              <button
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSelectedPreset(null)}
-                className="text-xs text-zinc-400 hover:text-white"
               >
                 Close Inspector
-              </button>
+              </Button>
             </div>
             <h2 className="font-display text-3xl font-bold uppercase text-white">
               {selectedPreset.title}
@@ -503,12 +495,12 @@ export const EffectsPage: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <ShimmerButton
                 onClick={() => applyPresetToDock(selectedPreset)}
-                className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
+                className="px-5 py-2.5 text-xs"
               >
                 Use Effect in Studio
-              </button>
+              </ShimmerButton>
               <span className="text-xs text-zinc-400">
                 Target Model:{' '}
                 <strong className="text-zinc-200">
@@ -518,16 +510,16 @@ export const EffectsPage: React.FC = () => {
               </span>
             </div>
           </div>
-        </div>
+        </SpotlightCard>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((preset) => {
           const model = models.find((m) => m.id === preset.modelId);
           return (
-            <div
+            <SpotlightCard
               key={preset.id}
-              className="rounded-xl bg-[#111114] border border-white/10 hover:border-white/25 overflow-hidden flex flex-col justify-between transition-all"
+              className="overflow-hidden flex flex-col justify-between transition-all p-0"
             >
               <div
                 onClick={() => setSelectedPreset(preset)}
@@ -544,13 +536,13 @@ export const EffectsPage: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                     {model && <ProviderBrandIcon provider={model.provider} size={14} />}
-                    <span>{preset.category}</span>
+                    <Badge variant="outline" className="text-[10px]">{preset.category}</Badge>
                     <span>·</span>
                     <span>{model?.label || preset.modelId}</span>
                   </div>
                   <h3
                     onClick={() => setSelectedPreset(preset)}
-                    className="text-lg font-bold text-white mt-1 cursor-pointer hover:text-[#46ecd5]"
+                    className="text-lg font-bold text-white mt-1.5 cursor-pointer hover:text-[#46ecd5]"
                   >
                     {preset.title}
                   </h3>
@@ -560,21 +552,24 @@ export const EffectsPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 pt-3 border-t border-white/10">
-                  <button
+                  <Button
+                    variant="default"
+                    size="sm"
                     onClick={() => applyPresetToDock(preset)}
-                    className="flex-1 py-2 px-3 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 transition-all"
+                    className="flex-1"
                   >
                     Use Effect
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setSelectedPreset(preset)}
-                    className="py-2 px-3 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10 rounded-lg"
                   >
                     Inspect
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
+            </SpotlightCard>
           );
         })}
       </div>
@@ -633,30 +628,24 @@ export const CommunityPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-1 p-1 bg-[#111114] border border-white/10 rounded-lg max-w-full overflow-x-auto no-scrollbar">
-            {(['all', 'video', 'image', 'audio'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setSurfaceFilter(s)}
-                className={`px-3 py-1.5 text-xs font-semibold uppercase rounded-md transition-colors shrink-0 ${
-                  surfaceFilter === s
-                    ? 'bg-[#46ecd5] text-zinc-950'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <AnimatedPillTabs
+            layoutGroupId="community-surface-tabs"
+            value={surfaceFilter}
+            onChange={(v) => setSurfaceFilter(v as 'all' | Surface)}
+            items={(['all', 'video', 'image', 'audio'] as const).map((s) => ({
+              value: s,
+              label: s.toUpperCase(),
+            }))}
+          />
 
           <div className="relative flex-1 sm:flex-initial">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 z-10" />
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter by prompt or model..."
-              className="w-full sm:w-64 pl-9 pr-3 py-1.5 text-xs bg-[#111114] border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#46ecd5]"
+              className="w-full sm:w-64 pl-9 h-8 text-xs"
             />
           </div>
         </div>
@@ -671,29 +660,43 @@ export const CommunityPage: React.FC = () => {
             />
             <div className="flex items-center justify-between px-1 text-xs text-zinc-400">
               <span className="truncate">By {gen.userName || 'SPACIX Director'}</span>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <button
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  variant="cyanGhost"
+                  size="sm"
                   onClick={() => reuseGenerationInDock(gen, false)}
-                  className="text-[#46ecd5] hover:underline font-medium"
+                  className="h-7 px-2 text-xs"
                 >
                   Recreate
-                </button>
-                <button
-                  onClick={(e) => downloadGeneration(gen, e)}
-                  title="Download generation"
-                  aria-label="Download generation"
-                  className="p-1 rounded bg-white/5 hover:bg-[#46ecd5] text-zinc-300 hover:text-zinc-950 border border-white/10 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleReport(gen.id)}
-                  title="Report community item"
-                  aria-label="Report community item"
-                  className="text-zinc-500 hover:text-zinc-300"
-                >
-                  <Flag className="w-3.5 h-3.5" />
-                </button>
+                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={(e) => downloadGeneration(gen, e)}
+                      aria-label="Download generation"
+                      className="h-7 w-7"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Download generation</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleReport(gen.id)}
+                      aria-label="Report community item"
+                      className="h-7 w-7 text-zinc-500 hover:text-zinc-200"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Report community item</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -977,20 +980,22 @@ export const AssetsLibraryPage: React.FC = () => {
             New Project Folder
           </label>
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="e.g. Autumn Campaign"
-              className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-zinc-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#46ecd5]"
+              className="flex-1 min-w-0 h-8 text-xs"
             />
-            <button
+            <Button
               type="submit"
+              variant="default"
+              size="icon"
               aria-label="Create project"
-              className="p-2 bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105 shrink-0"
+              className="h-8 w-8 shrink-0"
             >
               <FolderPlus className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </form>
       </aside>
@@ -998,8 +1003,11 @@ export const AssetsLibraryPage: React.FC = () => {
       {/* Main Assets Feed */}
       <section className="min-w-0 w-full lg:col-span-9 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-[#111114] border border-white/10 rounded-xl">
-          <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-lg max-w-full overflow-x-auto no-scrollbar">
-            {(
+          <AnimatedPillTabs
+            layoutGroupId="assets-vault-tabs"
+            value={filterTab}
+            onChange={(v) => setFilterTab(v as typeof filterTab)}
+            items={(
               [
                 'all',
                 'characters',
@@ -1013,20 +1021,8 @@ export const AssetsLibraryPage: React.FC = () => {
                 'audio',
                 'uploads',
               ] as const
-            ).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilterTab(t)}
-                className={`px-3 py-1.5 text-xs font-semibold uppercase rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                  filterTab === t
-                    ? 'bg-[#46ecd5] text-zinc-950'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+            ).map((t) => ({ value: t, label: t.toUpperCase() }))}
+          />
 
           <div className="flex items-center gap-2">
             {selectedIds.length > 0 && (
@@ -1444,16 +1440,17 @@ export const PricingPage: React.FC = () => {
   return (
     <div className="min-h-[calc(100vh-5rem)] flex flex-col justify-center max-w-[1240px] mx-auto px-4 sm:px-6 py-12 sm:py-20 space-y-14">
       {/* Hero Coming Soon Section */}
-      <div className="relative rounded-3xl bg-gradient-to-b from-[#14161D] to-[#0D0E12] border border-white/10 p-8 sm:p-14 text-center overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.85)]">
+      <SpotlightCard className="relative rounded-3xl bg-gradient-to-b from-[#14161D] to-[#0D0E12] border border-white/10 p-8 sm:p-14 text-center overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.85)]">
+        <BorderBeam />
         <div className="max-w-3xl mx-auto space-y-6 relative z-10">
           <div className="flex justify-center">
             <SpacixLogo size="md" />
           </div>
 
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#46ecd5]/10 border border-[#46ecd5]/30 text-[11px] font-mono-tabular font-bold uppercase tracking-[0.2em] text-[#46ecd5]">
+          <Badge variant="default" className="px-3.5 py-1.5 text-[11px] font-mono-tabular font-bold uppercase tracking-[0.2em]">
             <span className="w-2 h-2 rounded-full bg-[#46ecd5] animate-pulse" />
             <span>COMING SOON · OFFICIAL PRICING RELEASE</span>
-          </div>
+          </Badge>
 
           <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-black uppercase tracking-wide text-white leading-tight">
             Tailored Studio Plans &amp; Production Pricing Coming Soon
@@ -1475,38 +1472,39 @@ export const PricingPage: React.FC = () => {
                 onSubmit={handleNotifySubmit}
                 className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
               >
-                <input
+                <Input
                   type="email"
                   required
                   value={notifyEmail}
                   onChange={(e) => setNotifyEmail(e.target.value)}
                   placeholder="Enter your email for pricing launch updates..."
-                  className="flex-1 px-4 py-3 rounded-xl bg-[#090A0D] border border-white/15 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#46ecd5]"
+                  className="flex-1 h-11 rounded-xl bg-[#090A0D]"
                 />
-                <button
+                <ShimmerButton
                   type="submit"
-                  className="px-5 py-3 rounded-xl bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider transition-all shrink-0"
+                  className="px-5 py-3 text-xs shrink-0"
                 >
                   Notify Me
-                </button>
+                </ShimmerButton>
               </form>
             )}
           </div>
 
           <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-zinc-400">
-            <button
+            <Button
               type="button"
+              variant="cyanGhost"
+              size="sm"
               onClick={() => navigate('cinema')}
-              className="inline-flex items-center gap-1.5 text-[#46ecd5] font-bold hover:underline"
             >
               <span>Enter Cinema Studio 4.0</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            </Button>
             <span>·</span>
             <span>No credit card required during preview access</span>
           </div>
         </div>
-      </div>
+      </SpotlightCard>
 
       {/* Preview of Upcoming Architecture */}
       <div className="space-y-6">
@@ -1524,22 +1522,23 @@ export const PricingPage: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {upcomingTiers.map((tier) => (
-            <div
+            <SpotlightCard
               key={tier.name}
-              className={`p-6 rounded-2xl border flex flex-col justify-between gap-6 ${
+              className={`p-6 rounded-2xl border flex flex-col justify-between gap-6 relative ${
                 tier.badge
                   ? 'bg-[#14161C] border-[#46ecd5]/60 shadow-[0_12px_40px_rgba(70,236,213,0.08)]'
                   : 'bg-[#111216] border-white/10'
               }`}
             >
+              {tier.badge && <BorderBeam />}
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
                     {tier.name}
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono-tabular font-semibold text-[#46ecd5]">
+                  <Badge variant={tier.badge ? 'default' : 'outline'} className="font-mono-tabular">
                     {tier.badge || 'COMING SOON'}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div>
@@ -1562,7 +1561,7 @@ export const PricingPage: React.FC = () => {
               <div className="py-2.5 px-4 rounded-xl bg-zinc-900/90 border border-white/10 text-center text-xs font-semibold text-zinc-400">
                 Launching Soon
               </div>
-            </div>
+            </SpotlightCard>
           ))}
         </div>
       </div>
@@ -1716,127 +1715,127 @@ export const AccountBillingPage: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {user.role === 'admin' && (
-            <button
+            <Button
+              variant="cyanGhost"
+              size="sm"
               onClick={() => navigate('admin')}
-              className="px-3.5 py-2 text-xs font-semibold bg-white/10 hover:bg-white/15 text-[#46ecd5] border border-[#46ecd5]/30 rounded-lg flex items-center gap-2"
             >
               <Shield className="w-4 h-4" />
               <span>Open Admin Console</span>
-            </button>
+            </Button>
           )}
-          <button
+          <ShimmerButton
             onClick={() => setUpgradeModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold bg-[#46ecd5] text-zinc-950 rounded-lg hover:brightness-105"
+            className="px-3.5 py-2 text-xs"
           >
             Add Credits / Change Plan
-          </button>
-          <button
+          </ShimmerButton>
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={logout}
-            className="px-3.5 py-2 text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 rounded-lg"
           >
             Sign Out
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Profile & Password Security Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <form
-          onSubmit={handleUpdateProfileName}
-          className="p-5 rounded-xl bg-[#111114] border border-white/10 space-y-4 text-xs"
-        >
-          <h2 className="font-display text-xl font-bold uppercase text-white">
-            Account Profile
-          </h2>
-          <div>
-            <label className="text-zinc-400 block mb-1">Display Name</label>
-            <input
-              type="text"
-              required
-              value={profileName}
-              onChange={(e) => setProfileName(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-            />
-          </div>
-          <div>
-            <label className="text-zinc-400 block mb-1">Registered Email</label>
-            <input
-              type="email"
-              disabled
-              value={user.email}
-              className="w-full px-3 py-2 bg-zinc-950 border border-white/5 rounded-lg text-zinc-500 font-mono-tabular"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-lg bg-[#46ecd5] text-zinc-950 font-bold uppercase tracking-wider"
+        <SpotlightCard className="p-5">
+          <form
+            onSubmit={handleUpdateProfileName}
+            className="space-y-4 text-xs"
           >
-            Save Profile Name
-          </button>
-        </form>
+            <h2 className="font-display text-xl font-bold uppercase text-white">
+              Account Profile
+            </h2>
+            <div>
+              <label className="text-zinc-400 block mb-1">Display Name</label>
+              <Input
+                type="text"
+                required
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-zinc-400 block mb-1">Registered Email</label>
+              <Input
+                type="email"
+                disabled
+                value={user.email}
+                className="font-mono-tabular opacity-60"
+              />
+            </div>
+            <Button type="submit" variant="default" size="sm">
+              Save Profile Name
+            </Button>
+          </form>
+        </SpotlightCard>
 
-        <form
-          onSubmit={handleChangePassword}
-          className="p-5 rounded-xl bg-[#111114] border border-white/10 space-y-3.5 text-xs"
-        >
-          <h2 className="font-display text-xl font-bold uppercase text-white">
-            Change Password
-          </h2>
-          {pwdError && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">
-              {pwdError}
-            </div>
-          )}
-          <div>
-            <label className="text-zinc-400 block mb-1">Current Password</label>
-            <input
-              type="password"
-              required
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
-              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-zinc-400 block mb-1">New Password</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 6 characters"
-                className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-              />
-            </div>
-            <div>
-              <label className="text-zinc-400 block mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password"
-                className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={pwdSaving}
-            className="px-4 py-2 rounded-lg bg-[#46ecd5] text-zinc-950 font-bold uppercase tracking-wider disabled:opacity-50"
+        <SpotlightCard className="p-5">
+          <form
+            onSubmit={handleChangePassword}
+            className="space-y-3.5 text-xs"
           >
-            {pwdSaving ? 'Updating...' : 'Update Password'}
-          </button>
-        </form>
+            <h2 className="font-display text-xl font-bold uppercase text-white">
+              Change Password
+            </h2>
+            {pwdError && (
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">
+                {pwdError}
+              </div>
+            )}
+            <div>
+              <label className="text-zinc-400 block mb-1">Current Password</label>
+              <Input
+                type="password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-zinc-400 block mb-1">New Password</label>
+                <Input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 6 characters"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 block mb-1">Confirm New Password</label>
+                <Input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                />
+              </div>
+            </div>
+            <Button
+              type="submit"
+              variant="default"
+              size="sm"
+              disabled={pwdSaving}
+            >
+              {pwdSaving ? 'Updating...' : 'Update Password'}
+            </Button>
+          </form>
+        </SpotlightCard>
       </div>
 
       {/* Credit Buckets Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl bg-[#111114] border border-white/10">
+        <SpotlightCard className="p-5">
           <div className="text-xs text-zinc-400">Total Available Credits</div>
           <div className="font-display text-4xl font-black font-mono-tabular text-[#46ecd5] mt-1">
             ✦ {user.credits.total.toLocaleString()}
@@ -1844,8 +1843,8 @@ export const AccountBillingPage: React.FC = () => {
           <div className="text-[11px] text-zinc-500 mt-1">
             Subscription bucket spent first, then non-expiring top-ups
           </div>
-        </div>
-        <div className="p-5 rounded-xl bg-[#111114] border border-white/10">
+        </SpotlightCard>
+        <SpotlightCard className="p-5">
           <div className="text-xs text-zinc-400">
             Subscription Bucket ({user.plan.toUpperCase()})
           </div>
@@ -1858,8 +1857,8 @@ export const AccountBillingPage: React.FC = () => {
               ? new Date(user.planRenewsAt).toLocaleDateString()
               : 'No active renewal'}
           </div>
-        </div>
-        <div className="p-5 rounded-xl bg-[#111114] border border-white/10">
+        </SpotlightCard>
+        <SpotlightCard className="p-5">
           <div className="text-xs text-zinc-400">Top-Up Bucket (Never Expires)</div>
           <div className="font-display text-4xl font-black font-mono-tabular text-white mt-1">
             ✦ {user.credits.topup.toLocaleString()}
@@ -1867,7 +1866,7 @@ export const AccountBillingPage: React.FC = () => {
           <div className="text-[11px] text-zinc-500 font-mono-tabular mt-1">
             Stripe Customer: {user.stripeCustomerId || 'Lazy init at checkout'}
           </div>
-        </div>
+        </SpotlightCard>
       </div>
 
       {/* Append-Only Idempotent Credit Ledger Table */}
@@ -1876,9 +1875,9 @@ export const AccountBillingPage: React.FC = () => {
           <h2 className="font-display text-xl font-bold uppercase tracking-wide text-white">
             Append-Only Credit Ledger (`credit_ledger`)
           </h2>
-          <span className="text-xs font-mono-tabular text-zinc-400">
+          <Badge variant="outline" className="font-mono-tabular">
             Unique index: &#123;reason, refType, refId&#125;
-          </span>
+          </Badge>
         </div>
 
         <div className="overflow-x-auto">
@@ -1929,58 +1928,58 @@ export const AccountBillingPage: React.FC = () => {
 
       {/* User Support Tickets Desk */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <form
-          onSubmit={handleSubmitSupportTicket}
-          className="min-w-0 lg:col-span-5 p-4 sm:p-6 rounded-xl bg-[#111114] border border-white/10 space-y-4 text-xs"
-        >
-          <h2 className="font-display text-xl font-bold uppercase text-white">
-            Contact SPACIX Support
-          </h2>
-          <div>
-            <label className="text-zinc-400 block mb-1">Topic Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-            >
-              <option value="billing">Billing & Credits</option>
-              <option value="api_provider">API Provider / Endpoint</option>
-              <option value="generation_failure">Generation Refund Request</option>
-              <option value="account">Account & Commercial Rights</option>
-              <option value="feature_request">Feature Request</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-zinc-400 block mb-1">Subject</label>
-            <input
-              type="text"
-              required
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Brief summary of your question..."
-              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-            />
-          </div>
-          <div>
-            <label className="text-zinc-400 block mb-1">Message</label>
-            <textarea
-              rows={3}
-              required
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Include generation ID or invoice details if applicable..."
-              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg text-white"
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2.5 px-4 font-bold uppercase tracking-wider bg-[#46ecd5] text-zinc-950 rounded-lg"
+        <SpotlightCard className="min-w-0 lg:col-span-5 p-4 sm:p-6">
+          <form
+            onSubmit={handleSubmitSupportTicket}
+            className="space-y-4 text-xs"
           >
-            Submit Support Ticket
-          </button>
-        </form>
+            <h2 className="font-display text-xl font-bold uppercase text-white">
+              Contact SPACIX Support
+            </h2>
+            <div>
+              <label className="text-zinc-400 block mb-1">Topic Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
+                className="w-full h-9 px-3 bg-zinc-900/90 border border-white/10 rounded-xl text-white text-xs"
+              >
+                <option value="billing">Billing & Credits</option>
+                <option value="api_provider">API Provider / Endpoint</option>
+                <option value="generation_failure">Generation Refund Request</option>
+                <option value="account">Account & Commercial Rights</option>
+                <option value="feature_request">Feature Request</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-zinc-400 block mb-1">Subject</label>
+              <Input
+                type="text"
+                required
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Brief summary of your question..."
+              />
+            </div>
+            <div>
+              <label className="text-zinc-400 block mb-1">Message</label>
+              <Textarea
+                rows={3}
+                required
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Include generation ID or invoice details if applicable..."
+              />
+            </div>
+            <ShimmerButton
+              type="submit"
+              className="w-full py-2.5 px-4 text-xs"
+            >
+              Submit Support Ticket
+            </ShimmerButton>
+          </form>
+        </SpotlightCard>
 
-        <div className="min-w-0 lg:col-span-7 p-4 sm:p-6 rounded-xl bg-[#111114] border border-white/10 space-y-4 text-xs">
+        <SpotlightCard className="min-w-0 lg:col-span-7 p-4 sm:p-6 space-y-4 text-xs">
           <h2 className="font-display text-xl font-bold uppercase text-white">
             Your Support Tickets ({tickets.length})
           </h2>
@@ -1997,9 +1996,9 @@ export const AccountBillingPage: React.FC = () => {
                     <span className="font-mono-tabular text-[#46ecd5] font-bold">
                       #{t.id} · {t.category.toUpperCase()}
                     </span>
-                    <span className="uppercase font-mono-tabular text-zinc-300">
+                    <Badge variant="outline" className="uppercase font-mono-tabular">
                       {t.status}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="font-bold text-white">{t.subject}</div>
                   {t.messages.map((m) => (
@@ -2015,7 +2014,7 @@ export const AccountBillingPage: React.FC = () => {
               ))}
             </div>
           )}
-        </div>
+        </SpotlightCard>
       </div>
     </div>
   );
@@ -2037,9 +2036,9 @@ export const LegalPage: React.FC<{ section?: string }> = ({ section = 'terms' })
       <div className="flex items-center gap-3">
         <SpacixLogo size="sm" />
         <span className="text-white/20">·</span>
-        <span className="text-xs font-mono-tabular uppercase text-[#46ecd5]">
+        <Badge variant="default" className="font-mono-tabular uppercase">
           SPACIX STUDIO LEGAL DOCUMENTATION
-        </span>
+        </Badge>
       </div>
       <h1 className="font-display text-4xl font-bold uppercase text-white">
         {section === 'privacy'
@@ -2048,7 +2047,7 @@ export const LegalPage: React.FC<{ section?: string }> = ({ section = 'terms' })
           ? 'Acceptable Use & Content Safety Policy'
           : 'Terms of Service & Commercial License'}
       </h1>
-      <div className="p-6 rounded-xl bg-[#111114] border border-white/10 space-y-4 text-xs text-zinc-300 leading-relaxed">
+      <SpotlightCard className="p-6 space-y-4 text-xs text-zinc-300 leading-relaxed">
         <p>
           1. <strong>Commercial Ownership</strong>: Paid Creator, Studio Plus, and Production Ultra subscribers retain full commercial rights to all images, videos, and audio synthesized in SPACIX Studio.
         </p>
@@ -2058,7 +2057,7 @@ export const LegalPage: React.FC<{ section?: string }> = ({ section = 'terms' })
         <p>
           3. <strong>Permanent Media Storage</strong>: While upstream inference providers retain temporary outputs for 7 days, SPACIX automatically archives completed assets to our dedicated Cloudflare R2 storage bucket (`u/&#123;userId&#125;/&#123;generationId&#125;/`).
         </p>
-      </div>
+      </SpotlightCard>
     </div>
   );
 };

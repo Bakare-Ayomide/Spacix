@@ -258,9 +258,9 @@ export const ContinuityStudioBar: React.FC<{ activeStudio?: StudioId }> = ({ act
         {/* Cross-Studio Continuity Lock Strip */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono-tabular text-[11px] text-[#46ecd5] font-semibold flex items-center gap-1 whitespace-nowrap shrink-0">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#46ecd5]/10 border border-[#46ecd5]/30 font-mono-tabular text-[11px] text-[#46ecd5] font-semibold whitespace-nowrap shrink-0">
               <Lock className="w-3 h-3" />
-              <span>ACTIVE CONTINUITY BUS:</span>
+              <span>ACTIVE CONTINUITY BUS</span>
             </span>
 
             {/* Active Project Selector */}
