@@ -13,12 +13,13 @@ import {
   Clapperboard,
   Clock,
   Compass,
+  Copy,
   Diamond,
   Download,
   Edit3,
   Eye,
   FileText,
-  Film,
+  Focus,
   Folder,
   Heart,
   Home,
@@ -28,6 +29,7 @@ import {
   MapPin,
   Maximize2,
   Mic,
+  MoreVertical,
   Move,
   Music,
   Package,
@@ -39,9 +41,9 @@ import {
   Scissors,
   Search,
   Shirt,
-  Sliders,
   Sparkles,
-  Sun,
+  Star,
+  Trash2,
   Upload,
   Users,
   Video,
@@ -50,6 +52,10 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
+import {
+  buildCharacterTurnaroundPrompt,
+  CHARACTER_TURNAROUND_ASPECT_RATIO,
+} from '../lib/characterTurnaround';
 import { useRuns } from '../lib/useRuns';
 import {
   CharacterExpression,
@@ -666,11 +672,13 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
     propsList,
     locations,
     motionTemplates,
+    voices,
     cinemaProjects,
     presets,
     activeContinuity,
     setActiveContinuity,
     submitGeneration,
+    pollGenerationUntilDone,
     uploadReferenceFile,
     composeContinuityPrompt,
     saveCharacter,
@@ -678,7 +686,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
     saveWardrobe,
     saveProp,
     saveLocation,
+    saveVoice,
+    deleteVoice,
     saveCinemaProject,
+    deleteCinemaProject,
+    duplicateCinemaProject,
+    setLightboxItem,
     calculateTokenCost,
     navigate,
     routeParams,
@@ -698,7 +711,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   const [sidebarTab, setSidebarTab] = useState<'home' | 'elements' | 'favorites' | 'project'>('home');
   const [projectSearch, setProjectSearch] = useState('');
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [projectFavoritesOnly, setProjectFavoritesOnly] = useState(false);
   const [projectSort, setProjectSort] = useState<'recent' | 'alpha' | 'type'>('recent');
+  const [projectMenuOpenId, setProjectMenuOpenId] = useState<string | null>(null);
+  const [renamingProjId, setRenamingProjId] = useState<string | null>(null);
+  const [renameProjValue, setRenameProjValue] = useState('');
+  const [deleteConfirmProjId, setDeleteConfirmProjId] = useState<string | null>(null);
   const [activeSubfolder, setActiveSubfolder] = useState<'all' | 'scenes' | 'versions' | 'deliverables'>('all');
   const [favoriteGenIds, setFavoriteGenIds] = useState<string[]>([]);
   const [activeShowcaseIdx, setActiveShowcaseIdx] = useState<number>(0);
@@ -723,17 +741,41 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   );
 
   const [scenePrompt, setScenePrompt] = useState('');
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [atMentionQuery, setAtMentionQuery] = useState<{ query: string; startIdx: number } | null>(null);
   const [selectedVideoModelId, setSelectedVideoModelId] = useState('seedance-2-5');
   const [selectedImageModelId, setSelectedImageModelId] = useState('soul-2-standard');
   const [selectedAudioModelId, setSelectedAudioModelId] = useState('inworld-tts-studio');
   const [voicePersona, setVoicePersona] = useState<string>('noir_narrator');
   const [resolution, setResolution] = useState<'1080p' | '2K' | '4K'>('1080p');
-  const [aspectRatio, setAspectRatio] = useState<'16:9' | '21:9' | '9:16' | '1:1'>('16:9');
+  const [aspectRatio, setAspectRatio] = useState<'16:9' | '21:9' | '9:16' | '1:1' | '4:3' | '3:4'>('16:9');
   const [durationSec, setDurationSec] = useState<number>(5);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [batchSize, setBatchSize] = useState<number>(1);
   const [selectedEmotion, setSelectedEmotion] = useState<string>('Auto');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // My Elements: Voices Library Creator + Dual AI/Device Import State
+  const [voiceCreatorOpen, setVoiceCreatorOpen] = useState(false);
+  const [newVoiceName, setNewVoiceName] = useState('');
+  const [newVoiceModelId, setNewVoiceModelId] = useState('chatterbox-dia-tts');
+  const [newVoiceLanguage, setNewVoiceLanguage] = useState<SupportedCharacterLanguage>('English');
+  const [newVoiceAccent, setNewVoiceAccent] = useState('Neutral Warm');
+  const [newVoiceDialect, setNewVoiceDialect] = useState('');
+  const [newVoiceGender, setNewVoiceGender] = useState('Female');
+  const [newVoiceAge, setNewVoiceAge] = useState('Young Adult (25-35)');
+  const [newVoiceMood, setNewVoiceMood] = useState('Confident & Expressive');
+  const [newVoiceStyle, setNewVoiceStyle] = useState('Cinematic Narrative');
+  const [newVoiceEffects, setNewVoiceEffects] = useState('Clean Studio Mic');
+  const [newVoiceSampleLine, setNewVoiceSampleLine] = useState(
+    'Every frame carries the weight of memory—listen closely before the lights cut.'
+  );
+  const [newVoiceAssignedCharId, setNewVoiceAssignedCharId] = useState<string>('');
+  const [voiceGenBusy, setVoiceGenBusy] = useState(false);
+  const [voiceGenError, setVoiceGenError] = useState<string | null>(null);
+  const voiceUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const elementUploadKindRef = useRef<'character' | 'location' | 'wardrobe' | 'prop'>('character');
+  const elementUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeToolSpec = useMemo(
     () => CINEMA_TOOLS[activeToolId] || CINEMA_TOOLS.video_creation,
@@ -822,10 +864,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
       setActivePopover('camera');
     } else if (spec.id === 'lighting_cinema') {
       setActivePopover('lighting');
-    } else if (spec.id === 'script_screenplay' || spec.id === 'scene_breakdown') {
-      setAiDirectorOpen(true);
-    } else if (spec.id === 'video_sequencing') {
-      setWorkingMode('production');
+    } else if (
+      spec.id === 'script_screenplay' ||
+      spec.id === 'scene_breakdown' ||
+      spec.id === 'video_sequencing'
+    ) {
+      setWorkingMode('auto_production');
     }
   };
 
@@ -919,68 +963,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   const [gradeHalation, setGradeHalation] = useState(15);
   const [deliverableIds, setDeliverableIds] = useState<string[]>([]);
 
-  // AI Director Assistant Drawer & Screenplay-to-Shot Breakdown
-  const [aiDirectorOpen, setAiDirectorOpen] = useState(false);
-  const [aiDirectorInput, setAiDirectorInput] = useState(
-    'A king enters his palace at midnight and discovers that his throne room is empty.'
-  );
-  const [aiDirectorBusy, setAiDirectorBusy] = useState(false);
-  const [aiShotList, setAiShotList] = useState<AIDirectorShotSuggestion[]>([
-    {
-      shotNumber: '01',
-      camera: 'Extreme Wide · 24mm Anamorphic',
-      lens: 'Anamorphic',
-      movement: 'Crane up',
-      lighting: 'Silhouette',
-      emotion: 'Contemplative',
-      action: 'Establish the towering obsidian palace courtyard under rain and torchlight.',
-    },
-    {
-      shotNumber: '02',
-      camera: 'Medium Wide · 35mm Film',
-      lens: 'Halation Vintage',
-      movement: 'Dolly in',
-      lighting: 'Practicals',
-      emotion: 'Determined',
-      action: 'The king pushes open the heavy bronze doors and enters the grand hall.',
-    },
-    {
-      shotNumber: '03',
-      camera: 'Tracking Shot · Modern',
-      lens: 'Clean Sharp',
-      movement: 'Tracking shot',
-      lighting: 'Window',
-      emotion: 'Neutral',
-      action: 'Steadicam follows the king past marble pillars toward the dais.',
-    },
-    {
-      shotNumber: '04',
-      camera: 'Close-Up · 85mm Portrait',
-      lens: '85mm Portrait',
-      movement: 'Rack focus',
-      lighting: 'Soft Cross',
-      emotion: 'Surprise',
-      action: 'The king stops mid-stride as his eyes lock onto the dais.',
-    },
-    {
-      shotNumber: '05',
-      camera: 'POV · 24mm Wide',
-      lens: '24mm Wide',
-      movement: 'POV',
-      lighting: 'Overhead fall',
-      emotion: 'Fear',
-      action: 'Subjective POV revealing the empty throne bathed in cold overhead moonlight.',
-    },
-    {
-      shotNumber: '06',
-      camera: 'Extreme Close-Up · f/1.4 Wide Open',
-      lens: 'Anamorphic',
-      movement: 'Dolly in',
-      lighting: 'Silhouette',
-      emotion: 'Sadness',
-      action: 'Extreme close-up on the king’s eyes as realization and grief take hold.',
-    },
-  ]);
+
 
   // ==========================================================================
   // COMPUTED REFERENCES (UP TO 50) & ACTIVE MODEL
@@ -1110,25 +1093,29 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   );
 
   const sortedProjects = useMemo(() => {
-    const filtered = cinemaProjects.filter((p) =>
-      !projectSearch.trim()
-        ? true
-        : p.title.toLowerCase().includes(projectSearch.toLowerCase())
-    );
+    const filtered = cinemaProjects.filter((p) => {
+      if (projectFavoritesOnly && !p.isFavorite) return false;
+      if (projectSearch.trim()) {
+        return p.title.toLowerCase().includes(projectSearch.toLowerCase());
+      }
+      return true;
+    });
     const copy = [...filtered];
     if (projectSort === 'alpha') {
       copy.sort((a, b) => a.title.localeCompare(b.title));
     } else if (projectSort === 'type') {
       copy.sort((a, b) => a.productionType.localeCompare(b.productionType));
+    } else {
+      copy.sort((a, b) => (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0));
     }
     return copy;
-  }, [cinemaProjects, projectSearch, projectSort]);
+  }, [cinemaProjects, projectSearch, projectSort, projectFavoritesOnly]);
 
   const estimatedCredits = useMemo(() => {
     const modelId =
       activeModel?.id || (dockSurface === 'video' ? 'seedance-2-5' : 'soul-2-standard');
     const settingsPayload: Record<string, string | number | boolean> = {
-      aspect_ratio: aspectRatio === '21:9' ? '16:9' : aspectRatio,
+      aspect_ratio: aspectRatio,
       resolution,
     };
     if (dockSurface === 'video') {
@@ -1273,9 +1260,19 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
     const isAudioTask = routedModel.surface === 'audio' || dockSurface === 'audio';
     const rawText = (overridePrompt ?? scenePrompt).trim();
+    const isCharacterSheetTask =
+      activeToolId === 'character_identity' && routedModel.surface === 'image';
 
     const directed = isAudioTask
       ? rawText || `Cinematic ${activeToolSpec.label} for "${projectTitle}"`
+      : isCharacterSheetTask
+      ? buildCharacterTurnaroundPrompt({
+          name:
+            characters.find((c) => activeContinuity.characterIds.includes(c.id))?.name ||
+            'Character',
+          description: rawText || `Character turnaround reference for ${projectTitle}`,
+          visualStyle: activePalette.id !== 'Auto' ? activePalette.name : 'Photorealistic Cinema',
+        })
       : buildDirectedPrompt(rawText);
 
     const extraMedia: MediaSlotInput[] = overrideMedia ? [...overrideMedia] : [];
@@ -1297,7 +1294,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
       ? { prompt: directed, media: [] as MediaSlotInput[] }
       : composeContinuityPrompt(directed, undefined, extraMedia);
 
+    const effectiveAspect = isCharacterSheetTask
+      ? CHARACTER_TURNAROUND_ASPECT_RATIO
+      : aspectRatio;
+
     setIsSubmitting(true);
+    setShowLiveMonitor(true);
     try {
       for (let i = 0; i < batchSize; i++) {
         const settingsPayload: Record<string, string | number | boolean> =
@@ -1309,7 +1311,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                 instrumental_only: activeToolId === 'music_sfx',
               }
             : {
-                aspect_ratio: aspectRatio === '21:9' ? '16:9' : aspectRatio,
+                aspect_ratio: effectiveAspect,
                 resolution,
                 ...(routedModel.surface === 'video'
                   ? { duration: durationSec, sound: soundEnabled }
@@ -1413,115 +1415,342 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // ==========================================================================
-  // AI DIRECTOR ASSISTANT: INTERPRET SCENE & POPULATE SETTINGS + SHOT LIST
-  // ==========================================================================
-  const handleRunAIDirectorBreakdown = async () => {
-    if (!aiDirectorInput.trim()) return;
-    setAiDirectorBusy(true);
+  // Voice Library Creation (AI Synthesis & Device Upload) + Reusable Element Device Upload
+  const handleGenerateVoiceProfile = async () => {
+    if (!newVoiceName.trim() || !newVoiceSampleLine.trim()) {
+      setVoiceGenError('Enter both a Voice Name and sample line to synthesize.');
+      return;
+    }
+    setVoiceGenBusy(true);
+    setVoiceGenError(null);
     try {
-      const res = await fetch('/api/story-studio/ai-cowriter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'outline',
-          instruction: aiDirectorInput,
-          currentMarkdown: `# ${projectTitle}\n\n${aiDirectorInput}`,
-          title: projectTitle,
-          globalStyle: `${filmSetup.genre !== 'Auto' ? filmSetup.genre : 'Cinema'} / ${
-            cameraOptics.lens !== 'Auto' ? cameraOptics.lens : '35mm Anamorphic'
-          }`,
-          libraryAssets: [
-            ...characters.map((c) => ({ category: 'Character', name: c.name })),
-            ...locations.map((l) => ({ category: 'Location', name: l.name })),
-            ...propsList.map((p) => ({ category: 'Prop', name: p.name })),
-          ],
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      const cleanBrief = aiDirectorInput.trim();
-      const charLead = characters[0]?.name ? `@${characters[0].name}` : 'the protagonist';
-      const locLead = locations[0]?.name ? `@${locations[0].name}` : 'the main set';
+      const voicePrompt = `[VOICE SPECIFICATION: ${newVoiceGender}, ${newVoiceAge}, Language: ${newVoiceLanguage}, Accent: ${newVoiceAccent}${
+        newVoiceDialect ? `, Dialect: ${newVoiceDialect}` : ''
+      }, Emotion: ${newVoiceMood}, Style: ${newVoiceStyle}, Audio FX: ${newVoiceEffects}] ${newVoiceSampleLine.trim()}`;
 
-      const generatedShots: AIDirectorShotSuggestion[] = [
-        {
-          shotNumber: '01',
-          camera: 'Modern',
-          lens: '24mm Wide',
-          movement: 'Crane up',
-          lighting: 'Silhouette',
-          emotion: 'Contemplative',
-          action: `Extreme Wide establishing ${locLead}: ${cleanBrief}`,
+      const sub = await submitGeneration({
+        surface: 'audio',
+        modelId: newVoiceModelId,
+        mode: 'Text to Speech',
+        prompt: voicePrompt,
+        settings: {
+          duration: '10',
+          speaking_rate: 1.0,
+          voice_persona: newVoiceName.trim(),
+          language: newVoiceLanguage,
+          accent: newVoiceAccent,
         },
-        {
-          shotNumber: '02',
-          camera: '35mm Film',
-          lens: 'Anamorphic',
-          movement: 'Dolly in',
-          lighting: 'Practicals',
-          emotion: 'Determined',
-          action: `Medium Wide as ${charLead} enters the space and surveys the environment.`,
-        },
-        {
-          shotNumber: '03',
-          camera: 'Modern',
-          lens: 'Clean Sharp',
-          movement: 'Tracking shot',
-          lighting: 'Window',
-          emotion: 'Neutral',
-          action: `Tracking shot following ${charLead} moving through the room (${
-            data?.provider ? `AI Engine: ${data.provider}` : 'Continuity Locked'
-          }).`,
-        },
-        {
-          shotNumber: '04',
-          camera: '35mm Film',
-          lens: '85mm Portrait',
-          movement: 'Rack focus',
-          lighting: 'Soft Cross',
-          emotion: 'Surprise',
-          action: `Close-Up on ${charLead} noticing a critical detail in the scene.`,
-        },
-        {
-          shotNumber: '05',
-          camera: 'Modern',
-          lens: '24mm Wide',
-          movement: 'POV',
-          lighting: 'Overhead fall',
-          emotion: 'Fear',
-          action: `Subjective POV revealing what ${charLead} just discovered.`,
-        },
-        {
-          shotNumber: '06',
-          camera: '35mm Film',
-          lens: 'Anamorphic',
-          movement: 'Dolly in',
-          lighting: 'Silhouette',
-          emotion: 'Sadness',
-          action: `Extreme Close-Up capturing ${charLead}'s emotional reaction in f/1.4 shallow focus.`,
-        },
-      ];
-      setAiShotList(generatedShots);
-      showToast('AI Director prepared 6 camera-directed shots for review');
+        media: [],
+      });
+      if (!sub.generation?.id) {
+        throw new Error(sub.error || 'Voice generation submission failed');
+      }
+      const completed = await pollGenerationUntilDone(sub.generation.id, 120000);
+      const audioUrl = completed?.outputs?.[0]?.url || '';
+      if (!completed || completed.status === 'failed' || !audioUrl) {
+        throw new Error(completed?.error || 'Voice synthesis failed or returned no audio file');
+      }
+
+      const saved = await saveVoice({
+        name: newVoiceName.trim(),
+        sourceType: 'ai',
+        sampleAudioUrl: audioUrl,
+        modelId: newVoiceModelId,
+        genderPresentation: newVoiceGender,
+        vocalAge: newVoiceAge,
+        language: newVoiceLanguage,
+        accent: newVoiceAccent,
+        dialect: newVoiceDialect,
+        mood: newVoiceMood,
+        speakingStyle: newVoiceStyle,
+        effects: newVoiceEffects,
+        description: newVoiceSampleLine.trim(),
+        assignedCharacterIds: newVoiceAssignedCharId ? [newVoiceAssignedCharId] : [],
+      });
+
+      if (saved && newVoiceAssignedCharId) {
+        const targetChar = characters.find((c) => c.id === newVoiceAssignedCharId);
+        if (targetChar) {
+          await saveCharacter({
+            ...targetChar,
+            voiceId: saved.id,
+            voiceName: saved.name,
+            primaryLanguage: saved.language as SupportedCharacterLanguage,
+            speechAccent: saved.accent,
+            dialect: saved.dialect,
+          });
+        }
+      }
+      setNewVoiceName('');
+      setVoiceCreatorOpen(false);
+    } catch (err: any) {
+      setVoiceGenError(err?.message || 'Voice synthesis failed');
     } finally {
-      setAiDirectorBusy(false);
+      setVoiceGenBusy(false);
     }
   };
 
-  const applyAIShotToDirectorPanel = (shot: AIDirectorShotSuggestion) => {
-    setCameraOptics((prev) => ({
-      ...prev,
-      camera: CAMERA_BODIES.some((c) => c.id === shot.camera) ? shot.camera : '35mm Film',
-      lens: LENS_OPTICS.some((l) => l.id === shot.lens) ? shot.lens : 'Anamorphic',
-      aperture: shot.shotNumber === '06' || shot.shotNumber === '04' ? 'f/1.4 Wide Open' : 'f/2.8 Cinematic',
-      movements: [shot.movement],
-    }));
-    if (LIGHTING_PRESETS.some((l) => l.id === shot.lighting)) {
-      setSelectedLightingId(shot.lighting);
+  const handleUploadVoiceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = String(reader.result || '');
+      const upl = await uploadReferenceFile({
+        label: file.name,
+        contentType: file.type || 'audio/mpeg',
+        bytes: file.size,
+        dataUrl,
+      });
+      if (upl) {
+        const saved = await saveVoice({
+          name: newVoiceName.trim() || file.name.replace(/\.[^/.]+$/, ''),
+          sourceType: 'upload',
+          sampleAudioUrl: upl.publicUrl,
+          genderPresentation: newVoiceGender,
+          vocalAge: newVoiceAge,
+          language: newVoiceLanguage,
+          accent: newVoiceAccent,
+          dialect: newVoiceDialect,
+          mood: newVoiceMood,
+          speakingStyle: newVoiceStyle,
+          effects: newVoiceEffects,
+          description: newVoiceSampleLine.trim() || file.name,
+          assignedCharacterIds: newVoiceAssignedCharId ? [newVoiceAssignedCharId] : [],
+        });
+        if (saved && newVoiceAssignedCharId) {
+          const targetChar = characters.find((c) => c.id === newVoiceAssignedCharId);
+          if (targetChar) {
+            await saveCharacter({
+              ...targetChar,
+              voiceId: saved.id,
+              voiceName: saved.name,
+              primaryLanguage: saved.language as SupportedCharacterLanguage,
+              speechAccent: saved.accent,
+            });
+          }
+        }
+        setNewVoiceName('');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadElementFromDevice = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const kind = elementUploadKindRef.current;
+    const baseName = file.name.replace(/\.[^/.]+$/, '').slice(0, 32) || 'Imported Element';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = String(reader.result || '');
+      const upl = await uploadReferenceFile({
+        label: file.name,
+        contentType: file.type || 'image/png',
+        bytes: file.size,
+        dataUrl,
+      });
+      if (!upl) return;
+      if (kind === 'character') {
+        const saved = await saveCharacter({
+          name: baseName,
+          roleTitle: 'Imported Character',
+          facialIdentityLock: true,
+          identitySeed: Math.floor(100000 + Math.random() * 900000),
+          facePromptDescriptor: `Imported reference character (${baseName})`,
+          faceReferenceUrl: upl.publicUrl,
+          ageRange: '25-35',
+          genderPresentation: 'Lead',
+          skinTone: 'Natural',
+          bodyType: 'Balanced',
+          height: '5\'10"',
+          hairstyle: 'Reference Match',
+          eyeColor: 'Natural',
+          distinctiveFeatures: 'Uploaded portrait reference',
+          voiceId: 'VLOCK-UPLOAD',
+          voiceName: `${baseName} Voice`,
+          voiceIdentityLock: true,
+          voiceCloneConsent: true,
+          primaryLanguage: 'English',
+          supportedLanguages: ['English'],
+          speechAccent: 'Natural',
+          pitch: 'Medium',
+          tone: 'Natural',
+          defaultEmotion: 'Neutral',
+          speakingSpeed: 1.0,
+          deliveryStyle: 'Naturalistic Cinema',
+          activeExpression: 'Neutral',
+          expressionSheetUrls: { Neutral: upl.publicUrl },
+          defaultWardrobeId: null,
+          consistencyLock: true,
+        });
+        if (saved) insertElementToken(`@${saved.name.toUpperCase()}`, saved.id);
+      } else if (kind === 'location') {
+        const saved = await saveLocation({
+          name: baseName,
+          category: 'Landscapes',
+          settingType: 'EXT.',
+          timeOfDay: 'Day',
+          weather: 'Clear',
+          description: `Imported location visual plate (${baseName})`,
+          lightingAndMood: 'Natural Reference Lighting',
+          primaryImageUrl: upl.publicUrl,
+          cameraAngleReferences: [
+            {
+              id: `ang_${Date.now()}`,
+              angleLabel: 'Master Wide',
+              lens: '24mm Anamorphic',
+              imageUrl: upl.publicUrl,
+              promptNotes: 'Imported location visual reference',
+            },
+          ],
+          continuityLock: true,
+        });
+        if (saved) insertElementToken(`@${saved.name.toUpperCase()}`, undefined, saved.id);
+      } else if (kind === 'wardrobe') {
+        await saveWardrobe({
+          name: baseName,
+          category: 'Casual',
+          description: `Imported wardrobe visual (${baseName})`,
+          garments: `Matched garments from ${baseName}`,
+          shoes: 'Matched',
+          accessories: '',
+          jewellery: '',
+          hairstyleOverride: '',
+          colorPalette: 'Natural',
+          referenceImageUrl: upl.publicUrl,
+          assignedCharacterIds: [],
+          sceneContinuityLock: true,
+        });
+      } else {
+        const saved = await saveProp({
+          name: baseName,
+          category: 'Hero Artifacts',
+          description: `Imported prop reference (${baseName})`,
+          materialAndFinish: 'Reference Photo Match',
+          scaleAndDimensions: 'Hero scale',
+          referenceImageUrl: upl.publicUrl,
+          assignedCharacterIds: [],
+          assignedSceneIds: [],
+          appearanceLock: true,
+        });
+        if (saved) insertElementToken(`[PROP: ${saved.name}]`, undefined, undefined, saved.id);
+      }
+      showToast(`Imported ${kind} "${baseName}" into My Elements`);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Live @ mention autocomplete items across all My Elements & Uploads
+  const atMentionCandidates = useMemo(() => {
+    if (!atMentionQuery) return [];
+    const q = atMentionQuery.query.toLowerCase();
+    const list: Array<{
+      id: string;
+      kind: 'Character' | 'Location' | 'Wardrobe' | 'Prop' | 'Voice' | 'Reference';
+      label: string;
+      token: string;
+      sublabel: string;
+      thumb?: string;
+      charId?: string;
+      locId?: string;
+      wardId?: string;
+      propId?: string;
+    }> = [
+      ...characters.map((c) => ({
+        id: `m_c_${c.id}`,
+        kind: 'Character' as const,
+        label: c.name,
+        token: `@${c.name.toUpperCase()}`,
+        sublabel: c.roleTitle || c.identityId,
+        thumb: c.faceReferenceUrl,
+        charId: c.id,
+      })),
+      ...locations.map((l) => ({
+        id: `m_l_${l.id}`,
+        kind: 'Location' as const,
+        label: l.name,
+        token: `@${l.name.toUpperCase()}`,
+        sublabel: `${l.settingType} · ${l.timeOfDay}`,
+        thumb: l.primaryImageUrl,
+        locId: l.id,
+      })),
+      ...wardrobes.map((w) => ({
+        id: `m_w_${w.id}`,
+        kind: 'Wardrobe' as const,
+        label: w.name,
+        token: `@${w.name.toUpperCase()}`,
+        sublabel: w.category,
+        thumb: w.referenceImageUrl,
+        wardId: w.id,
+      })),
+      ...propsList.map((p) => ({
+        id: `m_p_${p.id}`,
+        kind: 'Prop' as const,
+        label: p.name,
+        token: `[PROP: ${p.name}]`,
+        sublabel: p.category,
+        thumb: p.referenceImageUrl,
+        propId: p.id,
+      })),
+      ...voices.map((v) => ({
+        id: `m_v_${v.id}`,
+        kind: 'Voice' as const,
+        label: v.name,
+        token: `[VOICE: ${v.name}]`,
+        sublabel: `${v.language} · ${v.accent}`,
+      })),
+      ...customRefs.map((r) => ({
+        id: `m_r_${r.id}`,
+        kind: 'Reference' as const,
+        label: r.label,
+        token: `[REF: ${r.label}]`,
+        sublabel: r.sublabel,
+        thumb: r.url,
+      })),
+    ];
+    return list.filter(
+      (item) =>
+        !q ||
+        item.label.toLowerCase().includes(q) ||
+        item.kind.toLowerCase().includes(q) ||
+        item.sublabel.toLowerCase().includes(q)
+    );
+  }, [atMentionQuery, characters, locations, wardrobes, propsList, voices, customRefs]);
+
+  const handleSelectAtMention = (item: (typeof atMentionCandidates)[number]) => {
+    if (!atMentionQuery) return;
+    const before = scenePrompt.slice(0, atMentionQuery.startIdx);
+    const caret = promptTextareaRef.current?.selectionStart ?? scenePrompt.length;
+    const after = scenePrompt.slice(caret);
+    const nextPrompt = `${before}${item.token} ${after}`;
+    setScenePrompt(nextPrompt);
+    setAtMentionQuery(null);
+    if (item.charId) {
+      setActiveContinuity((prev) => ({
+        ...prev,
+        characterIds: prev.characterIds.includes(item.charId!)
+          ? prev.characterIds
+          : [...prev.characterIds, item.charId!],
+      }));
     }
-    setSelectedEmotion(shot.emotion);
-    setScenePrompt(`${shot.action} #${shot.movement.replace(/\s+/g, '')}`);
-    showToast(`Loaded Shot ${shot.shotNumber} into Director's Panel — ready to review & generate`);
+    if (item.locId) {
+      setActiveContinuity((prev) => ({ ...prev, locationId: item.locId! }));
+    }
+    if (item.wardId) {
+      setActiveContinuity((prev) => ({ ...prev, wardrobeId: item.wardId! }));
+    }
+    if (item.propId) {
+      setActiveContinuity((prev) => ({
+        ...prev,
+        propIds: prev.propIds.includes(item.propId!)
+          ? prev.propIds
+          : [...prev.propIds, item.propId!],
+      }));
+    }
+    setTimeout(() => promptTextareaRef.current?.focus(), 0);
   };
 
   // Helper to cycle through wheel items in Camera Setup modal
@@ -1739,12 +1968,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#090A0C] text-zinc-100 flex flex-col overflow-x-hidden">
+    <div className="min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] bg-[#090A0C] text-zinc-100 flex flex-col overflow-x-clip">
       {/* ====================================================================
           MAIN UNIFIED STUDIO WORKSPACE
           Matches attached screenshot across all 12 SPACIX Studios
           ==================================================================== */}
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 min-h-0 flex relative overflow-x-clip">
         {/* Mobile Backdrop for Left Sidebar Drawer */}
         {mobileSidebarOpen && (
           <div
@@ -1851,7 +2080,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                 </div>
                 {!sidebarCollapsed && (
                   <span className="text-[10px] font-mono-tabular px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">
-                    {characters.length + locations.length + propsList.length + wardrobes.length}
+                    {characters.length + locations.length + propsList.length + wardrobes.length + voices.length}
                   </span>
                 )}
               </button>
@@ -1903,12 +2132,24 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               </button>
             </nav>
 
-            {/* Projects Section with Search, Sorting & New Project */}
+            {/* Projects Section with Search, Favorites Filter, Sorting, Options Menu & New Project */}
             {!sidebarCollapsed && (
               <div className="pt-4 border-t border-white/[0.06] space-y-2.5">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs font-semibold text-zinc-400">Projects</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setProjectFavoritesOnly((v) => !v)}
+                      title="Filter Favorites"
+                      className={`p-1 rounded-lg transition-colors ${
+                        projectFavoritesOnly
+                          ? 'text-amber-300 bg-amber-400/15'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${projectFavoritesOnly ? 'fill-amber-300' : ''}`} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setProjectSearchOpen((v) => !v)}
@@ -1973,32 +2214,174 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                   <span>New project</span>
                 </button>
 
-                {/* Active Production List */}
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                {/* Active Production List with ⋮ Options Menu */}
+                <div className="space-y-1 max-h-56 overflow-y-auto no-scrollbar pr-0.5">
                   {sortedProjects.map((proj) => {
                     const isSelected = proj.id === selectedProjId;
+                    const menuOpen = projectMenuOpenId === proj.id;
+                    const isRenaming = renamingProjId === proj.id;
                     return (
-                      <div key={proj.id} className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedProjId(proj.id);
-                            setProjectTitle(proj.title);
-                            setProductionType(proj.productionType);
-                            setAspectRatio(proj.aspectRatio);
-                            setSidebarTab('project');
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs transition-all ${
-                            isSelected
-                              ? 'bg-[#1C1E24] text-white font-bold border border-white/10'
-                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                          }`}
-                        >
-                          <span className="truncate">{proj.title}</span>
-                          <span className="text-[10px] font-mono-tabular text-zinc-500">
-                            {proj.aspectRatio}
-                          </span>
-                        </button>
+                      <div key={proj.id} className="space-y-1 relative">
+                        {isRenaming ? (
+                          <div className="flex items-center gap-1 px-1.5 py-1 rounded-xl bg-[#1C1E24] border border-[#46ecd5]/50">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={renameProjValue}
+                              onChange={(e) => setRenameProjValue(e.target.value)}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && renameProjValue.trim()) {
+                                  await saveCinemaProject({
+                                    ...proj,
+                                    title: renameProjValue.trim(),
+                                  });
+                                  if (proj.id === selectedProjId) {
+                                    setProjectTitle(renameProjValue.trim());
+                                  }
+                                  setRenamingProjId(null);
+                                } else if (e.key === 'Escape') {
+                                  setRenamingProjId(null);
+                                }
+                              }}
+                              className="w-full bg-transparent text-xs text-white focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (renameProjValue.trim()) {
+                                  await saveCinemaProject({
+                                    ...proj,
+                                    title: renameProjValue.trim(),
+                                  });
+                                  if (proj.id === selectedProjId) {
+                                    setProjectTitle(renameProjValue.trim());
+                                  }
+                                }
+                                setRenamingProjId(null);
+                              }}
+                              className="text-[#46ecd5] p-0.5"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className={`w-full flex items-center justify-between gap-1 px-2 py-1.5 rounded-xl text-left text-xs transition-all ${
+                              isSelected
+                                ? 'bg-[#1C1E24] text-white font-bold border border-white/10'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProjId(proj.id);
+                                setProjectTitle(proj.title);
+                                setProductionType(proj.productionType);
+                                setAspectRatio((proj.aspectRatio as any) || '16:9');
+                                setSidebarTab('project');
+                                setProjectMenuOpenId(null);
+                              }}
+                              className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
+                            >
+                              {proj.isFavorite && (
+                                <Star className="w-3 h-3 text-amber-300 fill-amber-300 shrink-0" />
+                              )}
+                              <span className="truncate">{proj.title}</span>
+                            </button>
+                            <span className="text-[10px] font-mono-tabular text-zinc-500 shrink-0">
+                              {proj.aspectRatio}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProjectMenuOpenId(menuOpen ? null : proj.id);
+                              }}
+                              className="p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white shrink-0"
+                              title="Project Options"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {menuOpen && (
+                          <div className="absolute right-1 top-8 z-50 w-44 rounded-xl bg-[#181B22] border border-white/15 shadow-2xl p-1 space-y-0.5 text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProjId(proj.id);
+                                setProjectTitle(proj.title);
+                                setProductionType(proj.productionType);
+                                setAspectRatio((proj.aspectRatio as any) || '16:9');
+                                setSidebarTab('project');
+                                setProjectMenuOpenId(null);
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 flex items-center gap-2"
+                            >
+                              <Folder className="w-3 h-3 text-[#46ecd5]" />
+                              <span>Open Project</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRenamingProjId(proj.id);
+                                setRenameProjValue(proj.title);
+                                setProjectMenuOpenId(null);
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 flex items-center gap-2"
+                            >
+                              <Edit3 className="w-3 h-3 text-sky-300" />
+                              <span>Rename</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setProjectMenuOpenId(null);
+                                const dup = await duplicateCinemaProject(proj.id);
+                                if (dup) {
+                                  setSelectedProjId(dup.id);
+                                  setProjectTitle(dup.title);
+                                }
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 flex items-center gap-2"
+                            >
+                              <Copy className="w-3 h-3 text-emerald-300" />
+                              <span>Duplicate Copy</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setProjectMenuOpenId(null);
+                                await saveCinemaProject({
+                                  ...proj,
+                                  isFavorite: !proj.isFavorite,
+                                });
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-200 flex items-center gap-2"
+                            >
+                              <Star
+                                className={`w-3 h-3 ${
+                                  proj.isFavorite ? 'text-amber-300 fill-amber-300' : 'text-zinc-400'
+                                }`}
+                              />
+                              <span>{proj.isFavorite ? 'Remove Favorite' : 'Mark Favorite'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProjectMenuOpenId(null);
+                                setDeleteConfirmProjId(proj.id);
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-300 flex items-center gap-2"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+
                         {isSelected && sidebarTab === 'project' && (
                           <div className="pl-4 space-y-0.5 text-[11px]">
                             {(
@@ -2071,7 +2454,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
         {/* ================================================================
             2. LARGE CENTRAL CREATIVE WORKSPACE + UNIVERSAL COMPOSER
             ================================================================ */}
-        <main className="flex-1 min-w-0 flex flex-col justify-between overflow-y-auto overflow-x-hidden relative bg-[#090A0C]">
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col justify-between overflow-y-auto overflow-x-clip relative bg-[#090A0C]">
           {/* ================================================================
               PERSISTENT PROJECT HEADER & COMPACT CONTEXTUAL TOOL NAVIGATION
               Categories: Production Elements | Media Generation | Film Production
@@ -2181,32 +2564,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                       : 'Automatic Production'}
                   </span>
                 </Button>
-
-                <Button
-                  type="button"
-                  variant={workingMode === 'production' ? 'default' : 'secondary'}
-                  size="sm"
-                  onClick={() =>
-                    setWorkingMode((prev) => (prev === 'production' ? 'director' : 'production'))
-                  }
-                  className="whitespace-nowrap"
-                >
-                  <Layers className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span className="hidden md:inline">
-                    {workingMode === 'production' ? '← Workspace' : 'Timeline & Vault'}
-                  </span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant={aiDirectorOpen ? 'accent' : 'secondary'}
-                  size="sm"
-                  onClick={() => setAiDirectorOpen((v) => !v)}
-                  className="shrink-0"
-                >
-                  <Wand2 className="w-3.5 h-3.5 text-[#46ecd5]" />
-                  <span className="hidden xl:inline">AI Director</span>
-                </Button>
               </div>
             </div>
 
@@ -2306,17 +2663,32 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               {/* ============================================================
                   CENTER VIEWPORT: UPPER-CENTRE SHOWCASE + GENEROUS EMPTY SPACE
                   ============================================================ */}
-              <div className="flex-1 flex flex-col justify-center px-3 sm:px-8 py-4 sm:py-6 max-w-[1280px] w-full mx-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col justify-center px-3 sm:px-8 py-3 sm:py-5 max-w-[1280px] w-full mx-auto">
                 {sidebarTab === 'elements' ? (
-                  /* @ MY ELEMENTS — REUSABLE CONTINUITY VAULT (ACETERNITY SPOTLIGHT CARDS + SHADCN SCROLLAREA) */
+                  /* @ MY ELEMENTS — REUSABLE CONTINUITY VAULT (Characters 1:1 4-Panel, Locations, Wardrobes, Props & Dedicated Voices Library) */
                   <div className="space-y-5">
+                    <input
+                      ref={elementUploadInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadElementFromDevice}
+                      className="hidden"
+                    />
+                    <input
+                      ref={voiceUploadInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleUploadVoiceFile}
+                      className="hidden"
+                    />
+
                     <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
                       <div>
                         <div className="text-xs font-mono-tabular text-sky-400 uppercase tracking-wider">
-                          @ MY ELEMENTS — REUSABLE CONTINUITY VAULT ({allReferences.length}/50 ACTIVE)
+                          @ MY ELEMENTS — REUSABLE CONTINUITY VAULT ({allReferences.length}/50 ACTIVE · {voices.length} VOICES)
                         </div>
                         <h2 className="font-display text-2xl font-bold uppercase text-white mt-0.5">
-                          Characters, Locations, Wardrobes & Props
+                          Characters, Locations, Wardrobes, Props & Voices
                         </h2>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -2343,43 +2715,79 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {/* Characters Column */}
+                      {/* Characters Column (1:1 4-panel Turnaround + Upload from device) */}
                       <SpotlightCard className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
                             <Users className="w-4 h-4 text-[#46ecd5]" />
                             <span>Characters ({characters.length})</span>
                           </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setSidebarTab('home');
-                              handleSelectCinemaTool('character_identity');
-                            }}
-                            className="text-[#46ecd5]"
-                          >
-                            + Character Tool
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                elementUploadKindRef.current = 'character';
+                                elementUploadInputRef.current?.click();
+                              }}
+                              className="text-zinc-300"
+                              title="Import character photo from device"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              Import
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                setSidebarTab('home');
+                                handleSelectCinemaTool('character_identity');
+                              }}
+                              className="text-[#46ecd5]"
+                            >
+                              + AI 4-Panel
+                            </Button>
+                          </div>
                         </div>
-                        <ScrollArea className="h-64 pr-1">
+                        <ScrollArea className="h-64 pr-1 no-scrollbar">
                           <div className="space-y-2">
                             {characters.map((c) => {
                               const locked = activeContinuity.characterIds.includes(c.id);
+                              const thumb = c.faceReferenceUrl;
                               return (
                                 <div
                                   key={c.id}
-                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                  className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
                                     locked
                                       ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
                                       : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
                                   }`}
                                 >
-                                  <div className="min-w-0">
-                                    <div className="font-bold text-white truncate">@{c.name}</div>
-                                    <div className="text-[10px] text-zinc-400 truncate">
-                                      {c.identityId} · {c.primaryLanguage}
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {thumb && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setLightboxItem({
+                                            url: thumb,
+                                            kind: 'image',
+                                            title: `${c.name} (1:1 Turnaround Sheet)`,
+                                            subtitle: `${c.roleTitle || c.identityId} · ${c.primaryLanguage}`,
+                                            aspectRatio: '1:1',
+                                          })
+                                        }
+                                        className="w-9 h-9 rounded-lg overflow-hidden border border-white/15 bg-black shrink-0"
+                                      >
+                                        <img src={thumb} alt={c.name} className="w-full h-full object-contain" />
+                                      </button>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white truncate">@{c.name}</div>
+                                      <div className="text-[10px] text-zinc-400 truncate">
+                                        {c.voiceName || c.primaryLanguage} · {c.identityId}
+                                      </div>
                                     </div>
                                   </div>
                                   <Button
@@ -2402,41 +2810,78 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                       {/* Locations Column */}
                       <SpotlightCard className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
                             <MapPin className="w-4 h-4 text-[#46ecd5]" />
                             <span>Locations ({locations.length})</span>
                           </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setSidebarTab('home');
-                              handleSelectCinemaTool('location_environment');
-                            }}
-                            className="text-[#46ecd5]"
-                          >
-                            + Location Tool
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                elementUploadKindRef.current = 'location';
+                                elementUploadInputRef.current?.click();
+                              }}
+                              className="text-zinc-300"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              Import
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                setSidebarTab('home');
+                                handleSelectCinemaTool('location_environment');
+                              }}
+                              className="text-[#46ecd5]"
+                            >
+                              + AI
+                            </Button>
+                          </div>
                         </div>
-                        <ScrollArea className="h-64 pr-1">
+                        <ScrollArea className="h-64 pr-1 no-scrollbar">
                           <div className="space-y-2">
                             {locations.map((loc) => {
                               const locked = activeContinuity.locationId === loc.id;
                               return (
                                 <div
                                   key={loc.id}
-                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                  className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
                                     locked
                                       ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
                                       : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
                                   }`}
                                 >
-                                  <div className="min-w-0">
-                                    <div className="font-bold text-white truncate">@{loc.name}</div>
-                                    <div className="text-[10px] text-zinc-400 truncate">
-                                      {loc.settingType} · {loc.timeOfDay} · {loc.weather}
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {loc.primaryImageUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setLightboxItem({
+                                            url: loc.primaryImageUrl,
+                                            kind: 'image',
+                                            title: loc.name,
+                                            subtitle: `${loc.settingType} · ${loc.timeOfDay}`,
+                                          })
+                                        }
+                                        className="w-9 h-9 rounded-lg overflow-hidden border border-white/15 bg-black shrink-0"
+                                      >
+                                        <img
+                                          src={loc.primaryImageUrl}
+                                          alt={loc.name}
+                                          className="w-full h-full object-contain"
+                                        />
+                                      </button>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-white truncate">@{loc.name}</div>
+                                      <div className="text-[10px] text-zinc-400 truncate">
+                                        {loc.settingType} · {loc.timeOfDay} · {loc.weather}
+                                      </div>
                                     </div>
                                   </div>
                                   <Button
@@ -2463,32 +2908,47 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                       {/* Wardrobes Column */}
                       <SpotlightCard className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
                             <Shirt className="w-4 h-4 text-[#46ecd5]" />
                             <span>Wardrobes ({wardrobes.length})</span>
                           </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setSidebarTab('home');
-                              handleSelectCinemaTool('wardrobe_outfit');
-                            }}
-                            className="text-[#46ecd5]"
-                          >
-                            + Wardrobe Tool
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                elementUploadKindRef.current = 'wardrobe';
+                                elementUploadInputRef.current?.click();
+                              }}
+                              className="text-zinc-300"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              Import
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                setSidebarTab('home');
+                                handleSelectCinemaTool('wardrobe_outfit');
+                              }}
+                              className="text-[#46ecd5]"
+                            >
+                              + AI
+                            </Button>
+                          </div>
                         </div>
-                        <ScrollArea className="h-64 pr-1">
+                        <ScrollArea className="h-64 pr-1 no-scrollbar">
                           <div className="space-y-2">
                             {wardrobes.map((w) => {
                               const locked = activeContinuity.wardrobeId === w.id;
                               return (
                                 <div
                                   key={w.id}
-                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                  className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
                                     locked
                                       ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
                                       : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
@@ -2523,32 +2983,47 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
 
                       {/* Props Column */}
                       <SpotlightCard className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
                             <Package className="w-4 h-4 text-[#46ecd5]" />
                             <span>Props ({propsList.length})</span>
                           </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setSidebarTab('home');
-                              handleSelectCinemaTool('prop_object');
-                            }}
-                            className="text-[#46ecd5]"
-                          >
-                            + Props Tool
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                elementUploadKindRef.current = 'prop';
+                                elementUploadInputRef.current?.click();
+                              }}
+                              className="text-zinc-300"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              Import
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => {
+                                setSidebarTab('home');
+                                handleSelectCinemaTool('prop_object');
+                              }}
+                              className="text-[#46ecd5]"
+                            >
+                              + AI
+                            </Button>
+                          </div>
                         </div>
-                        <ScrollArea className="h-64 pr-1">
+                        <ScrollArea className="h-64 pr-1 no-scrollbar">
                           <div className="space-y-2">
                             {propsList.map((p) => {
                               const locked = activeContinuity.propIds.includes(p.id);
                               return (
                                 <div
                                   key={p.id}
-                                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
+                                  className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 transition-colors ${
                                     locked
                                       ? 'bg-[#46ecd5]/15 border-[#46ecd5]'
                                       : 'bg-[#0D0E12] border-white/10 hover:border-white/20'
@@ -2583,131 +3058,518 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         </ScrollArea>
                       </SpotlightCard>
                     </div>
-                  </div>
-                ) : (
-                  /* UPPER-CENTRE MEDIA SHOWCASE ("COMMUNITIES") + HEADLINE (EXACT SCREENSHOT MATCH) */
-                  <div className="space-y-6 sm:space-y-8 my-auto py-4">
-                    <div className="flex flex-col items-center text-center space-y-5">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.18em] text-white">
-                          COMMUNITIES
-                        </span>
-                        {inspectedGen && inspectedGen.outputs[0] && (
-                          <button
+
+                    {/* DEDICATED VOICES LIBRARY INSIDE @ MY ELEMENTS */}
+                    <SpotlightCard className="p-4 sm:p-5 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                            <Mic className="w-4 h-4 text-[#46ecd5]" />
+                            <span>Saved Voices Library ({voices.length})</span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">
+                            Create persistent AI voice profiles or upload custom voice audio, audition playback, and assign directly to characters.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
                             type="button"
-                            onClick={() => setShowLiveMonitor((v) => !v)}
-                            className="px-2.5 py-0.5 rounded-full bg-[#181A20] border border-white/15 text-[10px] font-mono text-[#46ecd5] hover:bg-white/10"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => voiceUploadInputRef.current?.click()}
                           >
-                            {showLiveMonitor ? 'Show Showcase Stack' : 'Show Latest Generated Shot'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Fanned 3-Card Media Showcase Stack (Exact Match to Screenshot) */}
-                      <div className="relative w-full max-w-xl h-44 sm:h-56 flex items-center justify-center px-4 select-none">
-                        {/* Back Right Fanned Card */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowLiveMonitor(false);
-                            setActiveShowcaseIdx((prev) => (prev + 2) % SHOWCASE_CARDS.length);
-                          }}
-                          className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-10 sm:translate-x-20 rotate-[4deg] scale-90 opacity-85 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
-                          title={orderedShowcase[2].title}
-                        >
-                          <img
-                            src={orderedShowcase[2].image}
-                            alt={orderedShowcase[2].title}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-
-                        {/* Middle Fanned Card */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowLiveMonitor(false);
-                            setActiveShowcaseIdx((prev) => (prev + 1) % SHOWCASE_CARDS.length);
-                          }}
-                          className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-5 sm:translate-x-10 rotate-[2deg] scale-95 opacity-95 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
-                          title={orderedShowcase[1].title}
-                        >
-                          <img
-                            src={orderedShowcase[1].image}
-                            alt={orderedShowcase[1].title}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-
-                        {/* Front Primary Showcase / Monitor Card */}
-                        <div
-                          onClick={() => {
-                            if (!showLiveMonitor) {
-                              setScenePrompt(orderedShowcase[0].prompt);
-                              showToast(`Loaded "${orderedShowcase[0].title}" prompt into composer`);
-                            }
-                          }}
-                          className="w-64 sm:w-[360px] h-40 sm:h-52 rounded-3xl overflow-hidden border border-white/20 bg-[#14161B] relative z-10 -translate-x-2 sm:-translate-x-4 shadow-[0_24px_60px_rgba(0,0,0,0.9)] cursor-pointer group transition-transform duration-300 hover:scale-[1.01]"
-                        >
-                          {showLiveMonitor && inspectedGen && inspectedGen.outputs[0] ? (
-                            inspectedGen.outputs[0].kind === 'video' ? (
-                              <video
-                                src={inspectedGen.outputs[0].url}
-                                controls
-                                loop
-                                muted
-                                autoPlay
-                                playsInline
-                                style={{
-                                  filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
-                                    0,
-                                    gradeWarmth
-                                  )}%)`,
-                                }}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <img
-                                src={inspectedGen.outputs[0].url}
-                                alt={inspectedGen.prompt}
-                                style={{
-                                  filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
-                                    0,
-                                    gradeWarmth
-                                  )}%)`,
-                                }}
-                                className="w-full h-full object-cover"
-                              />
-                            )
-                          ) : (
-                            <>
-                              <img
-                                src={orderedShowcase[0].image}
-                                alt={orderedShowcase[0].title}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 text-left">
-                                <span className="text-[10px] font-mono text-[#46ecd5]">
-                                  {orderedShowcase[0].tag}
-                                </span>
-                                <span className="text-xs font-bold text-white">
-                                  {orderedShowcase[0].title} — Click to load prompt
-                                </span>
-                              </div>
-                            </>
-                          )}
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            Import Audio File
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="accent"
+                            size="sm"
+                            onClick={() => setVoiceCreatorOpen((v) => !v)}
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            {voiceCreatorOpen ? 'Close Voice Studio' : 'Create Voice with AI'}
+                          </Button>
                         </div>
                       </div>
 
-                      {/* Center Headline from Screenshot */}
-                      <div className="pt-4 sm:pt-8 space-y-1">
-                        <h1 className="font-display text-2xl sm:text-4xl font-extrabold uppercase tracking-wider text-[#46ecd5]">
-                          HERE, YOUR IDEAS COMES ALIVE
-                        </h1>
-                      </div>
-                    </div>
+                      {voiceCreatorOpen && (
+                        <div className="rounded-2xl bg-[#0D0E12] border border-white/10 p-4 space-y-3 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <input
+                              type="text"
+                              value={newVoiceName}
+                              onChange={(e) => setNewVoiceName(e.target.value)}
+                              placeholder="Voice Profile Name (e.g. Kemi Baritone)"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <select
+                              value={newVoiceModelId}
+                              onChange={(e) => setNewVoiceModelId(e.target.value)}
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            >
+                              {audioModels.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={newVoiceAssignedCharId}
+                              onChange={(e) => setNewVoiceAssignedCharId(e.target.value)}
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            >
+                              <option value="">Assign to Character (Optional)</option>
+                              {characters.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  @{c.name} ({c.roleTitle})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                    {/* Stage 5 & 6 Shot Inspector (Shown when user inspects or generates a live shot) */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <select
+                              value={newVoiceLanguage}
+                              onChange={(e) =>
+                                setNewVoiceLanguage(e.target.value as SupportedCharacterLanguage)
+                              }
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            >
+                              {SUPPORTED_LANGUAGES.map((l) => (
+                                <option key={l} value={l}>
+                                  Language: {l}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={newVoiceAccent}
+                              onChange={(e) => setNewVoiceAccent(e.target.value)}
+                              placeholder="Accent (e.g. Lagos Urban, British)"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <input
+                              type="text"
+                              value={newVoiceDialect}
+                              onChange={(e) => setNewVoiceDialect(e.target.value)}
+                              placeholder="Dialect / Cadence"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <select
+                              value={newVoiceGender}
+                              onChange={(e) => setNewVoiceGender(e.target.value)}
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            >
+                              <option value="Female">Gender: Female</option>
+                              <option value="Male">Gender: Male</option>
+                              <option value="Neutral">Gender: Neutral / Non-binary</option>
+                            </select>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <input
+                              type="text"
+                              value={newVoiceAge}
+                              onChange={(e) => setNewVoiceAge(e.target.value)}
+                              placeholder="Age Range (e.g. 25-35)"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <input
+                              type="text"
+                              value={newVoiceMood}
+                              onChange={(e) => setNewVoiceMood(e.target.value)}
+                              placeholder="Mood / Emotion"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <input
+                              type="text"
+                              value={newVoiceStyle}
+                              onChange={(e) => setNewVoiceStyle(e.target.value)}
+                              placeholder="Speaking Style"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <input
+                              type="text"
+                              value={newVoiceEffects}
+                              onChange={(e) => setNewVoiceEffects(e.target.value)}
+                              placeholder="Effects / Mic Profile"
+                              className="px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={newVoiceSampleLine}
+                              onChange={(e) => setNewVoiceSampleLine(e.target.value)}
+                              placeholder="Sample audition line to synthesize..."
+                              className="flex-1 px-3 py-2 rounded-xl bg-[#181A20] border border-white/10 text-white"
+                            />
+                            <Button
+                              type="button"
+                              variant="accent"
+                              disabled={voiceGenBusy}
+                              onClick={handleGenerateVoiceProfile}
+                            >
+                              {voiceGenBusy ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                  Synthesizing...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                                  Generate & Save Voice
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          {voiceGenError && (
+                            <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+                              {voiceGenError}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {voices.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-zinc-500">
+                          No saved voices yet. Click &ldquo;Create Voice with AI&rdquo; or &ldquo;Import Audio File&rdquo; to build reusable character voice presets.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {voices.map((v) => (
+                            <div
+                              key={v.id}
+                              className="p-3 rounded-xl bg-[#0D0E12] border border-white/10 space-y-2 text-xs"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="font-bold text-white truncate">{v.name}</div>
+                                  <div className="text-[10px] text-zinc-400 truncate">
+                                    {v.genderPresentation} · {v.language} ({v.accent}) · {v.mood}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteVoice(v.id)}
+                                  className="p-1 text-zinc-500 hover:text-rose-400"
+                                  title="Delete Voice"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {v.sampleAudioUrl && (
+                                <div className="flex items-center gap-2">
+                                  <audio src={v.sampleAudioUrl} controls className="w-full h-8" />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLightboxItem({
+                                        url: v.sampleAudioUrl,
+                                        kind: 'audio',
+                                        title: v.name,
+                                        subtitle: `${v.language} · ${v.accent} · ${v.speakingStyle}`,
+                                      })
+                                    }
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 shrink-0"
+                                    title="Open in Audio Player Lightbox"
+                                  >
+                                    <Maximize2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <select
+                                  value={v.assignedCharacterIds?.[0] || ''}
+                                  onChange={async (e) => {
+                                    const charId = e.target.value;
+                                    await saveVoice({
+                                      ...v,
+                                      assignedCharacterIds: charId ? [charId] : [],
+                                    });
+                                    if (charId) {
+                                      const c = characters.find((ch) => ch.id === charId);
+                                      if (c) {
+                                        await saveCharacter({
+                                          ...c,
+                                          voiceId: v.id,
+                                          voiceName: v.name,
+                                          primaryLanguage: v.language as SupportedCharacterLanguage,
+                                          speechAccent: v.accent,
+                                        });
+                                      }
+                                    }
+                                    showToast(
+                                      charId
+                                        ? `Assigned voice "${v.name}" to character`
+                                        : 'Unassigned voice from character'
+                                    );
+                                  }}
+                                  className="flex-1 px-2 py-1 rounded-lg bg-[#16181F] border border-white/10 text-[11px] text-zinc-200"
+                                >
+                                  <option value="">Assign to Character...</option>
+                                  {characters.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      @{c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDockSurface('audio');
+                                    setActiveToolId('speech_dialogue');
+                                    setVoicePersona(v.name);
+                                    setScenePrompt(v.description || '');
+                                    setSidebarTab('home');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-[#46ecd5]/15 text-[#46ecd5] font-semibold shrink-0"
+                                >
+                                  Use Voice
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </SpotlightCard>
+                  </div>
+                ) : (
+                  /* UPPER-CENTRE MEDIA SHOWCASE ("COMMUNITIES") OR DEDICATED FULL-STAGE GENERATION PREVIEW */
+                  <div className="space-y-6 sm:space-y-8 my-auto py-4">
+                    {!(isSubmitting || (showLiveMonitor && inspectedGen && inspectedGen.outputs[0])) ? (
+                      <div className="flex flex-col items-center text-center space-y-5">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.18em] text-white">
+                            COMMUNITIES
+                          </span>
+                          {inspectedGen && inspectedGen.outputs[0] && (
+                            <button
+                              type="button"
+                              onClick={() => setShowLiveMonitor(true)}
+                              className="px-2.5 py-0.5 rounded-full bg-[#181A20] border border-white/15 text-[10px] font-mono text-[#46ecd5] hover:bg-white/10"
+                            >
+                              Show Latest Generated Shot
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Fanned 3-Card Media Showcase Stack (Visible only when idle, not generating/viewing active output) */}
+                        <div className="relative w-full max-w-xl h-44 sm:h-56 flex items-center justify-center px-4 select-none">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowLiveMonitor(false);
+                              setActiveShowcaseIdx((prev) => (prev + 2) % SHOWCASE_CARDS.length);
+                            }}
+                            className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-10 sm:translate-x-20 rotate-[4deg] scale-90 opacity-85 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
+                            title={orderedShowcase[2].title}
+                          >
+                            <img
+                              src={orderedShowcase[2].image}
+                              alt={orderedShowcase[2].title}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowLiveMonitor(false);
+                              setActiveShowcaseIdx((prev) => (prev + 1) % SHOWCASE_CARDS.length);
+                            }}
+                            className="w-56 sm:w-80 h-36 sm:h-48 rounded-3xl overflow-hidden border border-white/15 bg-zinc-900 absolute translate-x-5 sm:translate-x-10 rotate-[2deg] scale-95 opacity-95 shadow-2xl transition-all duration-300 hover:opacity-100 focus:outline-none"
+                            title={orderedShowcase[1].title}
+                          >
+                            <img
+                              src={orderedShowcase[1].image}
+                              alt={orderedShowcase[1].title}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+
+                          <div
+                            onClick={() => {
+                              setScenePrompt(orderedShowcase[0].prompt);
+                              showToast(`Loaded "${orderedShowcase[0].title}" prompt into composer`);
+                            }}
+                            className="w-64 sm:w-[360px] h-40 sm:h-52 rounded-3xl overflow-hidden border border-white/20 bg-[#14161B] relative z-10 -translate-x-2 sm:-translate-x-4 shadow-[0_24px_60px_rgba(0,0,0,0.9)] cursor-pointer group transition-transform duration-300 hover:scale-[1.01]"
+                          >
+                            <img
+                              src={orderedShowcase[0].image}
+                              alt={orderedShowcase[0].title}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 text-left">
+                              <span className="text-[10px] font-mono text-[#46ecd5]">
+                                {orderedShowcase[0].tag}
+                              </span>
+                              <span className="text-xs font-bold text-white">
+                                {orderedShowcase[0].title} — Click to load prompt
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 sm:pt-8 space-y-1">
+                          <h1 className="font-display text-2xl sm:text-4xl font-extrabold uppercase tracking-wider text-[#46ecd5]">
+                            HERE, YOUR IDEAS COMES ALIVE
+                          </h1>
+                        </div>
+                      </div>
+                    ) : (
+                      /* DEDICATED FULL-STAGE GENERATION PREVIEW (CAROUSEL HIDDEN, TRUE ASPECT RATIO, CLICK FOR LIGHTBOX) */
+                      <div className="max-w-[980px] mx-auto space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#46ecd5]/15 border border-[#46ecd5]/40 text-[10px] font-mono font-bold text-[#46ecd5] uppercase">
+                              {isSubmitting ? 'GENERATING' : 'ACTIVE PREVIEW'}
+                            </span>
+                            {inspectedGen && (
+                              <span className="text-xs font-semibold text-white truncate">
+                                {inspectedGen.modelLabel} · {aspectRatio}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowLiveMonitor(false)}
+                            className="px-3 py-1 rounded-full bg-[#181A20] hover:bg-[#23262E] border border-white/15 text-[11px] font-semibold text-zinc-200"
+                          >
+                            ← Back to Showcase
+                          </button>
+                        </div>
+
+                        {isSubmitting && (!inspectedGen || !inspectedGen.outputs[0]) ? (
+                          <div
+                            style={{ aspectRatio: aspectRatio.replace(':', ' / ') }}
+                            className="w-full max-h-[58vh] mx-auto rounded-3xl border border-white/15 bg-[#101217] flex flex-col items-center justify-center gap-3 p-6 text-center"
+                          >
+                            <Loader2 className="w-8 h-8 text-[#46ecd5] animate-spin" />
+                            <div className="text-sm font-bold text-white">
+                              Generating {activeToolSpec.label} ({aspectRatio})...
+                            </div>
+                            <div className="text-xs text-zinc-400 max-w-md line-clamp-2">
+                              {scenePrompt || 'Rendering scene with locked cinematography & continuity'}
+                            </div>
+                          </div>
+                        ) : inspectedGen && inspectedGen.outputs[0] ? (
+                          (() => {
+                            const out = inspectedGen.outputs[0];
+                            const outAspect =
+                              out.width && out.height
+                                ? `${out.width} / ${out.height}`
+                                : aspectRatio.replace(':', ' / ');
+                            const mediaKind =
+                              out.kind === 'video'
+                                ? 'video'
+                                : out.kind === 'audio'
+                                ? 'audio'
+                                : 'image';
+                            return (
+                              <div className="relative rounded-3xl border border-white/15 bg-black overflow-hidden flex items-center justify-center shadow-2xl">
+                                {mediaKind === 'audio' ? (
+                                  <div
+                                    onClick={() =>
+                                      setLightboxItem({
+                                        url: out.url,
+                                        kind: 'audio',
+                                        title: inspectedGen.modelLabel,
+                                        subtitle: inspectedGen.prompt,
+                                      })
+                                    }
+                                    className="w-full p-8 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-[#121620] to-[#08090c] cursor-pointer"
+                                  >
+                                    <Volume2 className="w-10 h-10 text-[#46ecd5]" />
+                                    <audio
+                                      src={out.url}
+                                      controls
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="w-full max-w-lg"
+                                    />
+                                    <span className="text-xs text-zinc-400">
+                                      Click background to open full Audio Player Lightbox
+                                    </span>
+                                  </div>
+                                ) : mediaKind === 'video' ? (
+                                  <div
+                                    style={{ aspectRatio: outAspect }}
+                                    className="relative w-full max-h-[60vh] flex items-center justify-center bg-black group"
+                                  >
+                                    <video
+                                      src={out.url}
+                                      controls
+                                      loop
+                                      autoPlay
+                                      playsInline
+                                      style={{
+                                        filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
+                                          0,
+                                          gradeWarmth
+                                        )}%)`,
+                                      }}
+                                      className="max-w-full max-h-[60vh] w-auto h-auto object-contain"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setLightboxItem({
+                                          url: out.url,
+                                          kind: 'video',
+                                          title: inspectedGen.modelLabel,
+                                          subtitle: inspectedGen.prompt,
+                                          aspectRatio: outAspect,
+                                        })
+                                      }
+                                      className="absolute top-3 right-3 px-2.5 py-1.5 rounded-xl bg-black/75 hover:bg-black text-white border border-white/20 text-xs font-semibold flex items-center gap-1.5"
+                                    >
+                                      <Maximize2 className="w-3.5 h-3.5 text-[#46ecd5]" />
+                                      Expand Viewer
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={() =>
+                                      setLightboxItem({
+                                        url: out.url,
+                                        kind: 'image',
+                                        title: inspectedGen.modelLabel,
+                                        subtitle: inspectedGen.prompt,
+                                        aspectRatio: outAspect,
+                                      })
+                                    }
+                                    style={{ aspectRatio: outAspect }}
+                                    className="relative w-full max-h-[60vh] flex items-center justify-center bg-black cursor-zoom-in group"
+                                  >
+                                    <img
+                                      src={out.url}
+                                      alt={inspectedGen.prompt}
+                                      style={{
+                                        filter: `contrast(${gradeContrast}%) saturate(${gradeSaturation}%) sepia(${Math.max(
+                                          0,
+                                          gradeWarmth
+                                        )}%)`,
+                                      }}
+                                      className="max-w-full max-h-[60vh] w-auto h-auto object-contain"
+                                    />
+                                    <span className="absolute top-3 right-3 px-2.5 py-1.5 rounded-xl bg-black/75 text-white border border-white/20 text-xs font-semibold flex items-center gap-1.5 opacity-90 group-hover:opacity-100">
+                                      <Maximize2 className="w-3.5 h-3.5 text-[#46ecd5]" />
+                                      Full Screen
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Shot Inspector Actions */}
                     {showLiveMonitor && inspectedGen && inspectedGen.outputs[0] && (
                       <div className="rounded-2xl bg-[#121418] border border-white/10 p-3.5 max-w-[980px] mx-auto space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2721,6 +3583,27 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLightboxItem({
+                                  url: inspectedGen.outputs[0].url,
+                                  kind:
+                                    inspectedGen.outputs[0].kind === 'video'
+                                      ? 'video'
+                                      : inspectedGen.outputs[0].kind === 'audio'
+                                      ? 'audio'
+                                      : 'image',
+                                  title: inspectedGen.modelLabel,
+                                  subtitle: inspectedGen.prompt,
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-xl bg-[#1A1D24] hover:bg-[#242832] border border-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
+                            >
+                              <Maximize2 className="w-3 h-3 text-[#46ecd5]" />
+                              <span>Large View</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => handleAddGenerationAsReference(inspectedGen.id)}
@@ -2793,7 +3676,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                     }}
                                     className="cursor-pointer rounded-xl overflow-hidden bg-[#14161B] border border-white/10 hover:border-[#46ecd5]"
                                   >
-                                    <div className="aspect-video bg-black relative">
+                                    <div className="bg-black relative flex items-center justify-center p-1" style={{ minHeight: '120px' }}>
                                       {out ? (
                                         out.kind === 'video' ? (
                                           <video
@@ -2801,13 +3684,18 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                             muted
                                             loop
                                             playsInline
-                                            className="w-full h-full object-cover"
+                                            className="w-full max-h-40 object-contain"
                                           />
+                                        ) : out.kind === 'audio' ? (
+                                          <div className="w-full py-6 flex flex-col items-center justify-center gap-2 text-xs text-zinc-300">
+                                            <Volume2 className="w-6 h-6 text-[#46ecd5]" />
+                                            <span>Audio Clip</span>
+                                          </div>
                                         ) : (
                                           <img
                                             src={out.url}
                                             alt={gen.prompt}
-                                            className="w-full h-full object-cover"
+                                            className="w-full max-h-40 object-contain"
                                           />
                                         )
                                       ) : null}
@@ -2829,6 +3717,29 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                           }`}
                                         />
                                       </button>
+                                      {out && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLightboxItem({
+                                              url: out.url,
+                                              kind:
+                                                out.kind === 'video'
+                                                  ? 'video'
+                                                  : out.kind === 'audio'
+                                                  ? 'audio'
+                                                  : 'image',
+                                              title: gen.modelLabel,
+                                              subtitle: gen.prompt,
+                                            });
+                                          }}
+                                          className="absolute bottom-1.5 right-1.5 p-1 rounded-full bg-black/70 text-white hover:bg-black"
+                                          title="Open in Lightbox"
+                                        >
+                                          <Maximize2 className="w-3 h-3" />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -2850,11 +3761,11 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                     onClick={() => setActivePopover(null)}
                     className="fixed inset-0 bg-black/70 z-40 sm:hidden"
                   />
-                  <div className="fixed inset-x-0 bottom-0 sm:static z-50 p-2 sm:px-8 sm:pb-3 max-w-[1040px] w-full mx-auto max-h-[82vh] overflow-y-auto">
+                  <div className="fixed inset-x-0 bottom-0 sm:static z-50 p-2 sm:px-8 sm:pb-3 max-w-[1100px] w-full mx-auto max-h-[82vh] overflow-y-auto no-scrollbar shrink-0">
                     {/* 1. FILM SETUP & STUDIO SETUP POPOVER MODAL */}
                     {activePopover === 'film_setup' && (
                       <div className="rounded-3xl bg-[#18191D] border border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.9)] overflow-hidden">
-                        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-white/10">
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-white/10">
                           <span className="text-base font-bold text-white">
                             {studioConfig.setupCardLabel}
                           </span>
@@ -2863,11 +3774,11 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                               type="button"
                               onClick={() => {
                                 setActivePopover(null);
-                                setWorkingMode('production');
+                                setWorkingMode('auto_production');
                               }}
                               className="px-3 py-1.5 rounded-full bg-[#46ecd5]/15 hover:bg-[#46ecd5]/25 border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5]"
                             >
-                              Open Full {studioConfig.vaultButtonLabel}
+                              Open Automatic Production
                             </button>
                             <button
                               type="button"
@@ -3441,12 +4352,12 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                                       type="button"
                                       onClick={() => {
                                         setActivePopover(null);
-                                        setWorkingMode('production');
+                                        setWorkingMode('auto_production');
                                       }}
                                       className="px-4 py-2.5 rounded-xl bg-[#46ecd5] text-zinc-950 font-bold inline-flex items-center gap-2"
                                     >
-                                      <Layers className="w-4 h-4" />
-                                      <span>Launch Full {studioConfig.vaultButtonLabel}</span>
+                                      <Sparkles className="w-4 h-4" />
+                                      <span>Open Automatic Production</span>
                                     </button>
                                   </div>
                                 )}
@@ -4294,13 +5205,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <input
-                              ref={refUploadInputRef}
-                              type="file"
-                              accept="image/*,video/*"
-                              onChange={handleUploadCustomReference}
-                              className="hidden"
-                            />
                             <button
                               type="button"
                               onClick={() => refUploadInputRef.current?.click()}
@@ -4448,7 +5352,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             <X className="w-4 h-4" />
                           </button>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto no-scrollbar">
                           {compatibleModels.map((m) => {
                             const isSel = activeModel?.id === m.id;
                             return (
@@ -4497,7 +5401,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                   UNIVERSAL FLOATING GENERATION COMPOSER (BOTTOM CENTRE)
                   Dynamic surface & model-capability routing across Image, Video & Audio
                   ============================================================ */}
-              <div className="px-2 sm:px-8 pb-3 sm:pb-6 pt-2 max-w-[1040px] w-full mx-auto sticky bottom-0 z-20">
+              <div className="px-2 sm:px-6 pb-3 sm:pb-5 pt-2 max-w-[1100px] w-full mx-auto sticky bottom-0 z-20 shrink-0">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-2.5">
                   {/* Left Vertical Image / Video / Audio Mode Selector Pill */}
                   <div className="rounded-2xl sm:rounded-3xl bg-[#15161A] border border-white/10 p-1 sm:p-1.5 flex flex-row sm:flex-col justify-center sm:justify-between gap-1 shrink-0 shadow-2xl">
@@ -4558,8 +5462,17 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                   {/* Universal Floating Composer Box with Magic UI BorderBeam */}
                   <div className="relative flex-1 min-w-0 rounded-2xl sm:rounded-3xl bg-[#15161A] border border-white/12 p-2.5 sm:p-3.5 space-y-2.5 sm:space-y-3 shadow-[0_24px_70px_rgba(0,0,0,0.9)] overflow-hidden">
                     <BorderBeam />
-                    {/* Compact Top Control Row: References, Film Setup, Camera, Color Palette, Lighting */}
-                    <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-5 gap-2 pb-0.5 sm:pb-0">
+                    {/* Hidden Upload Input (always mounted for [+|@] and References popover) */}
+                    <input
+                      ref={refUploadInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleUploadCustomReference}
+                      className="hidden"
+                    />
+
+                    {/* Compact Top Control Row: References, Film setup, Camera, Color palette, Lighting */}
+                    <div className="relative z-10 grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {/* 1. References 0/50 */}
                       <button
                         type="button"
@@ -4568,24 +5481,24 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             activePopover === 'references' ? null : 'references'
                           )
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                           activePopover === 'references'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span className="w-8 h-8 rounded-xl bg-[#141519] border border-white/10 flex items-center justify-center shrink-0">
-                          <Plus className="w-4 h-4 text-zinc-300" />
+                        <span className="w-8 h-8 rounded-xl bg-[#111216] border border-white/10 flex items-center justify-center shrink-0">
+                          <Plus className="w-4 h-4 text-zinc-200" />
                         </span>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-zinc-400">References</div>
-                          <div className="text-xs font-bold text-white font-mono-tabular">
+                          <div className="text-[10px] text-zinc-400 truncate">References</div>
+                          <div className="text-xs font-bold text-white font-mono-tabular truncate">
                             {allReferences.length}/50
                           </div>
                         </div>
                       </button>
 
-                      {/* 2. Film setup / Studio setup */}
+                      {/* 2. Film setup */}
                       <button
                         type="button"
                         onClick={() =>
@@ -4593,14 +5506,42 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             activePopover === 'film_setup' ? null : 'film_setup'
                           )
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`min-w-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                           activePopover === 'film_setup'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-stone-300/40 via-stone-500/30 to-zinc-800 border border-white/15 flex items-center justify-center shrink-0">
-                          <Film className="w-4 h-4 text-zinc-100" />
+                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-stone-200 via-stone-300 to-stone-500 border border-white/20 flex items-center justify-center shrink-0 shadow-inner">
+                          <svg
+                            viewBox="0 0 28 24"
+                            className="w-6 h-5"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              x="1"
+                              y="2"
+                              width="26"
+                              height="20"
+                              rx="3"
+                              fill="url(#filmGateGrad)"
+                              stroke="#52525b"
+                              strokeWidth="1"
+                            />
+                            <defs>
+                              <linearGradient id="filmGateGrad" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stopColor="#e7e5e4" />
+                                <stop offset="100%" stopColor="#a8a29e" />
+                              </linearGradient>
+                            </defs>
+                            {[4.5, 10.5, 16.5].map((yPos) => (
+                              <React.Fragment key={yPos}>
+                                <rect x="3" y={yPos} width="2.6" height="3" rx="0.7" fill="#18181b" />
+                                <rect x="22.4" y={yPos} width="2.6" height="3" rx="0.7" fill="#18181b" />
+                              </React.Fragment>
+                            ))}
+                            <rect x="7.5" y="4.5" width="13" height="15" rx="1.5" fill="#d6d3d1" stroke="#78716c" strokeWidth="0.6" />
+                          </svg>
                         </span>
                         <div className="min-w-0">
                           <div className="text-[10px] text-zinc-400 truncate">
@@ -4618,25 +5559,25 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         onClick={() =>
                           setActivePopover(activePopover === 'camera' ? null : 'camera')
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                        className={`min-w-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                           activePopover === 'camera'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <div className="flex items-center -space-x-2 shrink-0">
+                        <span className="w-8 h-8 rounded-xl bg-[#0D0F14] border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
                           <GearVisual
-                            spec={getCameraBodyVisual(cameraOptics.camera)}
+                            spec={
+                              cameraOptics.camera !== 'Auto'
+                                ? getCameraBodyVisual(cameraOptics.camera)
+                                : getLensOpticVisual(cameraOptics.lens)
+                            }
                             size="sm"
                           />
-                          <GearVisual
-                            spec={getLensOpticVisual(cameraOptics.lens)}
-                            size="xs"
-                          />
-                        </div>
+                        </span>
                         <div className="min-w-0">
                           <div className="text-[10px] text-zinc-400 truncate">
-                            Camera · Optics
+                            Camera
                           </div>
                           <div className="text-xs font-bold text-white truncate">
                             {cameraSummary}
@@ -4652,18 +5593,20 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                             activePopover === 'color_palette' ? null : 'color_palette'
                           )
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                        className={`min-w-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                           activePopover === 'color_palette'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
-                        <GearVisual
-                          spec={getColorGradeVisual(activePalette.name)}
-                          size="sm"
-                        />
+                        <span className="w-8 h-8 rounded-xl bg-[#111216] border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                          <GearVisual
+                            spec={getColorGradeVisual(activePalette.name)}
+                            size="sm"
+                          />
+                        </span>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-zinc-400">Color palette</div>
+                          <div className="text-[10px] text-zinc-400 truncate">Color palette</div>
                           <div className="text-xs font-bold text-white truncate">
                             {activePalette.name}
                           </div>
@@ -4676,19 +5619,44 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         onClick={() =>
                           setActivePopover(activePopover === 'lighting' ? null : 'lighting')
                         }
-                        className={`min-w-[128px] sm:min-w-0 shrink-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                        className={`col-span-2 sm:col-span-1 min-w-0 p-2 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                           activePopover === 'lighting'
                             ? 'bg-[#24272F] border-white/25'
                             : 'bg-[#1D1F25] border-white/[0.06] hover:border-white/15'
                         }`}
                       >
                         <span
-                          className={`w-8 h-8 rounded-xl bg-gradient-to-br ${activeLighting.previewGradient} border border-white/15 flex items-center justify-center shrink-0`}
+                          className={`w-8 h-8 rounded-xl bg-gradient-to-br ${activeLighting.previewGradient} border border-white/15 flex items-center justify-center shrink-0 overflow-hidden`}
                         >
-                          <Sun className="w-4 h-4 text-sky-300" />
+                          <svg viewBox="0 0 28 28" className="w-6 h-6" aria-hidden="true">
+                            <defs>
+                              <linearGradient id="ledGlow" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stopColor="#60a5fa" />
+                                <stop offset="100%" stopColor="#1d4ed8" />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M8 23h12M14 19v4M6 12v4c0 2 3.5 3 8 3s8-1 8-3v-4"
+                              fill="none"
+                              stroke="#71717a"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                            />
+                            <polygon
+                              points="6,7 22,5 22,16 6,18"
+                              fill="url(#ledGlow)"
+                              stroke="#93c5fd"
+                              strokeWidth="1.1"
+                            />
+                            <polygon
+                              points="7.5,8.5 20.5,6.8 20.5,14.5 7.5,16.2"
+                              fill="#3b82f6"
+                              opacity="0.7"
+                            />
+                          </svg>
                         </span>
                         <div className="min-w-0">
-                          <div className="text-[10px] text-zinc-400">Lighting</div>
+                          <div className="text-[10px] text-zinc-400 truncate">Lighting</div>
                           <div className="text-xs font-bold text-white truncate">
                             {activeLighting.name}
                           </div>
@@ -4696,68 +5664,167 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                       </button>
                     </div>
 
-                    {/* Large Prompt Input Area */}
-                    <div className="relative pt-0.5">
+                    {/* Large Prompt Input Area with Live @ Mention Autocomplete */}
+                    <div className="relative z-10 pt-0.5">
+                      {atMentionQuery && atMentionCandidates.length > 0 && (
+                        <div className="mb-2 rounded-2xl bg-[#111319] border border-[#46ecd5]/40 shadow-2xl p-2 max-h-52 overflow-y-auto no-scrollbar space-y-1 z-40">
+                          <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-[#46ecd5] flex items-center justify-between">
+                            <span>@ Mention Production Element ({atMentionCandidates.length})</span>
+                            <button
+                              type="button"
+                              onClick={() => setAtMentionQuery(null)}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              Esc
+                            </button>
+                          </div>
+                          {atMentionCandidates.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleSelectAtMention(item)}
+                              className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#1E222B] text-left flex items-center justify-between gap-2 text-xs transition-colors"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {item.thumb ? (
+                                  <img
+                                    src={item.thumb}
+                                    alt={item.label}
+                                    className="w-6 h-6 rounded-md object-contain bg-black border border-white/10 shrink-0"
+                                  />
+                                ) : (
+                                  <span className="w-6 h-6 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-mono text-[#46ecd5] shrink-0">
+                                    @
+                                  </span>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="font-bold text-white truncate">{item.token}</div>
+                                  <div className="text-[10px] text-zinc-400 truncate">
+                                    {item.sublabel}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-mono text-zinc-300 shrink-0">
+                                {item.kind}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <textarea
+                        ref={promptTextareaRef}
                         rows={2}
                         value={scenePrompt}
-                        onChange={(e) => setScenePrompt(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setScenePrompt(val);
+                          const caret = e.target.selectionStart ?? val.length;
+                          const uptoCaret = val.slice(0, caret);
+                          const match = uptoCaret.match(/(?:^|\s)@([a-zA-Z0-9_-]*)$/);
+                          if (match) {
+                            const startIdx = caret - match[1].length - 1;
+                            setAtMentionQuery({ query: match[1], startIdx });
+                          } else {
+                            setAtMentionQuery(null);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (atMentionQuery && atMentionCandidates.length > 0) {
+                            if (e.key === 'Tab' || e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSelectAtMention(atMentionCandidates[0]);
+                            } else if (e.key === 'Escape') {
+                              setAtMentionQuery(null);
+                            }
+                          }
+                        }}
                         placeholder={activeToolSpec.promptPlaceholder}
                         className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none resize-none px-1.5"
                       />
                     </div>
 
-                    {/* Bottom Toolbar inside Composer (Contextually Adapts to Image / Video / Audio Tool) */}
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2 pt-1">
+                    {/* Optional Voice Persona Strip when generating Audio Dialogue/Voiceover */}
+                    {dockSurface === 'audio' && activeToolId !== 'music_sfx' && (
+                      <div className="relative z-10 flex items-center gap-2 px-1">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                          Voice Persona
+                        </span>
+                        <Select value={voicePersona} onValueChange={(v) => setVoicePersona(v)}>
+                          <SelectTrigger className="h-7 w-44 rounded-full bg-[#22242B] border-white/10 text-[11px] px-2.5 py-1">
+                            <SelectValue placeholder="Voice Persona" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="noir_narrator">Voice: Noir Narrator</SelectItem>
+                            <SelectItem value="warm_heroine">Voice: Warm Heroine</SelectItem>
+                            <SelectItem value="trailer_baritone">Voice: Trailer Baritone</SelectItem>
+                            <SelectItem value="documentary_clear">Voice: Documentary</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Bottom Toolbar inside Composer — All Action Pills & Generate CTA */}
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {/* + Upload Reference */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => refUploadInputRef.current?.click()}
-                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>Upload Reference Photo or Video</TooltipContent>
-                        </Tooltip>
+                        {/* Split pill: [ + | @ ] */}
+                        <div className="h-8 rounded-xl bg-[#22242B] border border-white/10 inline-flex items-center overflow-hidden shrink-0">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => refUploadInputRef.current?.click()}
+                                aria-label="Upload Reference Photo or Video"
+                                className="h-full px-2.5 hover:bg-[#2E313A] text-zinc-200 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Upload Reference Photo or Video</TooltipContent>
+                          </Tooltip>
+                          <span className="w-px h-4 bg-white/12 shrink-0" />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActivePopover(
+                                    activePopover === 'at_elements' ? null : 'at_elements'
+                                  )
+                                }
+                                aria-label="Insert @ Element"
+                                className="h-full px-2.5 hover:bg-[#2E313A] text-zinc-200 hover:text-white font-mono text-xs font-bold flex items-center justify-center transition-colors cursor-pointer"
+                              >
+                                @
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Insert @Character, @Location, Wardrobe or Prop</TooltipContent>
+                          </Tooltip>
+                        </div>
 
-                        {/* @ Add Character / Location Element */}
+                        {/* Framing / Camera Movement Viewfinder Square Button [ ⛶ ] */}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              onClick={() =>
-                                setActivePopover(
-                                  activePopover === 'at_elements' ? null : 'at_elements'
-                                )
-                              }
-                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 font-mono text-xs font-bold flex items-center justify-center transition-colors"
+                              onClick={() => {
+                                setCameraModalTab('movement');
+                                setActivePopover((prev) =>
+                                  prev === 'camera' && cameraModalTab === 'movement'
+                                    ? null
+                                    : 'camera'
+                                );
+                              }}
+                              aria-label="Camera Framing & Movement"
+                              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
+                                activePopover === 'camera'
+                                  ? 'bg-[#2E313A] border-white/30 text-white'
+                                  : 'bg-[#22242B] hover:bg-[#2E313A] border-white/10 text-zinc-200'
+                              }`}
                             >
-                              @
+                              <Focus className="w-3.5 h-3.5" />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>Insert @Character, @Location or Prop</TooltipContent>
-                        </Tooltip>
-
-                        {/* [⚃] Quick Element / Film Setup Button */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActivePopover(
-                                  activePopover === 'film_setup' ? null : 'film_setup'
-                                )
-                              }
-                              className="w-7 h-7 rounded-full bg-[#22242B] hover:bg-[#2C2F37] text-zinc-300 flex items-center justify-center transition-colors"
-                            >
-                              <Maximize2 className="w-3 h-3" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>Open Film & Continuity Setup</TooltipContent>
+                          <TooltipContent>Camera Framing & Movement Controls</TooltipContent>
                         </Tooltip>
 
                         {/* Capability-Routed Model Selector Pill */}
@@ -4766,122 +5833,99 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                           onClick={() =>
                             setActivePopover(activePopover === 'models' ? null : 'models')
                           }
-                          className="px-3 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] border border-white/5 text-[11px] font-bold text-white flex items-center gap-1.5"
+                          className="h-8 px-2.5 sm:px-3 rounded-xl bg-[#22242B] hover:bg-[#2E313A] border border-white/10 text-[11px] font-bold text-white inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
                         >
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#46ecd5] shrink-0" />
+                          <span className="w-3 h-3 rounded-full bg-white shrink-0 shadow-[0_0_8px_rgba(70,236,213,0.45)]" />
                           <span>{activeModel?.label || 'Cinema Studio 4.0'}</span>
                           <ChevronRight className="w-3 h-3 text-zinc-400" />
                         </button>
 
-                        {/* Contextual Settings: Show Resolution & Aspect Ratio only for Image & Video */}
-                        {dockSurface !== 'audio' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setResolution((prev) =>
-                                  prev === '1080p' ? '2K' : prev === '2K' ? '4K' : '1080p'
-                                )
-                              }
-                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                            >
-                              <Diamond className="w-3 h-3 text-zinc-400" />
-                              <span>{resolution}</span>
-                            </button>
+                        {/* Resolution Pill */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setResolution((prev) =>
+                              prev === '1080p' ? '2K' : prev === '2K' ? '4K' : '1080p'
+                            )
+                          }
+                          title="Cycle Output Resolution"
+                          className="h-8 px-2.5 rounded-xl bg-[#22242B] hover:bg-[#2E313A] border border-white/10 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+                        >
+                          <Diamond className="w-3 h-3 text-zinc-400" />
+                          <span>{resolution}</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setAspectRatio((prev) =>
-                                  prev === '16:9'
-                                    ? '21:9'
-                                    : prev === '21:9'
-                                    ? '9:16'
-                                    : prev === '9:16'
-                                    ? '1:1'
-                                    : '16:9'
-                                )
-                              }
-                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                            >
-                              <RectangleHorizontal className="w-3 h-3 text-zinc-400" />
-                              <span>{aspectRatio}</span>
-                            </button>
-                          </>
-                        )}
+                        {/* Aspect Ratio Pill */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAspectRatio((prev) =>
+                              prev === '16:9'
+                                ? '21:9'
+                                : prev === '21:9'
+                                ? '9:16'
+                                : prev === '9:16'
+                                ? '1:1'
+                                : prev === '1:1'
+                                ? '4:3'
+                                : prev === '4:3'
+                                ? '3:4'
+                                : '16:9'
+                            )
+                          }
+                          title="Cycle Aspect Ratio"
+                          className="h-8 px-2.5 rounded-xl bg-[#22242B] hover:bg-[#2E313A] border border-white/10 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+                        >
+                          <RectangleHorizontal className="w-3 h-3 text-zinc-400" />
+                          <span>{aspectRatio}</span>
+                        </button>
 
-                        {/* Contextual Settings: Duration & Audio Toggle for Video */}
-                        {dockSurface === 'video' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDurationSec((prev) => (prev === 5 ? 8 : prev === 8 ? 10 : 5))
-                              }
-                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                            >
-                              <Clock className="w-3 h-3 text-zinc-400" />
-                              <span>{durationSec}s</span>
-                            </button>
+                        {/* Duration Pill (Always Visible) */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDurationSec((prev) =>
+                              prev === 5 ? 8 : prev === 8 ? 10 : prev === 10 ? 15 : 5
+                            )
+                          }
+                          title="Cycle Shot Duration"
+                          className="h-8 px-2.5 rounded-xl bg-[#22242B] hover:bg-[#2E313A] border border-white/10 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+                        >
+                          <Clock className="w-3 h-3 text-zinc-400" />
+                          <span>{durationSec}s</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => setSoundEnabled((v) => !v)}
-                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                            >
-                              {soundEnabled ? (
-                                <Volume2 className="w-3 h-3 text-zinc-300" />
-                              ) : (
-                                <VolumeX className="w-3 h-3 text-zinc-500" />
-                              )}
-                              <span>{soundEnabled ? 'On' : 'Off'}</span>
-                            </button>
-                          </>
-                        )}
-
-                        {/* Contextual Settings: Voice Persona (Radix Select) & Audio Duration for Audio / Voice / Music */}
-                        {dockSurface === 'audio' && (
-                          <>
-                            {activeToolId !== 'music_sfx' && (
-                              <Select value={voicePersona} onValueChange={(v) => setVoicePersona(v)}>
-                                <SelectTrigger className="h-7 w-40 rounded-full bg-[#22242B] border-white/5 text-[11px] px-2.5 py-1">
-                                  <SelectValue placeholder="Voice Persona" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="noir_narrator">Voice: Noir Narrator</SelectItem>
-                                  <SelectItem value="warm_heroine">Voice: Warm Heroine</SelectItem>
-                                  <SelectItem value="trailer_baritone">Voice: Trailer Baritone</SelectItem>
-                                  <SelectItem value="documentary_clear">Voice: Documentary</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDurationSec((prev) => (prev === 5 ? 10 : prev === 10 ? 30 : 5))
-                              }
-                              className="px-2.5 py-1.5 rounded-full bg-[#22242B] hover:bg-[#2B2E37] text-[11px] font-semibold text-zinc-200 flex items-center gap-1"
-                            >
-                              <Clock className="w-3 h-3 text-zinc-400" />
-                              <span>{durationSec}s</span>
-                            </button>
-                          </>
-                        )}
+                        {/* Sound Toggle Pill (Always Visible) */}
+                        <button
+                          type="button"
+                          onClick={() => setSoundEnabled((v) => !v)}
+                          title="Toggle Native Audio Generation"
+                          className="h-8 px-2.5 rounded-xl bg-[#22242B] hover:bg-[#2E313A] border border-white/10 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+                        >
+                          {soundEnabled ? (
+                            <Volume2 className="w-3 h-3 text-zinc-300" />
+                          ) : (
+                            <VolumeX className="w-3 h-3 text-zinc-500" />
+                          )}
+                          <span>{soundEnabled ? 'On' : 'Off'}</span>
+                        </button>
 
                         {/* Output Quantity Stepper ("- 1/4 +") */}
-                        <div className="px-2.5 py-1.5 rounded-full bg-[#22242B] text-[11px] font-mono-tabular text-zinc-200 flex items-center gap-2">
+                        <div className="h-8 px-2.5 rounded-xl bg-[#22242B] border border-white/10 text-[11px] font-mono-tabular text-zinc-200 inline-flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={() => setBatchSize((b) => Math.max(1, b - 1))}
-                            className="text-zinc-400 hover:text-white"
+                            aria-label="Decrease batch size"
+                            className="text-zinc-400 hover:text-white cursor-pointer"
                           >
-                            -
+                            −
                           </button>
                           <span>{batchSize}/4</span>
                           <button
                             type="button"
                             onClick={() => setBatchSize((b) => Math.min(4, b + 1))}
-                            className="text-zinc-400 hover:text-white"
+                            aria-label="Increase batch size"
+                            className="text-zinc-400 hover:text-white cursor-pointer"
                           >
                             +
                           </button>
@@ -4893,7 +5937,7 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => handleGenerateShot()}
-                        className="w-full sm:w-auto justify-center shrink-0"
+                        className="w-full sm:w-auto justify-center shrink-0 rounded-xl px-4 py-2 text-[11px] sm:text-xs font-extrabold tracking-wide whitespace-nowrap"
                       >
                         {isSubmitting ? (
                           <>
@@ -4912,137 +5956,45 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
           )}
         </main>
 
-        {/* ================================================================
-            3. AI DIRECTOR RIGHT DRAWER (SCREENPLAY-TO-SHOT BREAKDOWN)
-            ================================================================ */}
-        <AnimatePresence>
-          {aiDirectorOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setAiDirectorOpen(false)}
-                className="fixed inset-0 bg-black/75 z-40 xl:hidden"
-              />
-              <motion.aside
-                initial={{ x: 24, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: 24, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed xl:static inset-y-0 right-0 w-full max-w-md xl:w-96 shrink-0 bg-[#121317] border-l border-white/10 p-4 flex flex-col justify-between overflow-y-auto z-50 xl:z-20 space-y-4 shadow-2xl"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <div className="flex items-center gap-2">
-                      <Wand2 className="w-4 h-4 text-[#46ecd5]" />
-                      <div>
-                        <div className="text-xs font-bold uppercase tracking-wider text-white">
-                          AI Director Assistant
-                        </div>
-                        <div className="text-[10px] text-zinc-400">
-                          Prepares shots & camera settings; you control generation
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setAiDirectorOpen(false)}
-                      className="h-7 w-7 text-zinc-400 hover:text-white"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <label className="block text-zinc-300 font-semibold">
-                      Scene Description or Screenplay Beat
-                    </label>
-                    <Textarea
-                      rows={3}
-                      value={aiDirectorInput}
-                      onChange={(e) => setAiDirectorInput(e.target.value)}
-                      placeholder="e.g. A king enters his palace and discovers that his throne room is empty..."
-                    />
-                    <ShimmerButton
-                      type="button"
-                      disabled={aiDirectorBusy}
-                      onClick={handleRunAIDirectorBreakdown}
-                      className="w-full justify-center rounded-xl py-2"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>
-                        {aiDirectorBusy
-                          ? 'Breaking Scene into Shots...'
-                          : 'Break Scene into Directed Shot List'}
-                      </span>
-                    </ShimmerButton>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                      Suggested Shot Coverage ({aiShotList.length} Shots)
-                    </div>
-                    {aiShotList.map((shot) => (
-                      <SpotlightCard
-                        key={shot.shotNumber}
-                        className="p-3 space-y-2 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono-tabular font-bold text-[#46ecd5] flex items-center gap-1.5">
-                            <GearVisual spec={getCameraAngleVisual(shot.camera)} size="xs" />
-                            <span>
-                              SHOT {shot.shotNumber} · {shot.camera}
-                            </span>
-                          </span>
-                          <Badge variant="outline" className="gap-1">
-                            <GearVisual spec={getCameraMovementVisual(shot.movement)} size="xs" />
-                            <span>#{shot.movement}</span>
-                          </Badge>
-                        </div>
-                        <p className="text-zinc-200 text-[11px] leading-relaxed">
-                          {shot.action}
-                        </p>
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[10px] text-zinc-400">
-                            Light: {shot.lighting} · {shot.emotion}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="accent"
-                            size="xs"
-                            onClick={() => {
-                              applyAIShotToDirectorPanel(shot);
-                              if (window.innerWidth < 1280) setAiDirectorOpen(false);
-                            }}
-                          >
-                            Load into Composer
-                          </Button>
-                        </div>
-                      </SpotlightCard>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-white/10 text-[11px] text-zinc-400">
-                  Need the full {studioConfig.vaultButtonLabel}?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiDirectorOpen(false);
-                      setWorkingMode('production');
-                    }}
-                    className="text-[#46ecd5] font-bold hover:underline"
-                  >
-                    Open {studioConfig.vaultButtonLabel} →
-                  </button>
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
+        {/* Project Delete Confirmation Modal */}
+        {deleteConfirmProjId && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-[#151820] border border-white/15 p-5 space-y-4 shadow-2xl">
+              <div className="text-sm font-bold text-white">Delete Production Project?</div>
+              <p className="text-xs text-zinc-400">
+                Are you sure you want to delete this project? This removes the project metadata permanently.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setDeleteConfirmProjId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={async () => {
+                    const id = deleteConfirmProjId;
+                    setDeleteConfirmProjId(null);
+                    await deleteCinemaProject(id);
+                    if (selectedProjId === id) {
+                      const remaining = cinemaProjects.filter((p) => p.id !== id);
+                      setSelectedProjId(remaining[0]?.id || null);
+                      if (remaining[0]) setProjectTitle(remaining[0].title);
+                    }
+                  }}
+                  className="bg-rose-600 hover:bg-rose-500 text-white"
+                >
+                  Delete Project
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ================================================================
             4. CMDK COMMAND PALETTE DIALOG (⌘K) — TOOLS, MODES & ENGINES
@@ -5078,15 +6030,6 @@ export const HiggsfieldCinemaStudio: React.FC<HiggsfieldCinemaStudioProps> = ({
               >
                 <Clapperboard className="w-4 h-4 text-[#46ecd5]" />
                 <span>Cinema Studio Director Workspace</span>
-              </CommandItem>
-              <CommandItem
-                onSelect={() => {
-                  setWorkingMode('production');
-                  setCommandPaletteOpen(false);
-                }}
-              >
-                <Layers className="w-4 h-4 text-[#46ecd5]" />
-                <span>Multi-Track Timeline & Vault</span>
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />

@@ -11,6 +11,7 @@ import {
   Layers,
   Link2,
   Loader2,
+  Maximize2,
   Mic,
   Music,
   Pause,
@@ -62,6 +63,12 @@ import {
   getColorGradeVisual,
   getSettingOptionVisual,
 } from '../catalog/cinemaGearVisuals';
+import {
+  buildCharacterTurnaroundPrompt,
+  CHARACTER_TURNAROUND_ASPECT_RATIO,
+} from '../lib/characterTurnaround';
+import { translateCreativeControlsForModel } from '../lib/creativeControlsTranslator';
+import { UniversalCreativeControlsBar } from './UniversalCreativeControlsBar';
 
 export interface MusicVideoStudioViewProps {
   projectId: string | null;
@@ -362,6 +369,9 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
     pollGenerationUntilDone,
     uploadReferenceFile,
     calculateTokenCost,
+    creativeControls,
+    setLightboxItem,
+    voices,
     showToast,
   } = useRuns();
 
@@ -371,9 +381,9 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
   );
 
   // =========================================================================
-  // SUB-NAVIGATION & WORKSPACE STATE
+  // SUB-NAVIGATION & WORKSPACE STATE (Clean Cinema Studio Tab Switching)
   // =========================================================================
-  const [activeSubTab, setActiveSubTab] = useState<'studio' | 'cast' | 'sequence'>('studio');
+  const [activeSubTab, setActiveSubTab] = useState<'audio' | 'cast' | 'studio' | 'sequence'>('studio');
 
   // Audio track & playback state
   const [audioTrack, setAudioTrack] = useState<MusicVideoAudioTrack | null>(
@@ -1133,15 +1143,28 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
     try {
       const targetModel =
         sceneImageModels.find((m) => m.id === castPortraitModelId) || sceneImageModels[0];
+      const translated = translateCreativeControlsForModel(
+        creativeControls,
+        targetModel,
+        'image'
+      );
       const settings = sanitizeSettingsForModel(targetModel, {
-        aspect_ratio: '3:4',
+        ...translated.nativeSettingsPatch,
+        aspect_ratio: CHARACTER_TURNAROUND_ASPECT_RATIO,
         resolution: '2K',
+      });
+      const turnaroundPrompt = buildCharacterTurnaroundPrompt({
+        name: castName || 'Music Video Artist',
+        role: castRole || 'Lead Performer',
+        appearance: castAppearance,
+        wardrobe: wardrobeName ? `${wardrobeName} — ${wardrobeGarments}` : wardrobeGarments,
+        styleNotes: [translated.promptDirective, wardrobePalette].filter(Boolean).join('. '),
       });
       const res = await submitGeneration({
         surface: 'image',
         modelId: targetModel.id,
         mode: targetModel.modes[0] || 'Create',
-        prompt: `Studio character identity portrait for music video performer (${castName || 'Artist'}): ${castAppearance}. Clean studio key light, authentic facial pores, sharp eye focus, neutral framing for character continuity.`,
+        prompt: turnaroundPrompt,
         settings,
         media: castPortraitPreviewUrl
           ? [{ role: 'reference', kind: 'image', url: castPortraitPreviewUrl, label: 'Face Reference' }]
@@ -1156,7 +1179,7 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
         const url = done?.outputs?.[0]?.url;
         if (url) {
           setCastPortraitPreviewUrl(url);
-          showToast('Generated performer identity plate');
+          showToast('Generated 1:1 4-Panel Character Turnaround Sheet');
         }
       }
     } finally {
@@ -1287,6 +1310,11 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
     updateActiveScene({ status: 'generating_ref' });
     try {
       const continuity = buildPerformerContinuity(activeScene.characterId, activeScene.wardrobeId);
+      const translated = translateCreativeControlsForModel(
+        creativeControls,
+        activeSceneImageModel,
+        'image'
+      );
       const fullPrompt = [
         continuity.text,
         `MUSIC VIDEO SCENE FRAME: ${activeScene.sceneDescription.trim()}.`,
@@ -1296,6 +1324,7 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
         `CAMERA ANGLE: ${activeScene.cameraFraming}.`,
         `LIGHTING: ${activeScene.lightingMood}.`,
         `VISUAL STYLE: ${activeScene.visualStyle}.`,
+        translated.promptDirective ? `[CINEMATOGRAPHY: ${translated.promptDirective}]` : '',
       ]
         .filter(Boolean)
         .join(' ');
@@ -1303,13 +1332,21 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
       const maxRefs =
         activeSceneImageModel.roles.find((r) => r.role === 'reference')?.maxCount || 0;
       const media = maxRefs > 0 ? continuity.refMedia.slice(0, maxRefs) : [];
+      const mergedImageSettings = sanitizeSettingsForModel(
+        activeSceneImageModel,
+        {
+          ...translated.nativeSettingsPatch,
+          ...sceneImageSettings,
+        },
+        activeAspectRatio
+      );
 
       const res = await submitGeneration({
         surface: 'image',
         modelId: activeSceneImageModel.id,
         mode: activeSceneImageModel.modes[0] || 'Create',
         prompt: fullPrompt,
-        settings: sceneImageSettings,
+        settings: mergedImageSettings,
         media,
         skipContinuityMerge: true,
       });
@@ -1458,6 +1495,11 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
     });
 
     try {
+      const translatedVid = translateCreativeControlsForModel(
+        creativeControls,
+        startModel,
+        'video'
+      );
       const stage1Prompt = [
         continuity.text,
         mode === 'lip_sync'
@@ -1465,13 +1507,17 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
           : `MUSIC VIDEO B-ROLL (${BROLL_TYPE_OPTIONS.find((b) => b.id === scene.bRollType)?.label || 'B-Roll'}): ${scene.sceneDescription}.`,
         scene.environmentAtmosphere ? `Environment: ${scene.environmentAtmosphere}.` : '',
         `Camera: ${scene.cameraFraming}, ${scene.cameraMovement}. Lighting: ${scene.lightingMood}. Style: ${scene.visualStyle}.`,
+        translatedVid.promptDirective ? `[CINEMATOGRAPHY: ${translatedVid.promptDirective}]` : '',
       ]
         .filter(Boolean)
         .join(' ');
 
       const step1Settings = sanitizeSettingsForModel(
         startModel,
-        scene.modelSettings,
+        {
+          ...translatedVid.nativeSettingsPatch,
+          ...(scene.modelSettings || {}),
+        },
         activeAspectRatio
       );
 
@@ -2016,18 +2062,53 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
           layoutId="music-video-subtabs"
           activeId={activeSubTab}
           items={[
-            { id: 'studio', label: 'Scene & Video Studio' },
-            { id: 'cast', label: `Cast & Wardrobe (${characters.length})` },
-            { id: 'sequence', label: `Sequence & Master Cut (${scenes.length})` },
+            { id: 'audio', label: audioTrack ? 'Audio & Waveform ✓' : '1. Audio & Waveform' },
+            { id: 'cast', label: `2. Cast & Wardrobe (${characters.length})` },
+            { id: 'studio', label: '3. Scene & Video Studio' },
+            { id: 'sequence', label: `4. Sequence & Master Cut (${scenes.length})` },
           ]}
           onChange={(id) => setActiveSubTab(id)}
         />
       </div>
 
+      {/* Compact Master Audio Status Strip when on other stages so screen stays clean */}
+      {activeSubTab !== 'audio' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-[#101218] border border-white/[0.07] text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-[#46ecd5]/15 border border-[#46ecd5]/30 flex items-center justify-center shrink-0 text-[#46ecd5]">
+              <Music className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-bold text-white truncate">
+                {audioTrack ? audioTrack.title : 'No Master Audio Track Imported'}
+              </span>
+              {audioTrack && (
+                <span className="ml-2 font-mono-tabular text-[11px] text-[#46ecd5]">
+                  Trim {formatTimecode(trimStartSec)}–{formatTimecode(trimEndSec)} ({trimDurationSec.toFixed(1)}s)
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {audioTrack && (
+              <Button type="button" variant="secondary" size="xs" onClick={togglePlaySelection}>
+                {playingSelectionOnly && isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                <span>{playingSelectionOnly && isPlaying ? 'Stop Trim' : 'Preview Trim'}</span>
+              </Button>
+            )}
+            <Button type="button" variant="accent" size="xs" onClick={() => setActiveSubTab('audio')}>
+              <Scissors className="w-3 h-3" />
+              <span>{audioTrack ? 'Edit Audio & Waveform' : 'Import Music Track'}</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ===================================================================
-          PERSISTENT MASTER AUDIO DECK & INTERACTIVE WAVEFORM TRIM TIMELINE
+          STAGE 1 TAB: MASTER AUDIO DECK & INTERACTIVE WAVEFORM TRIM TIMELINE
          =================================================================== */}
-      <SpotlightCard className="p-4 space-y-4">
+      {activeSubTab === 'audio' && (
+        <SpotlightCard className="p-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-[#46ecd5]/15 border border-[#46ecd5]/40 flex items-center justify-center shrink-0 text-[#46ecd5]">
@@ -2402,13 +2483,21 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
             </div>
           </div>
         )}
-      </SpotlightCard>
+        </SpotlightCard>
+      )}
 
       {/* ===================================================================
-          SUB-TAB 1: CAST & WARDROBE (CHARACTERS & APPEARANCE CREATION)
+          SUB-TAB 2: CAST & WARDROBE (CHARACTERS & APPEARANCE CREATION)
          =================================================================== */}
       {activeSubTab === 'cast' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div className="space-y-4">
+          <UniversalCreativeControlsBar
+            surface="image"
+            activeModel={sceneImageModels.find((m) => m.id === castPortraitModelId)}
+            compact
+            contextLabel="CAST & WARDROBE · UNIVERSAL CINEMATOGRAPHY"
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Create Performer Identity */}
           <SpotlightCard className="lg:col-span-6 p-5 space-y-4">
             <div className="flex items-center justify-between">
@@ -2507,15 +2596,35 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
 
             {castPortraitPreviewUrl && (
               <div className="flex items-center gap-4 p-3 rounded-2xl bg-[#0B0C10] border border-white/10">
-                <img
-                  src={castPortraitPreviewUrl}
-                  alt="Performer Identity Preview"
-                  className="w-20 h-24 rounded-xl object-cover border border-white/15 shrink-0"
-                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLightboxItem({
+                      kind: 'image',
+                      url: castPortraitPreviewUrl,
+                      title: castName || '1:1 Character Turnaround Sheet',
+                      subtitle: '4-Panel Turnaround Reference (Full Body · Half Body · Side Profile · Back View)',
+                      aspectRatio: '1:1',
+                    })
+                  }
+                  className="relative group shrink-0 rounded-xl overflow-hidden border border-white/15 bg-black"
+                  title="Click to inspect turnaround sheet full-screen"
+                >
+                  <img
+                    src={castPortraitPreviewUrl}
+                    alt="Performer Turnaround Sheet"
+                    className="w-24 h-24 object-contain"
+                  />
+                  <span className="absolute bottom-1 right-1 p-1 rounded bg-black/75 text-[#46ecd5] opacity-80 group-hover:opacity-100">
+                    <Maximize2 className="w-3 h-3" />
+                  </span>
+                </button>
                 <div className="space-y-1 text-xs">
-                  <div className="font-bold text-white">Identity Reference Ready</div>
+                  <div className="font-bold text-white">
+                    1:1 4-Panel Identity Sheet Ready ({voices.length} Saved Voices)
+                  </div>
                   <p className="text-zinc-400">
-                    Locked facial features will travel across scene frames, animations, and lip-sync runs.
+                    Locked multi-angle turnaround travels across scene frames, animations, and lip-sync runs. Click thumbnail to zoom.
                   </p>
                 </div>
               </div>
@@ -2642,13 +2751,29 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
 
             {wardrobePreviewUrl && (
               <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#0B0C10] border border-white/10">
-                <img
-                  src={wardrobePreviewUrl}
-                  alt="Wardrobe Preview"
-                  className="w-16 h-20 rounded-xl object-cover border border-white/15 shrink-0"
-                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLightboxItem({
+                      kind: 'image',
+                      url: wardrobePreviewUrl,
+                      title: wardrobeName || 'Wardrobe Lookbook Plate',
+                      subtitle: wardrobeCategory,
+                    })
+                  }
+                  className="relative group shrink-0 rounded-xl overflow-hidden border border-white/15 bg-black"
+                >
+                  <img
+                    src={wardrobePreviewUrl}
+                    alt="Wardrobe Preview"
+                    className="w-20 h-20 object-contain"
+                  />
+                  <span className="absolute bottom-1 right-1 p-0.5 rounded bg-black/75 text-[#46ecd5]">
+                    <Maximize2 className="w-2.5 h-2.5" />
+                  </span>
+                </button>
                 <div className="text-xs text-zinc-300">
-                  Costume reference ready to assign across music-video scenes.
+                  Costume reference ready to assign across music-video scenes. Click to inspect.
                 </div>
               </div>
             )}
@@ -2760,14 +2885,21 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
               </div>
             </ScrollArea>
           </SpotlightCard>
+          </div>
         </div>
       )}
 
       {/* ===================================================================
-          SUB-TAB 2: SCENE & VIDEO STUDIO (MAIN CREATIVE WORKFLOW)
+          SUB-TAB 3: SCENE & VIDEO STUDIO (MAIN CREATIVE WORKFLOW)
          =================================================================== */}
       {activeSubTab === 'studio' && (
         <div className="space-y-4">
+          <UniversalCreativeControlsBar
+            surface="video"
+            activeModel={activePrimaryModel || activeSceneImageModel}
+            compact
+            contextLabel="MUSIC VIDEO STUDIO · UNIVERSAL CAMERA, LENS & COLOR"
+          />
           {/* Scene Switcher Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-[#101218] border border-white/[0.07]">
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -3664,15 +3796,33 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
 
                 {activeScene.finalVideoUrl ? (
                   <div className="space-y-2">
-                    <video
-                      key={activeScene.finalVideoUrl}
-                      src={activeScene.finalVideoUrl}
-                      controls
-                      playsInline
-                      className="w-full aspect-video rounded-2xl bg-black object-cover border border-white/10"
-                    />
+                    <div className="relative rounded-2xl bg-black border border-white/10 overflow-hidden flex items-center justify-center min-h-[220px]">
+                      <video
+                        key={activeScene.finalVideoUrl}
+                        src={activeScene.finalVideoUrl}
+                        controls
+                        playsInline
+                        className="w-full max-h-[420px] object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLightboxItem({
+                            kind: 'video',
+                            url: activeScene.finalVideoUrl!,
+                            title: activeScene.title,
+                            subtitle: `${sceneMode === 'lip_sync' ? 'Lip-Sync' : 'B-Roll'} · ${activeAspectRatio}`,
+                            aspectRatio: activeAspectRatio,
+                          })
+                        }
+                        className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/80 hover:bg-[#46ecd5] hover:text-black border border-white/15 text-[11px] font-bold text-white flex items-center gap-1 transition-colors"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                        <span>Expand</span>
+                      </button>
+                    </div>
                     <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                      <span>Final Rendered Video</span>
+                      <span>Final Rendered Video ({activeAspectRatio})</span>
                       <a
                         href={activeScene.finalVideoUrl}
                         download={`${activeScene.title.replace(/\s+/g, '-')}.mp4`}
@@ -3685,17 +3835,35 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
                   </div>
                 ) : activeScene.sceneReferenceUrl ? (
                   <div className="space-y-2">
-                    <img
-                      src={activeScene.sceneReferenceUrl}
-                      alt={activeScene.title}
-                      className="w-full aspect-video rounded-2xl object-cover border border-white/10"
-                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLightboxItem({
+                          kind: 'image',
+                          url: activeScene.sceneReferenceUrl!,
+                          title: `${activeScene.title} Reference Frame`,
+                          subtitle: `${activeScene.sceneReferenceSource} · ${activeAspectRatio}`,
+                          aspectRatio: activeAspectRatio,
+                        })
+                      }
+                      className="relative group w-full rounded-2xl bg-black border border-white/10 overflow-hidden flex items-center justify-center min-h-[220px]"
+                    >
+                      <img
+                        src={activeScene.sceneReferenceUrl}
+                        alt={activeScene.title}
+                        className="w-full max-h-[420px] object-contain"
+                      />
+                      <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black border border-white/15 text-[11px] font-bold text-white flex items-center gap-1 transition-colors">
+                        <Maximize2 className="w-3 h-3" />
+                        <span>Inspect Full-Screen</span>
+                      </span>
+                    </button>
                     <div className="text-[11px] text-zinc-400">
                       Scene Reference Locked ({activeScene.sceneReferenceSource}) — ready to animate
                     </div>
                   </div>
                 ) : (
-                  <div className="aspect-video rounded-2xl bg-[#0B0C10] border border-white/10 flex flex-col items-center justify-center p-6 text-center space-y-2">
+                  <div className="min-h-[220px] rounded-2xl bg-[#0B0C10] border border-white/10 flex flex-col items-center justify-center p-6 text-center space-y-2">
                     <Clapperboard className="w-8 h-8 text-zinc-600" />
                     <div className="text-xs font-semibold text-zinc-300">
                       No Scene Reference Yet
@@ -3834,19 +4002,52 @@ export const MusicVideoStudioView: React.FC<MusicVideoStudioViewProps> = ({
                   </div>
 
                   {sc.finalVideoUrl ? (
-                    <video
-                      src={sc.finalVideoUrl}
-                      controls
-                      className="w-full aspect-video rounded-xl bg-black object-cover border border-white/10"
-                    />
+                    <div className="relative rounded-xl bg-black border border-white/10 overflow-hidden flex items-center justify-center min-h-[160px]">
+                      <video
+                        src={sc.finalVideoUrl}
+                        controls
+                        className="w-full max-h-[260px] object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLightboxItem({
+                            kind: 'video',
+                            url: sc.finalVideoUrl!,
+                            title: sc.title,
+                            aspectRatio: sc.aspectRatio || activeAspectRatio,
+                          })
+                        }
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 hover:bg-[#46ecd5] hover:text-black text-white border border-white/15"
+                        title="Expand clip"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   ) : sc.sceneReferenceUrl ? (
-                    <img
-                      src={sc.sceneReferenceUrl}
-                      alt={sc.title}
-                      className="w-full aspect-video rounded-xl object-cover border border-white/10"
-                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLightboxItem({
+                          kind: 'image',
+                          url: sc.sceneReferenceUrl!,
+                          title: sc.title,
+                          aspectRatio: sc.aspectRatio || activeAspectRatio,
+                        })
+                      }
+                      className="relative group w-full rounded-xl bg-black border border-white/10 overflow-hidden flex items-center justify-center min-h-[160px]"
+                    >
+                      <img
+                        src={sc.sceneReferenceUrl}
+                        alt={sc.title}
+                        className="w-full max-h-[260px] object-contain"
+                      />
+                      <span className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15">
+                        <Maximize2 className="w-3 h-3" />
+                      </span>
+                    </button>
                   ) : (
-                    <div className="w-full aspect-video rounded-xl bg-[#0B0C10] border border-white/10 flex items-center justify-center text-xs text-zinc-500">
+                    <div className="w-full min-h-[160px] rounded-xl bg-[#0B0C10] border border-white/10 flex items-center justify-center text-xs text-zinc-500">
                       Awaiting Scene Media
                     </div>
                   )}

@@ -48,6 +48,7 @@ import {
   GenerationDetailModal,
   UpgradeCreditsModal,
 } from './components/StudioModals';
+import { MediaLightbox } from './components/MediaLightbox';
 import { AuthPage } from './components/AuthPage';
 import { SpacixLogo } from './components/ProviderBrandIcon';
 import {
@@ -99,6 +100,8 @@ const StudioShell: React.FC = () => {
     setUpgradeModalOpen,
     logout,
     updateUserCredits,
+    lightboxItem,
+    setLightboxItem,
     toastMessage,
   } = useRuns();
 
@@ -585,7 +588,7 @@ const StudioShell: React.FC = () => {
         {/* =================================================================== */}
         {/* MAIN ROUTE VIEWPORT                                                 */}
         {/* =================================================================== */}
-        <main className="flex-1 w-full max-w-full overflow-x-hidden">
+        <main className="flex-1 w-full max-w-full overflow-x-clip">
           {route === 'explore' && <ExplorePage />}
           {route === 'cinema' && <CinemaStudioView />}
           {route === 'character' && <CharacterStudioView />}
@@ -687,6 +690,7 @@ const StudioShell: React.FC = () => {
         <GenerationDetailModal />
         <AuthMagicLinkModal />
         <UpgradeCreditsModal />
+        <MediaLightbox item={lightboxItem} onClose={() => setLightboxItem(null)} />
       </div>
     </TooltipProvider>
   );

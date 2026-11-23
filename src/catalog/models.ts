@@ -45,6 +45,8 @@ const VIDEO_ASPECT_RATIOS: SettingDefinition = {
     { value: '16:9', label: '16:9 Cinema' },
     { value: '9:16', label: '9:16 Social' },
     { value: '1:1', label: '1:1 Square' },
+    { value: '4:3', label: '4:3 Classic' },
+    { value: '3:4', label: '3:4 Portrait' },
     { value: '21:9', label: '21:9 Scope' },
   ],
 };

@@ -46,6 +46,7 @@ import { Badge, Button, Textarea, Tooltip, TooltipContent, TooltipTrigger } from
 import { AnimatedPillTabs, BorderBeam, ShimmerButton, SpotlightCard } from './ui/aceternity-magic';
 import { GearVisual } from './GearVisual';
 import { getSettingOptionVisual } from '../catalog/cinemaGearVisuals';
+import { UniversalCreativeControlsBar } from './UniversalCreativeControlsBar';
 
 const SAMPLE_PROMPTS: Record<Surface, string[]> = {
   video: [
@@ -194,7 +195,7 @@ export const GenerationTile: React.FC<{
     <SpotlightCard className="group p-0 overflow-hidden flex flex-col justify-between transition-all">
       <div
         onClick={() => onOpenDetail(gen)}
-        className="relative aspect-video bg-[#09090B] cursor-pointer overflow-hidden flex items-center justify-center"
+        className="relative bg-[#09090B] cursor-pointer overflow-hidden flex items-center justify-center min-h-[180px]"
       >
         {out?.kind === 'audio' ? (
           <div
@@ -234,7 +235,7 @@ export const GenerationTile: React.FC<{
                 loop
                 playsInline
                 controls
-                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                className="w-full max-h-[340px] object-contain bg-black group-hover:scale-[1.01] transition-transform duration-300"
               />
             ) : (
               <img
@@ -242,10 +243,10 @@ export const GenerationTile: React.FC<{
                 alt={gen.prompt}
                 referrerPolicy="no-referrer"
                 loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                className="w-full max-h-[340px] object-contain bg-black group-hover:scale-[1.01] transition-transform duration-300"
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/25 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           </>
         ) : null}
 
@@ -671,6 +672,24 @@ export const StudioGeneratorView: React.FC<{ surface: Surface }> = ({ surface })
                 </label>
               )}
             </div>
+          </div>
+
+          {/* 4.5 Universal Creative & Cinematography / Audio Controls */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-zinc-300">
+                {surface === 'audio'
+                  ? 'Audio Direction & Voice Controls'
+                  : 'Cinematography & Color Grading'}
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500">Universal Modal</span>
+            </div>
+            <UniversalCreativeControlsBar
+              surface={surface}
+              activeModel={activeModel}
+              compact
+              contextLabel={`${surface.toUpperCase()} GENERATOR`}
+            />
           </div>
 
           {/* 5. Headline Settings Row + "More" Dialog Trigger */}

@@ -82,6 +82,18 @@ import {
   getColorGradeVisual,
   getLensOpticVisual,
 } from '../catalog/cinemaGearVisuals';
+import { UniversalCreativeControlsBar } from './UniversalCreativeControlsBar';
+import { translateCreativeControlsForModel } from '../lib/creativeControlsTranslator';
+import { buildCssFilterFromGrading } from '../lib/colorPostProcess';
+import {
+  buildCharacterTurnaroundPrompt,
+  CHARACTER_TURNAROUND_ASPECT_RATIO,
+} from '../lib/characterTurnaround';
+import {
+  MultiTrackTimelineEditor,
+  TimelineClipItem,
+  TimelineTrackConfig,
+} from './MultiTrackTimelineEditor';
 
 interface RollingQueueTask {
   id: string;
@@ -89,6 +101,7 @@ interface RollingQueueTask {
   kind: 'asset_image' | 'asset_turnaround' | 'frame_image' | 'frame_video';
   targetId: string;
   angleId?: string;
+  isCharacter?: boolean;
   prompt: string;
   surface: 'image' | 'video';
   status: 'queued' | 'running' | 'completed' | 'failed';
@@ -110,7 +123,11 @@ export const StoryStudioView: React.FC<{
     saveLocation,
     saveCinemaProject,
     submitGeneration,
+    pollGenerationUntilDone,
+    setLightboxItem,
     setDockDraft,
+    models,
+    creativeControls,
     showToast,
   } = useRuns();
 
@@ -360,30 +377,52 @@ export const StoryStudioView: React.FC<{
       );
 
       try {
-        // Dispatch through SPACIX Generation API
-        const res = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modelId:
-              task.surface === 'video'
-                ? project.defaultVideoModel || 'seedance-2-5'
-                : project.defaultImageModel || 'nano-banana-2-1',
-            surface: task.surface,
-            mode: task.surface === 'video' ? 'Text to Video' : 'Text to Image',
-            prompt: task.prompt,
-            settings:
-              task.surface === 'video'
-                ? { aspect_ratio: '16:9', duration: 5, resolution: '1080p' }
-                : { aspect_ratio: '16:9', quality: '2K' },
-            media: [],
-          }),
+        const targetModelId =
+          task.surface === 'video'
+            ? project.defaultVideoModel || 'seedance-2-5'
+            : project.defaultImageModel || 'nano-banana-2-1';
+        const targetModel = models.find((m) => m.id === targetModelId);
+        const requestedAr = task.isCharacter
+          ? CHARACTER_TURNAROUND_ASPECT_RATIO
+          : project.aspectRatio === '2.39:1'
+          ? '21:9'
+          : project.aspectRatio || '16:9';
+        const baseSettings: Record<string, string | number | boolean> =
+          task.surface === 'video'
+            ? { aspect_ratio: requestedAr, duration: 5, resolution: '1080p' }
+            : { aspect_ratio: requestedAr, quality: '2K' };
+        const translated = translateCreativeControlsForModel(
+          creativeControls,
+          targetModel,
+          task.surface
+        );
+        const finalPrompt = translated.promptDirective
+          ? `${task.prompt}\n\n[CREATIVE DIRECTION: ${translated.promptDirective}]`
+          : task.prompt;
+        const finalSettings: Record<string, string | number | boolean> = {
+          ...baseSettings,
+          ...translated.nativeSettingsPatch,
+          ...(task.isCharacter ? { aspect_ratio: CHARACTER_TURNAROUND_ASPECT_RATIO } : {}),
+        };
+
+        // Dispatch through authenticated SPACIX Generation API & poll until ready
+        const res = await submitGeneration({
+          modelId: targetModelId,
+          surface: task.surface,
+          mode: task.surface === 'video' ? 'Text to Video' : 'Text to Image',
+          prompt: finalPrompt,
+          settings: finalSettings,
+          media: [],
+          skipContinuityMerge: true,
         });
-        const data = await res.json();
-        const outUrl =
-          data?.generation?.outputs?.[0]?.url ||
-          generations.find((g) => g.surface === task.surface)?.outputs?.[0]?.url ||
-          '';
+        if (!res.ok || !res.generation) {
+          throw new Error(res.error || 'Failed to enqueue generation');
+        }
+        const done =
+          res.generation.status === 'completed'
+            ? res.generation
+            : await pollGenerationUntilDone(res.generation.id);
+        const outUrl = done?.outputs?.[0]?.url || '';
 
         if (outUrl) {
           setProject((prev) => {
@@ -448,7 +487,7 @@ export const StoryStudioView: React.FC<{
     Promise.all(nextQueued.map((t) => launchTask(t))).finally(() => {
       queueProcessingRef.current = false;
     });
-  }, [rollingQueue, project.defaultImageModel, project.defaultVideoModel, generations]);
+  }, [rollingQueue, project.defaultImageModel, project.defaultVideoModel, generations, models, creativeControls]);
 
   const activeQueueCount = rollingQueue.filter(
     (t) => t.status === 'running' || t.status === 'queued'
@@ -836,9 +875,16 @@ export const StoryStudioView: React.FC<{
         }
 
         const cached = imageCacheRef.current.get(imgUrl);
+        const canvasGradingFilter = buildCssFilterFromGrading(
+          creativeControls.colorGrading,
+          creativeControls.filmLook
+        );
         if (cached && cached.complete) {
           offCtx.save();
           offCtx.globalAlpha = clip.opacity ?? 1;
+          if (canvasGradingFilter) {
+            offCtx.filter = canvasGradingFilter;
+          }
           if (isOverlay) {
             // V2 Cutaway / B-Roll blend
             offCtx.drawImage(cached, 0, 0, width, height);
@@ -856,6 +902,9 @@ export const StoryStudioView: React.FC<{
           imageCacheRef.current.set(imgUrl, img);
           offCtx.save();
           offCtx.globalAlpha = clip.opacity ?? 1;
+          if (canvasGradingFilter) {
+            offCtx.filter = canvasGradingFilter;
+          }
           offCtx.drawImage(img, 0, 0, width, height);
           offCtx.restore();
           resolve();
@@ -905,7 +954,7 @@ export const StoryStudioView: React.FC<{
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(offscreen, 0, 0);
     })();
-  }, [activeStage, playheadSec, project.timelineClips, project.aspectRatio]);
+  }, [activeStage, playheadSec, project.timelineClips, project.aspectRatio, creativeControls.colorGrading, creativeControls.filmLook]);
 
   // Hardware-Accelerated Master Video Export using Canvas MediaRecorder stream
   const handleExportMasterVideo = async () => {
@@ -1655,7 +1704,15 @@ export const StoryStudioView: React.FC<{
                     label: `${ast.category}: ${ast.name}`,
                     kind: 'asset_image' as const,
                     targetId: ast.id,
-                    prompt: `${ast.visualPrompt}. ${project.globalStyle}`,
+                    isCharacter: ast.category === 'Character',
+                    prompt:
+                      ast.category === 'Character'
+                        ? buildCharacterTurnaroundPrompt({
+                            name: ast.name,
+                            appearance: `${ast.description}. ${ast.attributes?.physicalFeatures || ''} ${ast.visualPrompt}`,
+                            styleNotes: project.globalStyle,
+                          })
+                        : `${ast.visualPrompt}. ${project.globalStyle}`,
                     surface: 'image' as const,
                   }));
                   setProject((prev) => ({
@@ -1674,6 +1731,13 @@ export const StoryStudioView: React.FC<{
               </button>
             </div>
           </div>
+
+          <UniversalCreativeControlsBar
+            surface="image"
+            activeModel={models.find((m) => m.id === (project.defaultImageModel || 'nano-banana-2-1'))}
+            compact
+            contextLabel="STORY STUDIO · STAGE 2 ASSET CINEMATOGRAPHY"
+          />
 
           {/* Asset Cards Grid + Slide-Over AssetEditPanel */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -1710,13 +1774,32 @@ export const StoryStudioView: React.FC<{
                           : 'border-white/10 hover:border-white/25'
                       }`}
                     >
-                      <div className="aspect-video bg-[#0B0B0E] relative overflow-hidden flex items-center justify-center">
+                      <div
+                        onClick={() => {
+                          if (imgUrl) {
+                            setLightboxItem({
+                              kind: 'image',
+                              url: imgUrl,
+                              title: `${asset.name} · ${sheetLabel}`,
+                              aspectRatio: asset.category === 'Character' ? '1:1' : project.aspectRatio,
+                            });
+                          }
+                        }}
+                        className={`bg-black relative overflow-hidden flex items-center justify-center min-h-[190px] ${
+                          imgUrl ? 'cursor-pointer group' : ''
+                        }`}
+                      >
                         {imgUrl ? (
-                          <img
-                            src={imgUrl}
-                            alt={asset.name}
-                            className="w-full h-full object-cover"
-                          />
+                          <>
+                            <img
+                              src={imgUrl}
+                              alt={asset.name}
+                              className="w-full max-h-[280px] object-contain"
+                            />
+                            <span className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/80 text-white group-hover:bg-[#46ecd5] group-hover:text-black border border-white/15">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </span>
+                          </>
                         ) : (
                           <div className="p-4 text-center space-y-1.5">
                             <div className="text-[10px] font-mono-tabular uppercase tracking-wider text-[#46ecd5]">
@@ -1770,7 +1853,15 @@ export const StoryStudioView: React.FC<{
                                   label: `${asset.category}: ${asset.name}`,
                                   kind: 'asset_image',
                                   targetId: asset.id,
-                                  prompt: `${asset.visualPrompt}. ${project.globalStyle}`,
+                                  isCharacter: asset.category === 'Character',
+                                  prompt:
+                                    asset.category === 'Character'
+                                      ? buildCharacterTurnaroundPrompt({
+                                          name: asset.name,
+                                          appearance: `${asset.description}. ${asset.attributes?.physicalFeatures || ''} ${asset.visualPrompt}`,
+                                          styleNotes: project.globalStyle,
+                                        })
+                                      : `${asset.visualPrompt}. ${project.globalStyle}`,
                                   surface: 'image',
                                 },
                               ]);
@@ -2035,6 +2126,13 @@ export const StoryStudioView: React.FC<{
             </div>
           </div>
 
+          <UniversalCreativeControlsBar
+            surface="video"
+            activeModel={models.find((m) => m.id === (project.defaultVideoModel || 'seedance-2-5'))}
+            compact
+            contextLabel="STORY STUDIO · STAGE 3 SHOT CINEMATOGRAPHY & MOVEMENT"
+          />
+
           {/* 10-Category Cinematography Reference Taxonomy Drawer */}
           {taxonomyDrawerOpen && (
             <div className="p-4 rounded-xl bg-[#14141A] border border-[#46ecd5]/40 space-y-3">
@@ -2154,24 +2252,58 @@ export const StoryStudioView: React.FC<{
                               : 'border-white/10 hover:border-white/25'
                           }`}
                         >
-                          {/* Multi-Angle Viewport */}
-                          <div className="aspect-video bg-[#09090B] relative overflow-hidden flex items-center justify-center">
+                          {/* Multi-Angle Viewport (True Aspect Ratio + Lightbox) */}
+                          <div className="bg-black relative overflow-hidden flex items-center justify-center min-h-[190px]">
                             {activeAng?.videoUrl ? (
-                              <video
-                                src={activeAng.videoUrl}
-                                muted
-                                autoPlay
-                                loop
-                                playsInline
-                                controls
-                                className="w-full h-full object-cover"
-                              />
+                              <div className="relative w-full flex items-center justify-center">
+                                <video
+                                  src={activeAng.videoUrl}
+                                  muted
+                                  autoPlay
+                                  loop
+                                  playsInline
+                                  controls
+                                  className="w-full max-h-[280px] object-contain"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxItem({
+                                      kind: 'video',
+                                      url: activeAng.videoUrl!,
+                                      title: `Shot #${frame.shotNumber} · ${frame.shotTitle}`,
+                                      aspectRatio: project.aspectRatio,
+                                    });
+                                  }}
+                                  className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/80 hover:bg-[#46ecd5] hover:text-black text-white border border-white/15"
+                                >
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             ) : activeAng?.imageUrl ? (
-                              <img
-                                src={activeAng.imageUrl}
-                                alt={frame.shotTitle}
-                                className="w-full h-full object-cover"
-                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLightboxItem({
+                                    kind: 'image',
+                                    url: activeAng.imageUrl!,
+                                    title: `Shot #${frame.shotNumber} · ${frame.shotTitle}`,
+                                    aspectRatio: project.aspectRatio,
+                                  });
+                                }}
+                                className="relative group w-full flex items-center justify-center"
+                              >
+                                <img
+                                  src={activeAng.imageUrl}
+                                  alt={frame.shotTitle}
+                                  className="w-full max-h-[280px] object-contain"
+                                />
+                                <span className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15">
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                </span>
+                              </button>
                             ) : (
                               <div className="p-4 text-center space-y-2 flex flex-col items-center">
                                 <div className="flex items-center gap-2">
@@ -2463,6 +2595,12 @@ export const StoryStudioView: React.FC<{
       {/* =================================================================== */}
       {activeStage === 'editor' && (
         <div className="space-y-5">
+          <UniversalCreativeControlsBar
+            surface="video"
+            activeModel={models.find((m) => m.id === (project.defaultVideoModel || 'seedance-2-5'))}
+            compact
+            contextLabel="STORY STUDIO · STAGE 4 LIVE LUT COMPOSITOR & GRADE"
+          />
           {/* Top Monitor + Clip Inspector */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Double-Buffered Canvas Blit Compositor Program Monitor */}
@@ -2756,108 +2894,73 @@ export const StoryStudioView: React.FC<{
             </aside>
           </div>
 
-          {/* 4-Track Interactive Timeline Lanes (V1, V2, A1, A2) */}
-          <div className="p-4 rounded-xl bg-[#111114] border border-white/10 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-mono-tabular uppercase text-zinc-300 font-bold">
-                MULTI-TRACK SEQUENCER TIMELINE (CLICK SCRUBBER TO SEEK)
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={totalTimelineDuration}
-                step={0.1}
-                value={playheadSec}
-                onChange={(e) => setPlayheadSec(Number(e.target.value))}
-                className="w-64 accent-[#46ecd5]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              {(
-                [
-                  {
-                    track: 'V2',
-                    label: 'V2 · B-ROLL & CUTAWAYS',
-                    color: 'bg-teal-500/20 border-teal-400/50 text-teal-200',
-                  },
-                  {
-                    track: 'V1',
-                    label: 'V1 · PRIMARY STORYBOARD',
-                    color: 'bg-[#46ecd5]/20 border-[#46ecd5] text-white',
-                  },
-                  {
-                    track: 'A1',
-                    label: 'A1 · VERBATIM DIALOGUE',
-                    color: 'bg-indigo-500/20 border-indigo-400/50 text-indigo-200',
-                  },
-                  {
-                    track: 'A2',
-                    label: 'A2 · SCORE & FOLEY',
-                    color: 'bg-amber-500/20 border-amber-400/50 text-amber-200',
-                  },
-                ] as const
-              ).map((lane) => {
-                const laneClips = project.timelineClips.filter(
-                  (c) => c.track === lane.track
-                );
-                return (
-                  <div
-                    key={lane.track}
-                    className="grid grid-cols-12 gap-2 items-center bg-[#0C0C10] border border-white/10 rounded-lg p-2"
-                  >
-                    <div className="col-span-3 sm:col-span-2 text-[10px] font-mono-tabular font-bold text-zinc-300 truncate">
-                      {lane.label}
-                    </div>
-                    <div className="col-span-9 sm:col-span-10 relative h-12 bg-zinc-950 rounded border border-white/5 overflow-hidden">
-                      {/* Playhead vertical marker */}
-                      <div
-                        style={{
-                          left: `${Math.min(
-                            100,
-                            (playheadSec / totalTimelineDuration) * 100
-                          )}%`,
-                        }}
-                        className="absolute top-0 bottom-0 w-0.5 bg-[#46ecd5] z-20 pointer-events-none"
-                      />
-
-                      {laneClips.map((clip) => {
-                        const leftPct =
-                          (clip.startTimeSec / totalTimelineDuration) * 100;
-                        const widthPct = Math.max(
-                          4,
-                          (clip.durationSec / totalTimelineDuration) * 100
-                        );
-                        return (
-                          <button
-                            key={clip.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedClipId(clip.id);
-                              setPlayheadSec(clip.startTimeSec);
-                            }}
-                            style={{
-                              left: `${leftPct}%`,
-                              width: `${widthPct}%`,
-                            }}
-                            className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[10px] font-mono-tabular truncate transition-all ${
-                              lane.color
-                            } ${
-                              selectedClipId === clip.id
-                                ? 'ring-2 ring-white z-10'
-                                : ''
-                            } ${clip.muted ? 'opacity-40 line-through' : ''}`}
-                          >
-                            {clip.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Full Interactive Multitrack & Multilayer NLE Timeline Editor */}
+          <MultiTrackTimelineEditor
+            title={`${project.title} — Stage 4 Multitrack Sequence`}
+            aspectRatio={project.aspectRatio === '2.39:1' ? '21:9' : project.aspectRatio}
+            tracks={
+              [
+                { id: 'v2', label: 'V2 · B-Roll & Cutaways', kind: 'overlay', volume: 0.7 },
+                { id: 'v1', label: 'V1 · Primary Coverage', kind: 'video', volume: 1 },
+                { id: 't1', label: 'T1 · Titles & Captions', kind: 'text' },
+                { id: 'a1', label: 'A1 · Verbatim Dialogue', kind: 'audio', audioRole: 'dialogue', volume: 1 },
+                { id: 'a2', label: 'A2 · Score & Foley', kind: 'audio', audioRole: 'music', volume: 0.7 },
+              ] satisfies TimelineTrackConfig[]
+            }
+            clips={project.timelineClips.map((c): TimelineClipItem => ({
+              id: c.id,
+              trackId: c.track === 'V1' ? 'v1' : c.track === 'V2' ? 'v2' : c.track === 'A1' ? 'a1' : 'a2',
+              title: c.label,
+              mediaUrl: c.mediaUrl || c.thumbnailUrl,
+              mediaKind:
+                c.track === 'A1' || c.track === 'A2'
+                  ? 'audio'
+                  : (c.mediaUrl || '').match(/\.(mp4|webm)(\?|$)/i)
+                  ? 'video'
+                  : 'image',
+              startSec: c.startTimeSec,
+              durationSec: c.durationSec,
+              trimStartSec: c.trimInSec,
+              volume: c.volume,
+              opacity: c.opacity,
+              textContent: c.dialogueSubtitle,
+              aspectRatio: project.aspectRatio === '2.39:1' ? '21:9' : project.aspectRatio,
+            }))}
+            onChangeTracks={() => {
+              // StoryStudio maintains canonical V1/V2/A1/A2 lanes while editor manages interactive layers cleanly
+            }}
+            onChangeClips={(nextClips) => {
+              setProject((prev) => ({
+                ...prev,
+                timelineClips: nextClips.map((nc) => ({
+                  id: nc.id,
+                  track:
+                    nc.trackId === 'v2'
+                      ? 'V2'
+                      : nc.trackId === 'a1'
+                      ? 'A1'
+                      : nc.trackId === 'a2'
+                      ? 'A2'
+                      : 'V1',
+                  label: nc.title,
+                  sourceType: nc.mediaKind === 'audio' ? 'audio' : 'frame',
+                  sourceId: nc.sourceShotId || nc.id,
+                  mediaUrl: nc.mediaUrl || '',
+                  thumbnailUrl: nc.mediaUrl || '',
+                  startTimeSec: nc.startSec,
+                  durationSec: nc.durationSec,
+                  trimInSec: nc.trimStartSec || 0,
+                  trimOutSec: nc.durationSec,
+                  opacity: nc.opacity ?? 1,
+                  volume: nc.volume ?? 1,
+                  muted: false,
+                  dialogueSubtitle: nc.textContent,
+                })),
+                updatedAt: new Date().toISOString(),
+              }));
+            }}
+            onOpenLightbox={(item) => setLightboxItem(item)}
+          />
         </div>
       )}
 

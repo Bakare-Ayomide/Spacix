@@ -770,19 +770,26 @@ function compute_runware_dimensions(string $surface, array $settings): array {
     $aspect = (string) ($settings['aspect_ratio'] ?? '16:9');
     $res = (string) ($settings['resolution'] ?? ($surface === 'video' ? '1080p' : '2K'));
     if ($res === '4K') {
+        if ($aspect === '21:9' || $aspect === '2.39:1') return ['width' => 3840, 'height' => 1644];
         if ($aspect === '9:16') return ['width' => 2160, 'height' => 3840];
         if ($aspect === '1:1') return ['width' => 2048, 'height' => 2048];
+        if ($aspect === '4:3') return ['width' => 2880, 'height' => 2160];
+        if ($aspect === '3:4') return ['width' => 2160, 'height' => 2880];
         return ['width' => 3840, 'height' => 2160];
     }
     if ($surface === 'image') {
+        if ($aspect === '21:9' || $aspect === '2.39:1') return ['width' => 1536, 'height' => 640];
         if ($aspect === '1:1') return ['width' => 1024, 'height' => 1024];
         if ($aspect === '9:16') return ['width' => 768, 'height' => 1344];
         if ($aspect === '4:3') return ['width' => 1152, 'height' => 896];
         if ($aspect === '3:4') return ['width' => 896, 'height' => 1152];
         return ['width' => 1344, 'height' => 768];
     }
+    if ($aspect === '21:9' || $aspect === '2.39:1') return ['width' => 1920, 'height' => 800];
     if ($aspect === '9:16') return ['width' => 1080, 'height' => 1920];
     if ($aspect === '1:1') return ['width' => 1080, 'height' => 1080];
+    if ($aspect === '4:3') return ['width' => 1440, 'height' => 1080];
+    if ($aspect === '3:4') return ['width' => 1080, 'height' => 1440];
     return ['width' => 1920, 'height' => 1080];
 }
 
@@ -2215,10 +2222,38 @@ if (preg_match('#^/api/projects/([^/]+)$#', $path, $m) && ($method === 'PATCH' |
     $proj = json_decode((string) $raw, true);
     $name = trim((string) ($reqBody['name'] ?? ''));
     if ($name !== '') $proj['name'] = $name;
+    if (array_key_exists('isFavorite', $reqBody)) {
+        $proj['isFavorite'] = !empty($reqBody['isFavorite']);
+    }
     $proj['updatedAt'] = gmdate('c');
     $pdo->prepare('UPDATE `spacix_projects` SET `name` = ?, `updated_at` = ?, `payload_json` = ? WHERE `id` = ?')
         ->execute([$proj['name'], $proj['updatedAt'], json_encode($proj, JSON_UNESCAPED_SLASHES), $proj['id']]);
     json_response(['project' => $proj]);
+}
+
+if (preg_match('#^/api/projects/([^/]+)/duplicate$#', $path, $m) && $method === 'POST') {
+    $user = get_session_user($pdo);
+    if (!$user) json_response(['error' => 'Unauthorized'], 401);
+    $stmt = $pdo->prepare('SELECT `payload_json` FROM `spacix_projects` WHERE `id` = ? AND `user_id` = ? LIMIT 1');
+    $stmt->execute([$m[1], $user['id']]);
+    $raw = $stmt->fetchColumn();
+    if (!$raw) json_response(['error' => 'Project not found'], 404);
+    $src = json_decode((string) $raw, true);
+    $now = gmdate('c');
+    $newId = 'proj_' . round(microtime(true) * 1000) . '_' . substr(md5(uniqid('', true)), 0, 4);
+    $copyName = trim((string) ($reqBody['name'] ?? ($src['name'] . ' (Copy)')));
+    $dup = [
+        'id' => $newId,
+        'userId' => $user['id'],
+        'name' => $copyName,
+        'generationCount' => 0,
+        'isFavorite' => !empty($src['isFavorite']),
+        'createdAt' => $now,
+        'updatedAt' => $now,
+    ];
+    $pdo->prepare('INSERT INTO `spacix_projects` (`id`, `user_id`, `name`, `created_at`, `updated_at`, `payload_json`) VALUES (?, ?, ?, ?, ?, ?)')
+        ->execute([$newId, $user['id'], $copyName, $now, $now, json_encode($dup, JSON_UNESCAPED_SLASHES)]);
+    json_response(['project' => $dup]);
 }
 
 if (preg_match('#^/api/projects/([^/]+)$#', $path, $m) && $method === 'DELETE') {
@@ -3395,6 +3430,7 @@ if ($path === '/api/continuity' && $method === 'GET') {
             'props' => [],
             'locations' => [],
             'motionTemplates' => [],
+            'voices' => [],
             'cinemaProjects' => [],
         ]);
     }
@@ -3413,6 +3449,7 @@ if ($path === '/api/continuity' && $method === 'GET') {
         'props' => $filterCollection(kv_get($pdo, 'props', [])),
         'locations' => $filterCollection(kv_get($pdo, 'locations', [])),
         'motionTemplates' => $filterCollection(kv_get($pdo, 'motionTemplates', [])),
+        'voices' => $filterCollection(kv_get($pdo, 'voices', [])),
         'cinemaProjects' => $filterCollection(kv_get($pdo, 'cinemaProjects', [])),
     ]);
 }
@@ -3423,10 +3460,11 @@ $continuityCollections = [
     'props' => ['kv' => 'props', 'prefix' => 'prp_', 'codeField' => 'propCode', 'codePrefix' => 'PRP-ID-', 'respKey' => 'prop'],
     'locations' => ['kv' => 'locations', 'prefix' => 'loc_', 'codeField' => 'locationCode', 'codePrefix' => 'LOC-ID-', 'respKey' => 'location'],
     'motion' => ['kv' => 'motionTemplates', 'prefix' => 'mot_', 'codeField' => 'motionCode', 'codePrefix' => 'MOT-ID-', 'respKey' => 'motionTemplate'],
+    'voices' => ['kv' => 'voices', 'prefix' => 'vox_', 'codeField' => 'voiceCode', 'codePrefix' => 'VOX-ID-', 'respKey' => 'voice'],
     'cinema-projects' => ['kv' => 'cinemaProjects', 'prefix' => 'cin_', 'codeField' => null, 'codePrefix' => null, 'respKey' => 'cinemaProject'],
 ];
 
-if (preg_match('#^/api/continuity/(characters|wardrobes|props|locations|motion|cinema-projects)(?:/([^/]+))?$#', $path, $cm)) {
+if (preg_match('#^/api/continuity/(characters|wardrobes|props|locations|motion|voices|cinema-projects)(?:/([^/]+))?$#', $path, $cm)) {
     $user = get_session_user($pdo);
     if (!$user) {
         json_response(['error' => 'Sign in to manage production continuity assets.'], 401);
@@ -3642,6 +3680,8 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
     $productionFormat = trim((string) ($reqBody['productionFormat'] ?? 'Short Films'));
     $creativeInstructions = trim((string) ($reqBody['creativeInstructions'] ?? ''));
     $referenceNotes = trim((string) ($reqBody['referenceNotes'] ?? ''));
+    $screenplayMarkdown = (string) ($reqBody['screenplayMarkdown'] ?? '');
+    $geminiKey = get_secret_value($pdo, 'GEMINI_API_KEY');
 
     if ($stage === 'screenplay') {
         $cleanIdea = $ideaDescription !== ''
@@ -3651,14 +3691,13 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
             ? $creativeInstructions
             : 'Anamorphic 35mm cinema look, high tension, atmospheric practical lighting, strong character subtext.';
 
-        $geminiKey = get_secret_value($pdo, 'GEMINI_API_KEY');
         if (strlen($geminiKey) > 10) {
             $promptText = implode("\n\n", array_filter([
-                "Generate a complete, structured professional screenplay for a {$productionFormat} titled \"{$title}\".",
+                "Generate a complete, structured professional screenplay and production bible for a {$productionFormat} titled \"{$title}\".",
                 "Core Idea: {$cleanIdea}",
                 "Creative Instructions: {$cleanInstructions}",
                 $referenceNotes !== '' ? "Reference Notes: {$referenceNotes}" : '',
-                "Write 3 complete scenes in Story Studio Screenplay Markdown format:\n- `# TITLE`\n- `### INT. LOCATION - NIGHT <!-- scene-id: scene-01 -->`\n- Action paragraphs with `[PROP: Item Name]` and `[B-ROLL: Visual description]`\n- Character dialogue cues using `@CHARACTER_NAME` on its own line, `(parenthetical)` on next line, and spoken dialogue below.\n- Include `> Production Note: ...` for lighting, wardrobe, and camera direction.",
+                "Write 3 complete, vivid scenes in Story Studio Screenplay Markdown format:\n- `# TITLE`\n- Character Bible lines right under the title using `> CHARACTER: @NAME | Role: ... | Ethnicity: ... | Skin Tone: ... | Gender: ... | Age: ... | Facial Structure: ... | Body Type: ... | Hairstyle: ... | Clothing: ... | Personality: ... | Voice: ... | Language: ... | Accent/Dialect: ...`\n- `### INT. LOCATION - NIGHT <!-- scene-id: scene-01 -->`\n- Detailed action paragraphs with `[WARDROBE: Item]`, `[PROP: Item Name]`, `[SFX: Sound effect]`, `[AMBIENCE: Background audio]`, `[MUSIC: Music mood cue]`, and `[B-ROLL: Visual description]`\n- Character dialogue cues using `@CHARACTER_NAME` on its own line, `(parenthetical)` on next line, and exact spoken dialogue verbatim below.",
             ]));
             $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($geminiKey));
             if ($ch !== false) {
@@ -3694,10 +3733,12 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
             "",
             "> Production Format: {$productionFormat} | Visual Direction: {$cleanInstructions}",
             "> Premise: {$cleanIdea}",
+            "> CHARACTER: @AMARA | Role: Lead Investigator | Ethnicity: West African Nigerian | Skin Tone: Rich Mahogany | Gender: Female | Age: 29 (27-32) | Facial Structure: High cheekbones, defined jawline, expressive dark eyes | Body Type: Athletic, 5'9\" | Hairstyle: Braided crown locs | Clothing: Tailored Charcoal Trench Coat with Brass Collar | Personality: Calm, razor-sharp, resolute | Voice: Warm mezzo-soprano, articulate | Language: English | Accent/Dialect: Lagos Nigerian",
+            "> CHARACTER: @KEMI | Role: Quantum Systems Partner | Ethnicity: West African Yoruba | Skin Tone: Warm Bronze | Gender: Female | Age: 31 (28-35) | Facial Structure: Oval face, arched brows, focused gaze | Body Type: Lean, 5'7\" | Hairstyle: Low tapered fade | Clothing: Charcoal Tactical Utility Jacket over slate knitwear | Personality: Observant, dry-witted, loyal | Voice: Crisp alto, grounded | Language: English | Accent/Dialect: British-Nigerian",
             "",
             "### EXT. METROPOLIS SKYLINE CAUSEWAY - NIGHT <!-- scene-id: scene-01 -->",
             "",
-            "Rain lashes the glass barricades of the elevated causeway. {$cleanIdea} @AMARA stands beside a [PROP: Matte-Black Tactical Coupe], adjusting her [WARDROBE: Trench Coat with Brass Collar]. [B-ROLL: Wide anamorphic establishing shot of neon reflections shimmering across wet asphalt]",
+            "Rain lashes the glass barricades of the elevated causeway under cold sodium streetlights and amber reflections. {$cleanIdea} @AMARA stands beside a [PROP: Matte-Black Tactical Coupe], adjusting her [WARDROBE: Trench Coat with Brass Collar]. [SFX: Distant thunder rumble and tires slicing wet asphalt] [AMBIENCE: Steady midnight rain and elevated highway wind] [MUSIC: Low sub-bass tension pulse] [B-ROLL: Wide anamorphic establishing shot of neon reflections shimmering across wet asphalt]",
             "",
             "@AMARA",
             "(into encrypted comms, steady and urgent)",
@@ -3711,7 +3752,7 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
             "",
             "### INT. SUBTERRANEAN ARCHIVE VAULT - NIGHT <!-- scene-id: scene-02 -->",
             "",
-            "Shafts of cool overhead light pierce the mist inside the cavernous concrete vault. @AMARA and @KEMI approach the central plinth where the [PROP: Quantum Chronometer Core] hums with amber light. @KEMI wears a [WARDROBE: Charcoal Utility Jacket]. [B-ROLL: Extreme close-up of rotating brass rings inside the Quantum Chronometer Core]",
+            "Shafts of cool overhead light pierce rising mist inside the cavernous concrete vault. @AMARA and @KEMI approach the central basalt plinth where the [PROP: Quantum Chronometer Core] hums with warm amber filaments. @KEMI wears a [WARDROBE: Charcoal Utility Jacket]. [SFX: Deep mechanical vault hatch unsealing and metallic clockwork chime] [AMBIENCE: Subterranean electrical hum and distant water drips] [B-ROLL: Extreme close-up of rotating brass rings inside the Quantum Chronometer Core]",
             "",
             "@KEMI",
             "(whispering in awe)",
@@ -3725,10 +3766,10 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
             "",
             "### EXT. ROOFTOP HELIPAD OVERLOOK - DAWN <!-- scene-id: scene-03 -->",
             "",
-            "Golden dawn breaks through low clouds above the city skyline. @AMARA holds the [PROP: Quantum Chronometer Core] as rotor wash ripples across the helipad. [B-ROLL: Sweeping 360-degree crane shot around Amara and Kemi against the rising sun]",
+            "Golden dawn breaks through low clouds above the city skyline. @AMARA holds the [PROP: Quantum Chronometer Core] as rotor wash sweeps across the wet concrete pad. [SFX: Helicopter turbine spooling up in the distance] [AMBIENCE: Dawn city breeze and open skyline air] [MUSIC: Swelling orchestral sunrise motif] [B-ROLL: Sweeping 360-degree crane shot around Amara and Kemi against the rising sun]",
             "",
             "@AMARA",
-            "(looking out over the waking city)",
+            "(looking out over the waking city, relieved and triumphant)",
             "Every frame is preserved. Now the whole world sees the truth.",
         ]);
 
@@ -3737,6 +3778,39 @@ if ($path === '/api/cinema/auto-production' && $method === 'POST') {
             'provider' => 'spacix-auto-production',
             'markdown' => $generatedMarkdown,
         ]);
+    }
+
+    if ($stage === 'analyze' && strlen($geminiKey) > 10 && trim($screenplayMarkdown) !== '') {
+        $analyzePrompt = implode("\n\n", [
+            'Analyze this screenplay into structured JSON with keys: characters (array of {name, role, ethnicity, skinTone, gender, ageRange, facialStructure, bodyType, hairstyle, clothing, personality, voiceDescription, language, accentDialect}), locations (array of {name, settingType, timeOfDay, lighting, atmosphere, prompt}), props (array of {name, description, material}), wardrobes (array of {name, garments, characterName}), audioItems (array of {type: "dialogue"|"narration"|"sfx"|"ambience"|"music", sceneNumber, speaker, exactText, language, accentDialect, emotion, speakingStyle, sfxDescription}), and shots (array of {sceneNumber, shotNumber, shotType, cameraAngle, cameraMovement, visualAction, lighting, durationSec, dialogueVerbatim}).',
+            'CRITICAL RULE: For every dialogue and narration item, copy exactText VERBATIM from the screenplay. Never alter, paraphrase, or invent dialogue words.',
+            'Output ONLY valid JSON.',
+            $screenplayMarkdown,
+        ]);
+        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($geminiKey));
+        if ($ch !== false) {
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 25,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'contents' => [['parts' => [['text' => $analyzePrompt]]]],
+                    'generationConfig' => ['responseMimeType' => 'application/json'],
+                ]),
+            ]);
+            $rawResp = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($httpCode >= 200 && $httpCode < 300 && is_string($rawResp)) {
+                $parsedResp = json_decode($rawResp, true);
+                $rawJson = trim((string) ($parsedResp['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+                $analysis = $rawJson !== '' ? json_decode($rawJson, true) : null;
+                if (is_array($analysis)) {
+                    json_response(['ok' => true, 'provider' => 'gemini-mysql-vault', 'analysis' => $analysis]);
+                }
+            }
+        }
     }
 
     json_response(['ok' => true]);

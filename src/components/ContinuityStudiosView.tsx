@@ -9,6 +9,7 @@ import {
   Layers,
   Lock,
   MapPin,
+  Maximize2,
   Mic,
   Move,
   Music,
@@ -61,6 +62,10 @@ import {
 } from '../catalog/cinemaGearVisuals';
 import { StoryStudioView } from './StoryStudioView';
 import { HiggsfieldCinemaStudio } from './HiggsfieldCinemaStudio';
+import {
+  buildCharacterTurnaroundPrompt,
+  CHARACTER_TURNAROUND_ASPECT_RATIO,
+} from '../lib/characterTurnaround';
 
 export const SPACI6X_STUDIOS: Array<{
   id: StudioId;
@@ -433,6 +438,7 @@ export const CharacterStudioView: React.FC = () => {
     characters,
     wardrobes,
     propsList,
+    voices,
     generations,
     saveCharacter,
     deleteCharacter,
@@ -441,6 +447,7 @@ export const CharacterStudioView: React.FC = () => {
     activeContinuity,
     setActiveContinuity,
     setSelectedGeneration,
+    setLightboxItem,
     navigate,
     showToast,
   } = useRuns();
@@ -573,13 +580,19 @@ export const CharacterStudioView: React.FC = () => {
     setIsGeneratingFace(true);
     try {
       const outfit = wardrobes.find((w) => w.id === form.defaultWardrobeId);
-      const portraitPrompt = `Cinema character identity reference portrait of ${form.name} (${form.identityId || 'LOCKED-ID'}), ${form.ageRange} year old ${form.genderPresentation}, ${form.skinTone} skin tone, ${form.bodyType} build, height ${form.height}, ${form.hairstyle} hairstyle, ${form.eyeColor} eyes, ${form.distinctiveFeatures || 'natural skin texture'}, facial expression: ${form.activeExpression || 'Neutral'}${outfit ? `, wearing ${outfit.name} (${outfit.garments})` : ''}. 85mm cinema portrait lens, neutral studio key lighting, 8k photorealistic continuity master.`;
+      const portraitPrompt = buildCharacterTurnaroundPrompt({
+        name: form.name,
+        role: form.roleTitle || 'Character',
+        appearance: `${form.ageRange} year old ${form.genderPresentation}, ${form.skinTone} skin tone, ${form.bodyType} build, height ${form.height}, ${form.hairstyle} hairstyle, ${form.eyeColor} eyes, ${form.distinctiveFeatures || 'natural skin texture'}, expression ${form.activeExpression || 'Neutral'}`,
+        wardrobe: outfit ? `${outfit.name} (${outfit.garments})` : undefined,
+        styleNotes: `Identity ID ${form.identityId || 'LOCKED-ID'}, consistent bone structure across all 4 panels`,
+      });
       const res = await submitGeneration({
         surface: 'image',
         modelId: 'soul-2-standard',
         mode: 'Create',
         prompt: portraitPrompt,
-        settings: { aspect_ratio: '1:1', quality: '1080p' },
+        settings: { aspect_ratio: CHARACTER_TURNAROUND_ASPECT_RATIO, quality: '1080p' },
         media: form.faceReferenceUrl
           ? [
               {
@@ -866,23 +879,76 @@ export const CharacterStudioView: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                 <div className="md:col-span-4 space-y-2.5">
-                  <div className="aspect-square rounded-xl bg-[#09090C] border border-white/10 overflow-hidden flex items-center justify-center relative">
+                  <div
+                    onClick={() => {
+                      if (form.faceReferenceUrl) {
+                        setLightboxItem({
+                          kind: 'image',
+                          url: form.faceReferenceUrl,
+                          title: `${form.name || 'Character'} · 1:1 Turnaround Sheet`,
+                          aspectRatio: '1:1',
+                        });
+                      }
+                    }}
+                    className={`aspect-square rounded-xl bg-[#09090C] border border-white/10 overflow-hidden flex items-center justify-center relative group ${
+                      form.faceReferenceUrl ? 'cursor-pointer' : ''
+                    }`}
+                  >
                     {form.faceReferenceUrl ? (
-                      <img
-                        src={form.faceReferenceUrl}
-                        alt={form.name || 'Character Face'}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
+                      <>
+                        <img
+                          src={form.faceReferenceUrl}
+                          alt={form.name || 'Character Turnaround Sheet'}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain bg-black"
+                        />
+                        <span className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 text-white group-hover:bg-[#46ecd5] group-hover:text-black border border-white/15">
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </span>
+                      </>
                     ) : (
                       <div className="text-center p-4 space-y-1.5">
                         <Users className="w-8 h-8 text-[#46ecd5]/60 mx-auto" />
                         <div className="text-xs text-zinc-400">
-                          Upload or Generate Face Master
+                          Upload or Generate 1:1 4-Panel Character Sheet
                         </div>
                       </div>
                     )}
                   </div>
+                  {voices.length > 0 && (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono uppercase text-zinc-400">
+                        Assign Saved My Elements Voice
+                      </label>
+                      <select
+                        value={voices.some((v) => v.sampleAudioUrl === form.voiceSampleUrl) ? form.voiceSampleUrl || '' : ''}
+                        onChange={(e) => {
+                          const v = voices.find((item) => item.sampleAudioUrl === e.target.value);
+                          if (v) {
+                            setForm((prev) => ({
+                              ...prev,
+                              voiceId: v.id,
+                              voiceName: v.name,
+                              voiceSampleUrl: v.sampleAudioUrl,
+                              primaryLanguage: (v.language as SupportedCharacterLanguage) || prev.primaryLanguage,
+                              speechAccent: [v.accent, v.dialect].filter(Boolean).join(' · '),
+                              defaultEmotion: v.mood || prev.defaultEmotion,
+                              deliveryStyle: v.speakingStyle || prev.deliveryStyle,
+                            }));
+                            showToast(`Assigned saved voice "${v.name}"`);
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#09090C] border border-white/10 text-xs text-white"
+                      >
+                        <option value="">Select saved voice ({voices.length})...</option>
+                        {voices.map((v) => (
+                          <option key={v.id} value={v.sampleAudioUrl}>
+                            {v.name} ({v.language})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <input
                     ref={fileInputRef}
                     type="file"

@@ -47,6 +47,10 @@ import {
 } from './ui/aceternity-magic';
 import { GearVisual } from './GearVisual';
 import { getSettingOptionVisual } from '../catalog/cinemaGearVisuals';
+import {
+  applyCreativeLookCanvas,
+  buildCssFilterFromGrading,
+} from '../lib/colorPostProcess';
 
 // ============================================================================
 // 1. MODEL PICKER MODAL (Radix Dialog + AnimatedPillTabs + SpotlightCard)
@@ -412,12 +416,12 @@ export const AssetLibraryModal: React.FC<{
                 }}
                 className="group cursor-pointer text-left p-0 overflow-hidden transition-all"
               >
-                <div className="aspect-video bg-zinc-900 relative overflow-hidden">
+                <div className="h-36 bg-black relative overflow-hidden flex items-center justify-center">
                   <img
                     src={u.publicUrl}
                     alt={u.label}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform"
                   />
                 </div>
                 <div className="p-2.5">
@@ -447,7 +451,7 @@ export const AssetLibraryModal: React.FC<{
                   }}
                   className="group cursor-pointer text-left p-0 overflow-hidden transition-all"
                 >
-                  <div className="aspect-video bg-zinc-900 relative overflow-hidden flex items-center justify-center">
+                  <div className="h-36 bg-black relative overflow-hidden flex items-center justify-center">
                     {out.kind === 'audio' ? (
                       <Music className="w-8 h-8 text-[#46ecd5]" />
                     ) : (
@@ -455,7 +459,7 @@ export const AssetLibraryModal: React.FC<{
                         src={out.url}
                         alt={g.prompt}
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform"
                       />
                     )}
                   </div>
@@ -486,12 +490,60 @@ export const GenerationDetailModal: React.FC = () => {
     downloadGeneration,
     projects,
     moveGenerationToProject,
+    creativeControls,
     showToast,
   } = useRuns();
+
+  const [lutPreviewOn, setLutPreviewOn] = useState(true);
+  const [exportingGraded, setExportingGraded] = useState(false);
 
   if (!selectedGeneration) return null;
   const gen = selectedGeneration;
   const out = gen.outputs[0];
+  const isImageOutput =
+    Boolean(out) &&
+    out.kind !== 'audio' &&
+    !(
+      out.kind === 'video' &&
+      (out.url.endsWith('.mp4') ||
+        out.url.endsWith('.webm') ||
+        out.url.includes('vm.runware.ai') ||
+        out.url.startsWith('data:video/'))
+    );
+  const gradedCssFilter =
+    lutPreviewOn && isImageOutput
+      ? buildCssFilterFromGrading(
+          creativeControls.colorGrading,
+          creativeControls.filmLook
+        )
+      : undefined;
+
+  const handleExportGraded = async () => {
+    if (!out?.url) return;
+    setExportingGraded(true);
+    try {
+      const blobUrl = await applyCreativeLookCanvas(
+        out.url,
+        creativeControls.colorGrading,
+        creativeControls.filmLook
+      );
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `spacix-graded-${gen.id}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => {
+        if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
+      }, 4000);
+      showToast('Exported canvas-graded JPG with LUT & film look');
+    } catch {
+      showToast('Could not canvas-export remote frame; downloading original');
+      downloadGeneration(gen);
+    } finally {
+      setExportingGraded(false);
+    }
+  };
 
   const handleCopyPrompt = () => {
     navigator.clipboard?.writeText(gen.prompt);
@@ -551,12 +603,28 @@ export const GenerationDetailModal: React.FC = () => {
                 className="max-h-[72vh] w-auto object-contain rounded-lg border border-white/10"
               />
             ) : (
-              <img
-                src={out.url}
-                alt={gen.prompt}
-                referrerPolicy="no-referrer"
-                className="max-h-[72vh] w-auto object-contain rounded-lg border border-white/10"
-              />
+              <div className="relative flex flex-col items-center gap-2">
+                <img
+                  src={out.url}
+                  alt={gen.prompt}
+                  referrerPolicy="no-referrer"
+                  style={{ filter: gradedCssFilter }}
+                  className="max-h-[68vh] w-auto object-contain rounded-lg border border-white/10 transition-all"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLutPreviewOn((v) => !v)}
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                      lutPreviewOn
+                        ? 'bg-[#46ecd5]/15 border-[#46ecd5]/50 text-[#46ecd5]'
+                        : 'bg-zinc-900 border-white/15 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {lutPreviewOn ? 'LUT Preview: On' : 'LUT Preview: Off (Raw)'}
+                  </button>
+                </div>
+              </div>
             )
           ) : (
             <div className="text-sm text-zinc-400">Status: {gen.status.toUpperCase()}</div>
@@ -687,10 +755,23 @@ export const GenerationDetailModal: React.FC = () => {
                   <span>Download</span>
                 </Button>
               )}
+              {isImageOutput && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={exportingGraded}
+                  onClick={handleExportGraded}
+                >
+                  <Sliders className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span>{exportingGraded ? 'Grading...' : 'Export Graded'}</span>
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => togglePublishGeneration(gen.id, !gen.isPublic)}
+                className={isImageOutput ? 'col-span-2' : ''}
               >
                 <Globe className="w-3.5 h-3.5 text-[#46ecd5]" />
                 <span>{gen.isPublic ? 'Unpublish' : 'Publish'}</span>

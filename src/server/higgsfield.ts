@@ -340,6 +340,9 @@ export function computeRunwareDimensions(
   if (res === '4K') {
     if (aspect === '9:16') return { width: 2160, height: 3840 };
     if (aspect === '1:1') return { width: 2048, height: 2048 };
+    if (aspect === '21:9') return { width: 3840, height: 1648 };
+    if (aspect === '4:3') return { width: 2880, height: 2160 };
+    if (aspect === '3:4') return { width: 2160, height: 2880 };
     return { width: 3840, height: 2160 };
   }
 
@@ -348,12 +351,16 @@ export function computeRunwareDimensions(
     if (aspect === '9:16') return { width: 768, height: 1344 };
     if (aspect === '4:3') return { width: 1152, height: 896 };
     if (aspect === '3:4') return { width: 896, height: 1152 };
+    if (aspect === '21:9') return { width: 1536, height: 640 };
     return { width: 1344, height: 768 };
   }
 
   // Video default 1080p / 720p
   if (aspect === '9:16') return { width: 1080, height: 1920 };
   if (aspect === '1:1') return { width: 1080, height: 1080 };
+  if (aspect === '21:9') return { width: 2560, height: 1088 };
+  if (aspect === '4:3') return { width: 1440, height: 1080 };
+  if (aspect === '3:4') return { width: 1080, height: 1440 };
   return { width: 1920, height: 1080 };
 }
 

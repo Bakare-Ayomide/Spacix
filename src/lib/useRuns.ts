@@ -18,8 +18,15 @@ import {
   Surface,
   UploadRecord,
   UserProfile,
+  UniversalCreativeControlsState,
+  VoiceProfile,
   WardrobeItem,
 } from '../types/studio';
+import type { MediaLightboxItem } from '../components/MediaLightbox';
+import {
+  DEFAULT_CREATIVE_CONTROLS,
+  translateCreativeControlsForModel,
+} from './creativeControlsTranslator';
 import { MODEL_CATALOG } from '../catalog/models';
 import { INITIAL_PRESETS } from '../catalog/presets';
 import { STUDIO_PLANS, StudioPlan, TOPUP_PACKS, TopupPack } from '../billing/plans';
@@ -95,8 +102,11 @@ interface StudioContextValue {
   locations: LocationItem[];
   motionTemplates: MotionTemplateItem[];
   cinemaProjects: CinemaProductionProject[];
+  voices: VoiceProfile[];
   activeContinuity: ActiveContinuityContext;
   setActiveContinuity: React.Dispatch<React.SetStateAction<ActiveContinuityContext>>;
+  creativeControls: UniversalCreativeControlsState;
+  setCreativeControls: React.Dispatch<React.SetStateAction<UniversalCreativeControlsState>>;
   saveCharacter: (data: Partial<CharacterProfile> & { name: string }) => Promise<CharacterProfile | null>;
   deleteCharacter: (id: string) => Promise<void>;
   saveWardrobe: (data: Partial<WardrobeItem> & { name: string }) => Promise<WardrobeItem | null>;
@@ -107,7 +117,10 @@ interface StudioContextValue {
   deleteLocation: (id: string) => Promise<void>;
   saveMotionTemplate: (data: Partial<MotionTemplateItem> & { name: string }) => Promise<MotionTemplateItem | null>;
   deleteMotionTemplate: (id: string) => Promise<void>;
+  saveVoice: (data: Partial<VoiceProfile> & { name: string }) => Promise<VoiceProfile | null>;
+  deleteVoice: (id: string) => Promise<void>;
   saveCinemaProject: (data: Partial<CinemaProductionProject> & { title: string }) => Promise<CinemaProductionProject | null>;
+  duplicateCinemaProject: (id: string) => Promise<CinemaProductionProject | null>;
   deleteCinemaProject: (id: string) => Promise<void>;
   composeContinuityPrompt: (
     basePrompt: string,
@@ -124,7 +137,11 @@ interface StudioContextValue {
   applyPresetToDock: (preset: PresetEffect) => void;
   reuseGenerationInDock: (gen: GenerationRecord, animateAsVideo?: boolean) => void;
   submitGeneration: (
-    overrideDraft?: Partial<DockDraftState> & { skipContinuityMerge?: boolean }
+    overrideDraft?: Partial<DockDraftState> & {
+      skipContinuityMerge?: boolean;
+      creativeControlsOverride?: UniversalCreativeControlsState;
+      skipCreativeControls?: boolean;
+    }
   ) => Promise<{
     ok: boolean;
     error?: string;
@@ -140,6 +157,8 @@ interface StudioContextValue {
   deleteGeneration: (id: string) => Promise<void>;
   createProject: (name: string) => Promise<ProjectRecord | null>;
   renameProject: (id: string, name: string) => Promise<void>;
+  duplicateProject: (id: string) => Promise<ProjectRecord | null>;
+  toggleFavoriteProject: (id: string, isFavorite: boolean) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   uploadReferenceFile: (file: {
     label: string;
@@ -206,6 +225,8 @@ interface StudioContextValue {
   setUpgradeModalOpen: (open: boolean) => void;
   selectedGeneration: GenerationRecord | null;
   setSelectedGeneration: (gen: GenerationRecord | null) => void;
+  lightboxItem: MediaLightboxItem | null;
+  setLightboxItem: (item: MediaLightboxItem | null) => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
@@ -276,6 +297,7 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [motionTemplates, setMotionTemplates] = useState<MotionTemplateItem[]>([]);
   const [cinemaProjects, setCinemaProjects] = useState<CinemaProductionProject[]>([]);
+  const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [activeContinuity, setActiveContinuity] = useState<ActiveContinuityContext>({
     projectId: null,
     characterIds: [],
@@ -284,12 +306,16 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     locationId: null,
     motionTemplateId: null,
   });
+  const [creativeControls, setCreativeControls] = useState<UniversalCreativeControlsState>(
+    DEFAULT_CREATIVE_CONTROLS
+  );
   const [dockDraft, setDockDraft] = useState<DockDraftState>(() =>
     getDefaultDraftForSurface('video')
   );
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationRecord | null>(null);
+  const [lightboxItem, setLightboxItem] = useState<MediaLightboxItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const pendingActionAfterLogin = useRef<(() => void) | null>(null);
 
@@ -349,6 +375,7 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (Array.isArray(contData.locations)) setLocations(contData.locations);
         if (Array.isArray(contData.motionTemplates)) setMotionTemplates(contData.motionTemplates);
         if (Array.isArray(contData.cinemaProjects)) setCinemaProjects(contData.cinemaProjects);
+        if (Array.isArray(contData.voices)) setVoices(contData.voices);
       }
       if (catRes.ok) {
         const catData = await catRes.json();
@@ -770,13 +797,52 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const submitGeneration = useCallback(
     async (
-      overrideDraft?: Partial<DockDraftState> & { skipContinuityMerge?: boolean }
+      overrideDraft?: Partial<DockDraftState> & {
+        skipContinuityMerge?: boolean;
+        creativeControlsOverride?: UniversalCreativeControlsState;
+        skipCreativeControls?: boolean;
+      }
     ) => {
-      const { skipContinuityMerge, ...draftOverrides } = overrideDraft || {};
+      const {
+        skipContinuityMerge,
+        creativeControlsOverride,
+        skipCreativeControls,
+        ...draftOverrides
+      } = overrideDraft || {};
       const activeDraft = { ...dockDraft, ...draftOverrides };
       const composed = skipContinuityMerge
         ? { prompt: activeDraft.prompt.trim(), media: activeDraft.media }
         : composeContinuityPrompt(activeDraft.prompt, undefined, activeDraft.media);
+
+      const activeControls = creativeControlsOverride || creativeControls;
+      const targetModel =
+        models.find((m) => m.id === activeDraft.modelId) ||
+        MODEL_CATALOG.find((m) => m.id === activeDraft.modelId);
+      const effectiveSurface = targetModel?.surface || activeDraft.surface;
+
+      let finalPrompt = composed.prompt;
+      let finalSettings = { ...activeDraft.settings };
+
+      if (!skipCreativeControls) {
+        const translated = translateCreativeControlsForModel(
+          activeControls,
+          targetModel,
+          effectiveSurface
+        );
+        if (
+          translated.promptDirective &&
+          !finalPrompt.includes('[CREATIVE DIRECTION:')
+        ) {
+          finalPrompt = finalPrompt
+            ? `${finalPrompt} [CREATIVE DIRECTION: ${translated.promptDirective}]`
+            : translated.promptDirective;
+        }
+        // Only apply creative aspect ratio/settings if draft override didn't already explicitly lock it
+        finalSettings = {
+          ...translated.nativeSettingsPatch,
+          ...finalSettings,
+        };
+      }
 
       if (!user) {
         setAuthModalOpen(true);
@@ -791,8 +857,8 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelId: activeDraft.modelId,
             apiProvider: activeDraft.apiProvider,
             mode: activeDraft.mode,
-            prompt: composed.prompt,
-            settings: activeDraft.settings,
+            prompt: finalPrompt,
+            settings: finalSettings,
             media: composed.media,
             presetId: activeDraft.presetSlug,
             projectId: routeParams.projectId || activeContinuity.projectId || null,
@@ -835,7 +901,17 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { ok: false, error: 'NETWORK_ERROR' };
       }
     },
-    [dockDraft, composeContinuityPrompt, user, authHeaders, routeParams.projectId, activeContinuity.projectId, showToast]
+    [
+      dockDraft,
+      composeContinuityPrompt,
+      creativeControls,
+      models,
+      user,
+      authHeaders,
+      routeParams.projectId,
+      activeContinuity.projectId,
+      showToast,
+    ]
   );
 
   const pollGenerationUntilDone = useCallback(
@@ -1177,6 +1253,55 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [authHeaders, showToast]
   );
 
+  const saveVoice = useCallback(
+    async (payload: Partial<VoiceProfile> & { name: string }) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch('/api/continuity/voices', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.voice) {
+          showToast(data.error || 'Could not save voice profile');
+          return null;
+        }
+        const saved = data.voice as VoiceProfile;
+        setVoices((prev) => {
+          const exists = prev.some((v) => v.id === saved.id);
+          return exists ? prev.map((v) => (v.id === saved.id ? saved : v)) : [saved, ...prev];
+        });
+        showToast(`Saved voice "${saved.name}" (${saved.voiceCode})`);
+        return saved;
+      } catch {
+        showToast('Network error saving voice profile');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const deleteVoice = useCallback(
+    async (id: string) => {
+      setVoices((prev) => prev.filter((v) => v.id !== id));
+      try {
+        await fetch(`/api/continuity/voices/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ id, _method: 'DELETE' }),
+        });
+      } catch {
+        // Optimistic delete
+      }
+      showToast('Voice removed');
+    },
+    [authHeaders, showToast]
+  );
+
   const saveCinemaProject = useCallback(
     async (payload: Partial<CinemaProductionProject> & { title: string }) => {
       if (!user) {
@@ -1203,6 +1328,34 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return saved;
       } catch {
         showToast('Network error saving production project');
+        return null;
+      }
+    },
+    [user, authHeaders, showToast]
+  );
+
+  const duplicateCinemaProject = useCallback(
+    async (id: string) => {
+      if (!user) {
+        setAuthModalOpen(true);
+        return null;
+      }
+      try {
+        const res = await fetch(`/api/continuity/cinema-projects/${encodeURIComponent(id)}/duplicate`, {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.cinemaProject) {
+          showToast(data.error || 'Could not duplicate production');
+          return null;
+        }
+        const saved = data.cinemaProject as CinemaProductionProject;
+        setCinemaProjects((prev) => [saved, ...prev]);
+        showToast(`Duplicated "${saved.title}"`);
+        return saved;
+      } catch {
+        showToast('Network error duplicating production');
         return null;
       }
     },
@@ -1359,6 +1512,50 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Optimistic update already applied
       }
       showToast('Project renamed');
+    },
+    [authHeaders, showToast]
+  );
+
+  const duplicateProject = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/projects/${id}/duplicate`, {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.project) {
+          setProjects((prev) => [data.project, ...prev]);
+          showToast(`Duplicated "${data.project.name}"`);
+          return data.project as ProjectRecord;
+        }
+        return null;
+      } catch {
+        showToast('Could not duplicate project');
+        return null;
+      }
+    },
+    [authHeaders, showToast]
+  );
+
+  const toggleFavoriteProject = useCallback(
+    async (id: string, isFavorite: boolean) => {
+      setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, isFavorite } : p)));
+      try {
+        const res = await fetch(`/api/projects/${id}`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ isFavorite, _method: 'PATCH' }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProjects((prev) => prev.map((p) => (p.id === id ? data.project : p)));
+        }
+      } catch {
+        // Optimistic toggle applied
+      }
+      showToast(isFavorite ? 'Added to Favorites' : 'Removed from Favorites');
     },
     [authHeaders, showToast]
   );
@@ -1790,8 +1987,11 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         locations,
         motionTemplates,
         cinemaProjects,
+        voices,
         activeContinuity,
         setActiveContinuity,
+        creativeControls,
+        setCreativeControls,
         saveCharacter,
         deleteCharacter,
         saveWardrobe,
@@ -1802,7 +2002,10 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteLocation,
         saveMotionTemplate,
         deleteMotionTemplate,
+        saveVoice,
+        deleteVoice,
         saveCinemaProject,
+        duplicateCinemaProject,
         deleteCinemaProject,
         composeContinuityPrompt,
         dockDraft,
@@ -1818,6 +2021,8 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteGeneration,
         createProject,
         renameProject,
+        duplicateProject,
+        toggleFavoriteProject,
         deleteProject,
         uploadReferenceFile,
         loginWithPassword,
@@ -1839,6 +2044,8 @@ export const StudioProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setUpgradeModalOpen,
         selectedGeneration,
         setSelectedGeneration,
+        lightboxItem,
+        setLightboxItem,
         toastMessage,
         showToast,
       },

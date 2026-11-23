@@ -65,18 +65,28 @@ export const BorderBeam: React.FC<BorderBeamProps> = ({
 }) => {
   return (
     <div
+      aria-hidden="true"
       className={cn(
-        'pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden',
+        'pointer-events-none absolute inset-0 z-0 rounded-[inherit]',
         className
       )}
+      style={{
+        padding: '1px',
+        WebkitMask:
+          'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        WebkitMaskComposite: 'xor',
+        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        maskComposite: 'exclude',
+      }}
     >
-      <div
-        className="absolute -inset-[150%] animate-border-beam opacity-35"
-        style={{
-          background: `conic-gradient(from 0deg, transparent 0 310deg, ${colorFrom} 340deg, ${colorTo} 360deg)`,
-        }}
-      />
-      <div className="absolute inset-[1px] rounded-[inherit] bg-[#14161C]" />
+      <div className="relative w-full h-full overflow-hidden rounded-[inherit]">
+        <div
+          className="absolute -inset-[150%] animate-border-beam opacity-45"
+          style={{
+            background: `conic-gradient(from 0deg, transparent 0 300deg, ${colorFrom} 335deg, ${colorTo} 360deg)`,
+          }}
+        />
+      </div>
     </div>
   );
 };

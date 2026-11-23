@@ -27,6 +27,7 @@ import {
   SupportTicket,
   UploadRecord,
   UserProfile,
+  VoiceProfile,
   WardrobeItem,
 } from '../types/studio';
 import { INITIAL_PRESETS } from '../catalog/presets';
@@ -278,6 +279,7 @@ class StudioDatabase {
   locations = new Map<string, LocationItem>();
   motionTemplates = new Map<string, MotionTemplateItem>();
   cinemaProjects = new Map<string, CinemaProductionProject>();
+  voices = new Map<string, VoiceProfile>();
   ledger: CreditLedgerEntry[] = [];
   ledgerUniqueKeys = new Set<string>();
   stripeEvents = new Set<string>();
@@ -625,6 +627,13 @@ class StudioDatabase {
           }
         }
       }
+      if (Array.isArray(parsed.voices)) {
+        for (const v of parsed.voices as VoiceProfile[]) {
+          if (v && v.id) {
+            this.voices.set(v.id, v);
+          }
+        }
+      }
       if (Array.isArray(parsed.notifications)) {
         this.notifications = parsed.notifications.filter(
           (n: PlatformNotification) => n && !LEGACY_SEED_NOTIF_IDS.has(n.id)
@@ -864,6 +873,7 @@ class StudioDatabase {
         locations: Array.from(this.locations.values()),
         motionTemplates: Array.from(this.motionTemplates.values()),
         cinemaProjects: Array.from(this.cinemaProjects.values()),
+        voices: Array.from(this.voices.values()),
         notifications: this.notifications,
         supportTickets: this.supportTickets,
         teamMembers: this.teamMembers,
@@ -948,6 +958,7 @@ class StudioDatabase {
           locations: Array.from(this.locations.values()),
           motionTemplates: Array.from(this.motionTemplates.values()),
           cinemaProjects: Array.from(this.cinemaProjects.values()),
+          voices: Array.from(this.voices.values()),
           notifications: this.notifications,
           supportTickets: this.supportTickets,
           teamMembers: this.teamMembers,
@@ -1126,6 +1137,13 @@ class StudioDatabase {
         for (const cp of snap.cinemaProjects as CinemaProductionProject[]) {
           if (cp?.id) {
             this.cinemaProjects.set(cp.id, cp);
+          }
+        }
+      }
+      if (Array.isArray(snap.voices)) {
+        for (const v of snap.voices as VoiceProfile[]) {
+          if (v?.id) {
+            this.voices.set(v.id, v);
           }
         }
       }

@@ -260,7 +260,7 @@ export const CINEMA_TOOLS: Record<CinemaToolId, CinemaToolSpec> = {
     defaultMode: 'Create',
     compatibleModelIds: IMAGE_MODEL_IDS,
     promptPlaceholder:
-      'Describe your cinematic still or keyframe — use @ to add characters, locations & props...',
+      'Describe your scene - use @ to add characters & locations',
     directivePrefix: 'Cinema Studio 4.0 Still Photography',
     supportsCameraOptics: true,
     supportsLightingAndColor: true,
@@ -281,7 +281,7 @@ export const CINEMA_TOOLS: Record<CinemaToolId, CinemaToolSpec> = {
     defaultMode: 'Create Video',
     compatibleModelIds: VIDEO_MODEL_IDS,
     promptPlaceholder:
-      'Describe your scene — use @ to add characters & locations, or # for camera movements...',
+      'Describe your scene - use @ to add characters & locations',
     directivePrefix: 'Cinema Studio 4.0 Direction',
     supportsCameraOptics: true,
     supportsLightingAndColor: true,

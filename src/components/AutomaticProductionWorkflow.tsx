@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Camera,
   Check,
   CheckCircle2,
@@ -14,6 +16,7 @@ import {
   Layers,
   Loader2,
   MapPin,
+  Maximize2,
   Mic,
   Music,
   Package,
@@ -35,6 +38,7 @@ import {
   CinemaProductionType,
   MediaSlotInput,
   SupportedCharacterLanguage,
+  UniversalCreativeControlsState,
 } from '../types/studio';
 import {
   getCompatibleModelsForTool,
@@ -59,6 +63,17 @@ import {
   getCameraMovementVisual,
   getLensOpticVisual,
 } from '../catalog/cinemaGearVisuals';
+import { UniversalCreativeControlsBar } from './UniversalCreativeControlsBar';
+import {
+  buildCharacterTurnaroundPrompt,
+  CHARACTER_TURNAROUND_ASPECT_RATIO,
+} from '../lib/characterTurnaround';
+import { translateCreativeControlsForModel } from '../lib/creativeControlsTranslator';
+import {
+  MultiTrackTimelineEditor,
+  TimelineClipItem,
+  TimelineTrackConfig,
+} from './MultiTrackTimelineEditor';
 
 export type AutoProdStageId = 1 | 2 | 3 | 4;
 
@@ -83,7 +98,27 @@ export interface AutoProdScene {
   charactersInScene: string[];
   propsInScene: string[];
   wardrobesInScene: string[];
+  sfxCues?: string[];
+  ambienceCues?: string[];
+  musicCues?: string[];
   productionNotes: string;
+}
+
+export interface AutoProdCharacterBio {
+  name: string;
+  role?: string;
+  ethnicity?: string;
+  skinTone?: string;
+  gender?: string;
+  ageRange?: string;
+  facialStructure?: string;
+  bodyType?: string;
+  hairstyle?: string;
+  clothing?: string;
+  personality?: string;
+  voiceDescription?: string;
+  language?: SupportedCharacterLanguage;
+  accentDialect?: string;
 }
 
 export interface AutoProdAsset {
@@ -97,9 +132,16 @@ export interface AutoProdAsset {
   modelId: string;
   outputUrl: string;
   outputKind: 'image' | 'audio';
-  status: 'idle' | 'generating' | 'ready' | 'approved';
+  status: 'idle' | 'generating' | 'ready' | 'approved' | 'error';
   language?: SupportedCharacterLanguage;
   voicePersona?: string;
+  audioKind?: 'dialogue' | 'narration' | 'sfx' | 'ambience' | 'music';
+  accentDialect?: string;
+  emotion?: string;
+  speakingStyle?: string;
+  characterBio?: AutoProdCharacterBio;
+  reusedElementId?: string;
+  error?: string;
 }
 
 export interface AutoProdStoryboardShot {
@@ -120,27 +162,34 @@ export interface AutoProdStoryboardShot {
   cameraMovement: string;
   lens: string;
   lighting: string;
+  timeOfDay?: string;
+  wardrobeName?: string;
   characterNames: string[];
   characterPositioning: string;
   actionDescription: string;
+  editInstruction?: string;
   emotion: string;
   dialogueOrNarration: string;
   speaker: string;
   locationName: string;
   imageModelId: string;
   frameImageUrl: string;
-  frameStatus: 'idle' | 'generating' | 'ready' | 'approved';
+  frameStatus: 'idle' | 'generating' | 'ready' | 'approved' | 'error';
+  frameError?: string;
   videoModelId: string;
   videoClipUrl: string;
   videoDurationSec: number;
-  videoStatus: 'idle' | 'generating' | 'ready';
+  aspectRatio?: '16:9' | '21:9' | '9:16' | '1:1' | '4:3' | '3:4';
+  videoStatus: 'idle' | 'generating' | 'ready' | 'error';
+  videoError?: string;
+  creativeControlsOverride?: UniversalCreativeControlsState;
 }
 
 export interface AutoProdProjectState {
   title: string;
   ideaDescription: string;
   productionFormat: CinemaProductionType;
-  aspectRatio: '16:9' | '21:9' | '9:16' | '1:1';
+  aspectRatio: '16:9' | '21:9' | '9:16' | '1:1' | '4:3' | '3:4';
   creativeInstructions: string;
   referenceNotes: string;
   referenceUrls: Array<{ id: string; label: string; url: string; kind: 'image' | 'video' | 'doc' }>;
@@ -154,6 +203,8 @@ export interface AutoProdProjectState {
   soundtrackUrl: string;
   soundtrackPrompt: string;
   soundtrackModelId: string;
+  timelineTracks?: TimelineTrackConfig[];
+  timelineClips?: TimelineClipItem[];
   updatedAt: string;
 }
 
@@ -183,6 +234,41 @@ const CAMERA_MOVEMENT_OPTIONS = [
   'Orbit 360',
   'Snorricam',
 ];
+
+function extractCharacterBiosFromMarkdown(markdown: string): Map<string, AutoProdCharacterBio> {
+  const bios = new Map<string, AutoProdCharacterBio>();
+  const lines = markdown.split(/\r?\n/);
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('>')) continue;
+    const match = trimmed.match(/^>\s*CHARACTER:\s*@?([A-Za-z0-9_ -]+)\s*\|(.*)$/i);
+    if (!match) continue;
+    const name = match[1].trim().toUpperCase();
+    const fields = match[2].split('|').map((s) => s.trim());
+    const bio: AutoProdCharacterBio = { name };
+    for (const f of fields) {
+      const idx = f.indexOf(':');
+      if (idx === -1) continue;
+      const key = f.slice(0, idx).trim().toLowerCase();
+      const val = f.slice(idx + 1).trim();
+      if (key.includes('role')) bio.role = val;
+      else if (key.includes('ethnicity') || key.includes('culture')) bio.ethnicity = val;
+      else if (key.includes('skin')) bio.skinTone = val;
+      else if (key.includes('gender')) bio.gender = val;
+      else if (key.includes('age')) bio.ageRange = val;
+      else if (key.includes('facial')) bio.facialStructure = val;
+      else if (key.includes('body')) bio.bodyType = val;
+      else if (key.includes('hair')) bio.hairstyle = val;
+      else if (key.includes('cloth') || key.includes('costume') || key.includes('wardrobe')) bio.clothing = val;
+      else if (key.includes('person') || key.includes('mood')) bio.personality = val;
+      else if (key.includes('voice')) bio.voiceDescription = val;
+      else if (key.includes('lang')) bio.language = val as SupportedCharacterLanguage;
+      else if (key.includes('accent') || key.includes('dialect')) bio.accentDialect = val;
+    }
+    bios.set(name, bio);
+  }
+  return bios;
+}
 
 function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
   const lines = markdown.split(/\r?\n/);
@@ -242,6 +328,9 @@ function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
         charactersInScene: [],
         propsInScene: [],
         wardrobesInScene: [],
+        sfxCues: [],
+        ambienceCues: [],
+        musicCues: [],
         productionNotes: '',
       };
       pendingSpeaker = '';
@@ -282,7 +371,8 @@ function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
         sceneId: current.sceneId,
         speaker: pendingSpeaker,
         parenthetical: pendingParenthetical || 'natural delivery',
-        line: trimmed,
+        // Copy exact verbatim dialogue from screenplay — never alter or truncate
+        line: rawLine.trim(),
         kind: pendingSpeaker === 'NARRATOR' || pendingSpeaker === 'V.O.' ? 'narration' : 'dialogue',
       });
       pendingSpeaker = '';
@@ -290,7 +380,7 @@ function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
       continue;
     }
 
-    // Action line: extract inline @CHARACTER, [PROP: ...], [WARDROBE: ...]
+    // Action line: extract inline @CHARACTER, [PROP: ...], [WARDROBE: ...], [SFX: ...], [AMBIENCE: ...], [MUSIC: ...]
     const charMatches = trimmed.matchAll(/@([A-Za-z0-9_]+)/g);
     for (const m of charMatches) {
       const cname = m[1].toUpperCase();
@@ -315,6 +405,30 @@ function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
       }
     }
 
+    const sfxMatches = trimmed.matchAll(/\[SFX:\s*([^\]]+)\]/gi);
+    for (const m of sfxMatches) {
+      const cue = m[1].trim();
+      if (cue && current.sfxCues && !current.sfxCues.includes(cue)) {
+        current.sfxCues.push(cue);
+      }
+    }
+
+    const ambMatches = trimmed.matchAll(/\[AMBIENCE:\s*([^\]]+)\]/gi);
+    for (const m of ambMatches) {
+      const cue = m[1].trim();
+      if (cue && current.ambienceCues && !current.ambienceCues.includes(cue)) {
+        current.ambienceCues.push(cue);
+      }
+    }
+
+    const musMatches = trimmed.matchAll(/\[MUSIC:\s*([^\]]+)\]/gi);
+    for (const m of musMatches) {
+      const cue = m[1].trim();
+      if (cue && current.musicCues && !current.musicCues.includes(cue)) {
+        current.musicCues.push(cue);
+      }
+    }
+
     current.actions = current.actions ? `${current.actions} ${trimmed}` : trimmed;
   }
 
@@ -324,15 +438,23 @@ function parseMarkdownToStructuredScenes(markdown: string): AutoProdScene[] {
 
 function buildAssetsFromScenes(
   scenes: AutoProdScene[],
-  existingAssets: AutoProdAsset[]
+  existingAssets: AutoProdAsset[],
+  markdown = '',
+  reusableLibrary?: {
+    characters?: Array<{ id: string; name: string; faceReferenceUrl?: string; roleTitle?: string; primaryLanguage?: SupportedCharacterLanguage; speechAccent?: string; distinctiveFeatures?: string }>;
+    locations?: Array<{ id: string; name: string; primaryImageUrl?: string; description?: string }>;
+    wardrobes?: Array<{ id: string; name: string; referenceImageUrl?: string; garments?: string }>;
+    props?: Array<{ id: string; name: string; referenceImageUrl?: string; description?: string }>;
+  }
 ): AutoProdAsset[] {
   const result: AutoProdAsset[] = [];
+  const bios = extractCharacterBiosFromMarkdown(markdown);
   const findExisting = (category: AutoProdAsset['category'], name: string) =>
     existingAssets.find(
       (a) => a.category === category && a.name.toLowerCase() === name.toLowerCase()
     );
 
-  // 1. Characters
+  // 1. Characters (Always 1:1 4-Panel Turnaround Sheets + full trait profiles + My Elements reuse check)
   const charMap = new Map<string, string[]>();
   for (const sc of scenes) {
     for (const ch of sc.charactersInScene) {
@@ -343,21 +465,50 @@ function buildAssetsFromScenes(
   }
   for (const [charName, sceneRefs] of charMap.entries()) {
     const existing = findExisting('Character', charName);
+    const bio = bios.get(charName.toUpperCase());
+    const savedChar = reusableLibrary?.characters?.find(
+      (c) => c.name.toLowerCase() === charName.toLowerCase()
+    );
+    const appearanceLine = bio
+      ? [
+          bio.role ? `Role: ${bio.role}` : '',
+          bio.ethnicity || '',
+          bio.skinTone ? `${bio.skinTone} skin tone` : '',
+          bio.gender || '',
+          bio.ageRange ? `age ${bio.ageRange}` : '',
+          bio.facialStructure || '',
+          bio.bodyType || '',
+          bio.hairstyle ? `${bio.hairstyle} hair` : '',
+          bio.personality ? `${bio.personality}` : '',
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : savedChar?.distinctiveFeatures ||
+        `Lead character @${charName} with locked facial identity and expressive cinema performance.`;
+
     result.push(
       existing
-        ? { ...existing, sceneRefs }
+        ? { ...existing, sceneRefs, characterBio: existing.characterBio || bio }
         : {
             id: `ast_chr_${charName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
             category: 'Character',
             name: charName,
             sceneRefs,
-            description: `Lead character @${charName} with locked facial identity, consistent bone structure, and expressive cinema performance.`,
-            generationPrompt: `Cinematic character identity reference portrait of ${charName}, neutral 50mm studio lighting, photorealistic skin texture, expressive eyes, consistent facial identity plate, 8k cinema still`,
+            description: appearanceLine,
+            generationPrompt: buildCharacterTurnaroundPrompt({
+              name: charName,
+              role: bio?.role || savedChar?.roleTitle || 'Lead Character',
+              appearance: appearanceLine,
+              wardrobe: bio?.clothing,
+            }),
             modelId: 'soul-2-standard',
-            outputUrl: '',
+            outputUrl: savedChar?.faceReferenceUrl || '',
             outputKind: 'image',
-            status: 'idle',
-            language: 'English',
+            status: savedChar?.faceReferenceUrl ? 'approved' : 'idle',
+            language: bio?.language || savedChar?.primaryLanguage || 'English',
+            accentDialect: bio?.accentDialect || savedChar?.speechAccent || 'Neutral',
+            characterBio: bio,
+            reusedElementId: savedChar?.faceReferenceUrl ? savedChar.id : undefined,
           }
     );
   }
@@ -375,6 +526,9 @@ function buildAssetsFromScenes(
   }
   for (const [locName, { scene, refs }] of locMap.entries()) {
     const existing = findExisting('Location', locName);
+    const savedLoc = reusableLibrary?.locations?.find(
+      (l) => l.name.toLowerCase() === locName.toLowerCase()
+    );
     result.push(
       existing
         ? { ...existing, sceneRefs: refs }
@@ -383,12 +537,13 @@ function buildAssetsFromScenes(
             category: 'Location',
             name: locName,
             sceneRefs: refs,
-            description: `${scene.settingType} ${locName} (${scene.timeOfDay}) filming environment plate.`,
+            description: savedLoc?.description || `${scene.settingType} ${locName} (${scene.timeOfDay}) filming environment plate.`,
             generationPrompt: `Wide 24mm anamorphic establishing location plate of ${scene.settingType} ${locName} at ${scene.timeOfDay}, cinematic volumetric lighting, production design master reference, no people`,
             modelId: 'soul-cinema',
-            outputUrl: '',
+            outputUrl: savedLoc?.primaryImageUrl || '',
             outputKind: 'image',
-            status: 'idle',
+            status: savedLoc?.primaryImageUrl ? 'approved' : 'idle',
+            reusedElementId: savedLoc?.primaryImageUrl ? savedLoc.id : undefined,
           }
     );
   }
@@ -404,13 +559,16 @@ function buildAssetsFromScenes(
   }
   if (wardMap.size === 0 && charMap.size > 0) {
     const firstChar = Array.from(charMap.keys())[0];
-    wardMap.set(`${firstChar} Hero Wardrobe`, {
+    wardMap.set(bios.get(firstChar)?.clothing || `${firstChar} Hero Wardrobe`, {
       refs: scenes.map((s) => s.heading),
       charHint: firstChar,
     });
   }
   for (const [wName, { refs, charHint }] of wardMap.entries()) {
     const existing = findExisting('Wardrobe', wName);
+    const savedWard = reusableLibrary?.wardrobes?.find(
+      (w) => w.name.toLowerCase() === wName.toLowerCase()
+    );
     result.push(
       existing
         ? { ...existing, sceneRefs: refs }
@@ -420,12 +578,13 @@ function buildAssetsFromScenes(
             name: wName,
             sceneRefs: refs,
             characterRef: charHint,
-            description: `Continuity costume and wardrobe reference for ${charHint || 'cast'}: ${wName}.`,
+            description: `Continuity costume and wardrobe reference for ${charHint || 'cast'}: ${savedWard?.garments || wName}.`,
             generationPrompt: `Cinema costume lookbook reference plate of ${wName}, high-detail fabric texture, tailored silhouette, studio rim lighting`,
             modelId: 'soul-2-standard',
-            outputUrl: '',
+            outputUrl: savedWard?.referenceImageUrl || '',
             outputKind: 'image',
-            status: 'idle',
+            status: savedWard?.referenceImageUrl ? 'approved' : 'idle',
+            reusedElementId: savedWard?.referenceImageUrl ? savedWard.id : undefined,
           }
     );
   }
@@ -441,6 +600,9 @@ function buildAssetsFromScenes(
   }
   for (const [pName, refs] of propMap.entries()) {
     const existing = findExisting('Prop', pName);
+    const savedProp = reusableLibrary?.props?.find(
+      (p) => p.name.toLowerCase() === pName.toLowerCase()
+    );
     result.push(
       existing
         ? { ...existing, sceneRefs: refs }
@@ -449,20 +611,22 @@ function buildAssetsFromScenes(
             category: 'Prop',
             name: pName,
             sceneRefs: refs,
-            description: `Hero production prop with locked finish and scale: ${pName}.`,
+            description: savedProp?.description || `Hero production prop with locked finish and scale: ${pName}.`,
             generationPrompt: `Macro hero prop continuity photograph of ${pName}, brushed metal and tactile material detail, dramatic rim lighting on dark soundstage`,
             modelId: 'nano-banana-2-1',
-            outputUrl: '',
+            outputUrl: savedProp?.referenceImageUrl || '',
             outputKind: 'image',
-            status: 'idle',
+            status: savedProp?.referenceImageUrl ? 'approved' : 'idle',
+            reusedElementId: savedProp?.referenceImageUrl ? savedProp.id : undefined,
           }
     );
   }
 
-  // 5. Voice & Dialogue Audio Assets (routed strictly to Voice/TTS Audio Models!)
+  // 5. Verbatim Spoken Dialogue & Narration + Scene SFX / Ambience / Music Cues
   for (const sc of scenes) {
     for (const dlg of sc.dialogueLines) {
-      const voiceAssetName = `${dlg.speaker} — "${dlg.line.slice(0, 34)}${dlg.line.length > 34 ? '...' : ''}"`;
+      const bio = bios.get(dlg.speaker.toUpperCase());
+      const voiceAssetName = `${dlg.speaker} — ${dlg.kind === 'narration' ? 'Narration' : 'Dialogue'}: "${dlg.line.slice(0, 32)}${dlg.line.length > 32 ? '...' : ''}"`;
       const existing = existingAssets.find((a) => a.id === `ast_voc_${dlg.id}`);
       result.push(
         existing || {
@@ -471,17 +635,63 @@ function buildAssetsFromScenes(
           name: voiceAssetName,
           sceneRefs: [sc.heading],
           characterRef: dlg.speaker,
-          description: `Spoken ${dlg.kind} by @${dlg.speaker} (${dlg.parenthetical}) in ${sc.heading}.`,
+          description: `Verbatim ${dlg.kind} by @${dlg.speaker} (${dlg.parenthetical}) in ${sc.heading}.`,
           generationPrompt: dlg.line,
           modelId: 'inworld-tts-studio',
           outputUrl: '',
           outputKind: 'audio',
           status: 'idle',
-          language: 'English',
+          audioKind: dlg.kind,
+          language: (bio?.language as SupportedCharacterLanguage) || 'English',
+          accentDialect: bio?.accentDialect || 'Neutral',
+          emotion: dlg.parenthetical,
+          speakingStyle: bio?.voiceDescription || 'Natural cinema dialogue delivery',
           voicePersona: 'noir_narrator',
         }
       );
     }
+
+    sc.sfxCues?.forEach((sfx, idx) => {
+      const id = `ast_sfx_${sc.sceneId}_${idx + 1}`;
+      const existing = existingAssets.find((a) => a.id === id);
+      result.push(
+        existing || {
+          id,
+          category: 'Voice',
+          name: `SFX (${sc.sceneNumber}): ${sfx.slice(0, 34)}`,
+          sceneRefs: [sc.heading],
+          characterRef: 'SFX FOLEY',
+          description: `Scene ${sc.sceneNumber} sound effect cue in ${sc.locationName}.`,
+          generationPrompt: `Clean isolated film sound effect (no dialogue): ${sfx}. Recorded foley cinema master.`,
+          modelId: 'sonilo-sfx-v1',
+          outputUrl: '',
+          outputKind: 'audio',
+          status: 'idle',
+          audioKind: 'sfx',
+        }
+      );
+    });
+
+    sc.ambienceCues?.forEach((amb, idx) => {
+      const id = `ast_amb_${sc.sceneId}_${idx + 1}`;
+      const existing = existingAssets.find((a) => a.id === id);
+      result.push(
+        existing || {
+          id,
+          category: 'Voice',
+          name: `Ambience (${sc.sceneNumber}): ${amb.slice(0, 30)}`,
+          sceneRefs: [sc.heading],
+          characterRef: 'AMBIENCE',
+          description: `Scene ${sc.sceneNumber} atmospheric room tone / environment bed.`,
+          generationPrompt: `Cinematic atmospheric environment bed (no speech): ${amb}.`,
+          modelId: 'sonilo-sfx-v1',
+          outputUrl: '',
+          outputKind: 'audio',
+          status: 'idle',
+          audioKind: 'ambience',
+        }
+      );
+    });
   }
 
   return result;
@@ -659,7 +869,13 @@ export const AutomaticProductionWorkflow: React.FC<{
 }) => {
   const {
     models,
+    characters,
+    locations,
+    wardrobes,
+    propsList,
+    voices,
     submitGeneration,
+    pollGenerationUntilDone,
     uploadReferenceFile,
     saveCharacter,
     saveLocation,
@@ -667,6 +883,8 @@ export const AutomaticProductionWorkflow: React.FC<{
     saveProp,
     saveCinemaProject,
     calculateTokenCost,
+    creativeControls,
+    setLightboxItem,
     showToast,
   } = useRuns();
 
@@ -684,7 +902,12 @@ export const AutomaticProductionWorkflow: React.FC<{
       // ignore storage read error
     }
     const initialScenes = parseMarkdownToStructuredScenes(DEFAULT_SCREENPLAY);
-    const initialAssets = buildAssetsFromScenes(initialScenes, []);
+    const initialAssets = buildAssetsFromScenes(initialScenes, [], DEFAULT_SCREENPLAY, {
+      characters,
+      locations,
+      wardrobes,
+      props: propsList,
+    });
     const initialShots = buildStoryboardShotsFromScenes(initialScenes, []);
     return {
       title: projectTitle || 'ECHOES OF LAGOS',
@@ -814,7 +1037,12 @@ export const AutomaticProductionWorkflow: React.FC<{
       const data = await res.json();
       if (data?.markdown) {
         const nextScenes = parseMarkdownToStructuredScenes(data.markdown);
-        const nextAssets = buildAssetsFromScenes(nextScenes, prodState.assets);
+        const nextAssets = buildAssetsFromScenes(nextScenes, prodState.assets, data.markdown, {
+          characters,
+          locations,
+          wardrobes,
+          props: propsList,
+        });
         const nextShots = buildStoryboardShotsFromScenes(nextScenes, prodState.shots);
         setProdState((prev) => ({
           ...prev,
@@ -838,7 +1066,12 @@ export const AutomaticProductionWorkflow: React.FC<{
 
   const handleScreenplayMarkdownEdit = (newMarkdown: string) => {
     const nextScenes = parseMarkdownToStructuredScenes(newMarkdown);
-    const nextAssets = buildAssetsFromScenes(nextScenes, prodState.assets);
+    const nextAssets = buildAssetsFromScenes(nextScenes, prodState.assets, newMarkdown, {
+      characters,
+      locations,
+      wardrobes,
+      props: propsList,
+    });
     const nextShots = buildStoryboardShotsFromScenes(nextScenes, prodState.shots);
     setProdState((prev) => ({
       ...prev,
@@ -852,8 +1085,66 @@ export const AutomaticProductionWorkflow: React.FC<{
 
   const handleApproveStage1AndContinue = async () => {
     const nextScenes = parseMarkdownToStructuredScenes(prodState.screenplayMarkdown);
-    const nextAssets = buildAssetsFromScenes(nextScenes, prodState.assets);
+    let nextAssets = buildAssetsFromScenes(
+      nextScenes,
+      prodState.assets,
+      prodState.screenplayMarkdown,
+      { characters, locations, wardrobes, props: propsList }
+    );
     const nextShots = buildStoryboardShotsFromScenes(nextScenes, prodState.shots);
+
+    // Optional AI structured enrichment pass (strictly preserves verbatim dialogue)
+    try {
+      const analyzeRes = await fetch('/api/cinema/auto-production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: 'analyze',
+          screenplayMarkdown: prodState.screenplayMarkdown,
+        }),
+      });
+      const analyzeJson = await analyzeRes.json();
+      const analysis = analyzeJson?.analysis;
+      if (analysis?.characters && Array.isArray(analysis.characters)) {
+        nextAssets = nextAssets.map((ast) => {
+          if (ast.category !== 'Character') return ast;
+          const matched = analysis.characters.find(
+            (c: AutoProdCharacterBio) =>
+              c.name && c.name.toLowerCase().includes(ast.name.toLowerCase())
+          );
+          if (!matched) return ast;
+          const desc = [
+            matched.role ? `Role: ${matched.role}` : '',
+            matched.ethnicity || '',
+            matched.skinTone ? `${matched.skinTone} skin` : '',
+            matched.gender || '',
+            matched.ageRange ? `age ${matched.ageRange}` : '',
+            matched.facialStructure || '',
+            matched.bodyType || '',
+            matched.hairstyle ? `${matched.hairstyle} hair` : '',
+            matched.personality || '',
+          ]
+            .filter(Boolean)
+            .join(', ');
+          return {
+            ...ast,
+            description: desc || ast.description,
+            characterBio: { ...ast.characterBio, ...matched },
+            language: (matched.language as SupportedCharacterLanguage) || ast.language,
+            accentDialect: matched.accentDialect || ast.accentDialect,
+            generationPrompt: buildCharacterTurnaroundPrompt({
+              name: ast.name,
+              role: matched.role || ast.characterBio?.role,
+              appearance: desc || ast.description,
+              wardrobe: matched.clothing || ast.characterBio?.clothing,
+            }),
+          };
+        });
+      }
+    } catch {
+      // Fallback cleanly to deterministic extraction
+    }
+
     setProdState((prev) => ({
       ...prev,
       screenplayApproved: true,
@@ -865,7 +1156,7 @@ export const AutomaticProductionWorkflow: React.FC<{
     await saveCinemaProject({
       title: prodState.title,
       productionType: prodState.productionFormat,
-      aspectRatio: prodState.aspectRatio,
+      aspectRatio: prodState.aspectRatio === '4:3' || prodState.aspectRatio === '3:4' ? '16:9' : prodState.aspectRatio,
       logline: prodState.ideaDescription,
       screenplayRaw: prodState.screenplayMarkdown,
     });
@@ -876,18 +1167,69 @@ export const AutomaticProductionWorkflow: React.FC<{
   // =========================================================================
   // STAGE 2 HANDLERS — PRODUCTION ASSETS (IMAGE & VOICE/AUDIO ROUTING)
   // =========================================================================
+  const handleUploadStage2AssetFile = async (
+    asset: AutoProdAsset,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setProdState((prev) => ({
+      ...prev,
+      assets: prev.assets.map((a) =>
+        a.id === asset.id ? { ...a, status: 'generating', error: undefined } : a
+      ),
+    }));
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+      const uploaded = await uploadReferenceFile({
+        label: `${asset.category}: ${asset.name}`,
+        contentType: file.type || (asset.outputKind === 'audio' ? 'audio/mpeg' : 'image/png'),
+        bytes: file.size,
+        dataUrl,
+      });
+      const finalUrl = uploaded?.publicUrl || dataUrl;
+      setProdState((prev) => ({
+        ...prev,
+        assets: prev.assets.map((a) =>
+          a.id === asset.id
+            ? { ...a, outputUrl: finalUrl, status: 'approved', error: undefined }
+            : a
+        ),
+        updatedAt: new Date().toISOString(),
+      }));
+      showToast(`Imported file for ${asset.name}`);
+    } catch (err) {
+      setProdState((prev) => ({
+        ...prev,
+        assets: prev.assets.map((a) =>
+          a.id === asset.id
+            ? { ...a, status: 'error', error: (err as Error).message || 'Upload failed' }
+            : a
+        ),
+      }));
+    }
+  };
+
   const handleGenerateSingleAsset = async (asset: AutoProdAsset) => {
     setProdState((prev) => ({
       ...prev,
       assets: prev.assets.map((a) =>
-        a.id === asset.id ? { ...a, status: 'generating' } : a
+        a.id === asset.id ? { ...a, status: 'generating', error: undefined } : a
       ),
     }));
 
-    // Strict model-capability routing: Voice assets MUST route to audio/TTS models; visual assets MUST route to image models!
     const isVoice = asset.category === 'Voice' || asset.outputKind === 'audio';
+    const isSfxOrAmb = asset.audioKind === 'sfx' || asset.audioKind === 'ambience' || asset.audioKind === 'music';
     const toolId = isVoice
-      ? 'speech_dialogue'
+      ? isSfxOrAmb
+        ? 'music_sfx'
+        : 'speech_dialogue'
       : asset.category === 'Character'
       ? 'character_identity'
       : asset.category === 'Location'
@@ -903,28 +1245,90 @@ export const AutomaticProductionWorkflow: React.FC<{
       isVoice ? 'audio' : 'image'
     );
 
-    const settingsPayload: Record<string, string | number | boolean> = isVoice
-      ? {
-          voice_persona: asset.voicePersona || 'noir_narrator',
-          speaking_rate: 1.0,
-          duration: '10',
+    try {
+      let promptToSend = asset.generationPrompt;
+      let settingsPayload: Record<string, string | number | boolean> = {};
+
+      if (isVoice) {
+        if (isSfxOrAmb) {
+          promptToSend = asset.generationPrompt;
+          settingsPayload = { duration: '10', instrumental_only: true };
+        } else {
+          // Strict verbatim spoken text preservation + voice traits metadata
+          const langPrefix = [
+            asset.language && asset.language !== 'English' ? `Language: ${asset.language}` : '',
+            asset.accentDialect && asset.accentDialect !== 'Neutral'
+              ? `Accent/Dialect: ${asset.accentDialect}`
+              : '',
+            asset.emotion ? `Emotion: ${asset.emotion}` : '',
+            asset.speakingStyle ? `Style: ${asset.speakingStyle}` : '',
+          ]
+            .filter(Boolean)
+            .join(', ');
+          promptToSend = langPrefix
+            ? `[${langPrefix}] "${asset.generationPrompt}"`
+            : asset.generationPrompt;
+          settingsPayload = {
+            voice_persona: asset.voicePersona || 'noir_narrator',
+            speaking_rate: 1.0,
+            duration: '12',
+          };
         }
-      : {
-          aspect_ratio: asset.category === 'Character' || asset.category === 'Wardrobe' ? '1:1' : prodState.aspectRatio === '21:9' ? '16:9' : prodState.aspectRatio,
-          resolution: '2K',
-        };
+      } else {
+        const translated = translateCreativeControlsForModel(
+          creativeControls,
+          compatibleModel,
+          'image'
+        );
+        if (asset.category === 'Character') {
+          promptToSend = buildCharacterTurnaroundPrompt({
+            name: asset.name,
+            role: asset.characterBio?.role || 'Character',
+            appearance: `${asset.description}. ${asset.generationPrompt}`,
+            wardrobe: asset.characterBio?.clothing,
+            styleNotes: translated.promptDirective,
+          });
+          settingsPayload = {
+            ...translated.nativeSettingsPatch,
+            aspect_ratio: CHARACTER_TURNAROUND_ASPECT_RATIO,
+            resolution: '2K',
+          };
+        } else {
+          promptToSend = translated.promptDirective
+            ? `${asset.generationPrompt}. [CINEMATOGRAPHY: ${translated.promptDirective}]`
+            : asset.generationPrompt;
+          settingsPayload = {
+            ...translated.nativeSettingsPatch,
+            aspect_ratio: asset.category === 'Wardrobe' ? '1:1' : prodState.aspectRatio,
+            resolution: '2K',
+          };
+        }
+      }
 
-    const res = await submitGeneration({
-      surface: isVoice ? 'audio' : 'image',
-      modelId: compatibleModel.id,
-      mode: compatibleModel.modes[0] || (isVoice ? 'Voice & SFX' : 'Create'),
-      prompt: asset.generationPrompt,
-      settings: settingsPayload,
-      media: [],
-    });
+      const res = await submitGeneration({
+        surface: isVoice ? 'audio' : 'image',
+        modelId: compatibleModel.id,
+        mode: compatibleModel.modes[0] || (isVoice ? 'Voice & SFX' : 'Create'),
+        prompt: promptToSend,
+        settings: settingsPayload,
+        media: [],
+        skipContinuityMerge: true,
+      });
 
-    const outUrl = res.generation?.outputs?.[0]?.url || '';
-    if (outUrl) {
+      if (!res.ok || !res.generation) {
+        throw new Error(res.error || 'Failed to submit asset generation');
+      }
+
+      const done =
+        res.generation.status === 'completed'
+          ? res.generation
+          : await pollGenerationUntilDone(res.generation.id);
+
+      const outUrl = done?.outputs?.[0]?.url || '';
+      if (!outUrl) {
+        throw new Error(done?.error || 'Generation completed without media output.');
+      }
+
       setProdState((prev) => ({
         ...prev,
         assets: prev.assets.map((a) =>
@@ -934,16 +1338,25 @@ export const AutomaticProductionWorkflow: React.FC<{
                 modelId: compatibleModel.id,
                 outputUrl: outUrl,
                 status: 'approved',
+                error: undefined,
               }
             : a
         ),
         updatedAt: new Date().toISOString(),
       }));
 
-      // Persist visual element into global MySQL Continuity Library so it's reusable everywhere
+      // Persist visual element into global Continuity Library
       if (asset.category === 'Character') {
         await saveCharacter({
           name: asset.name,
+          roleTitle: asset.characterBio?.role,
+          ageRange: asset.characterBio?.ageRange,
+          genderPresentation: asset.characterBio?.gender,
+          skinTone: asset.characterBio?.skinTone,
+          bodyType: asset.characterBio?.bodyType,
+          hairstyle: asset.characterBio?.hairstyle,
+          primaryLanguage: asset.language,
+          speechAccent: asset.accentDialect,
           faceReferenceUrl: outUrl,
           facialIdentityLock: true,
           distinctiveFeatures: asset.description,
@@ -977,11 +1390,12 @@ export const AutomaticProductionWorkflow: React.FC<{
           appearanceLock: true,
         });
       }
-    } else {
+    } catch (err) {
+      const msg = (err as Error).message || 'Generation failed';
       setProdState((prev) => ({
         ...prev,
         assets: prev.assets.map((a) =>
-          a.id === asset.id ? { ...a, status: 'idle' } : a
+          a.id === asset.id ? { ...a, status: 'error', error: msg } : a
         ),
       }));
     }
@@ -994,7 +1408,7 @@ export const AutomaticProductionWorkflow: React.FC<{
       for (const ast of pending) {
         await handleGenerateSingleAsset(ast);
       }
-      showToast('All Stage 2 production assets generated & synced to Continuity Library');
+      showToast('Generated missing Stage 2 production assets');
     } finally {
       setBatchBusy(false);
     }
@@ -1016,7 +1430,6 @@ export const AutomaticProductionWorkflow: React.FC<{
   // =========================================================================
   const collectContinuityMediaForShot = (shot: AutoProdStoryboardShot): MediaSlotInput[] => {
     const media: MediaSlotInput[] = [];
-    // Attach approved Character reference images from Stage 2
     for (const cname of shot.characterNames) {
       const charAsset = prodState.assets.find(
         (a) =>
@@ -1033,7 +1446,6 @@ export const AutomaticProductionWorkflow: React.FC<{
         });
       }
     }
-    // Attach approved Location reference image from Stage 2
     const locAsset = prodState.assets.find(
       (a) =>
         a.category === 'Location' &&
@@ -1055,11 +1467,10 @@ export const AutomaticProductionWorkflow: React.FC<{
     setProdState((prev) => ({
       ...prev,
       shots: prev.shots.map((s) =>
-        s.id === shot.id ? { ...s, frameStatus: 'generating' } : s
+        s.id === shot.id ? { ...s, frameStatus: 'generating', frameError: undefined } : s
       ),
     }));
 
-    // Strict routing to Image model for Storyboard Keyframe generation
     const imageModel = resolveCompatibleModel(
       'storyboard_planning',
       shot.imageModelId,
@@ -1067,44 +1478,137 @@ export const AutomaticProductionWorkflow: React.FC<{
       'image'
     );
 
-    const continuityMedia = collectContinuityMediaForShot(shot);
-    const fullFramePrompt = [
-      `[Storyboard Keyframe · Shot ${shot.shotNumber} · ${shot.cameraFraming} · Lens: ${shot.lens} · Lighting: ${shot.lighting}]`,
-      `Location: ${shot.sceneHeading}.`,
-      `Blocking: ${shot.characterPositioning}.`,
-      `Action: ${shot.actionDescription}`,
-      shot.emotion ? `Expression: ${shot.emotion}.` : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
+    try {
+      const translated = translateCreativeControlsForModel(
+        shot.creativeControlsOverride || creativeControls,
+        imageModel,
+        'image'
+      );
+      const continuityMedia = collectContinuityMediaForShot(shot);
+      const targetAspect = shot.aspectRatio || prodState.aspectRatio;
+      const fullFramePrompt = [
+        `[Storyboard Keyframe · Shot ${shot.shotNumber} · ${shot.cameraFraming} · Lens: ${shot.lens} · Lighting: ${shot.lighting}${shot.timeOfDay ? ` · Time: ${shot.timeOfDay}` : ''}]`,
+        `Location: ${shot.sceneHeading}.`,
+        shot.wardrobeName ? `Wardrobe: ${shot.wardrobeName}.` : '',
+        `Blocking: ${shot.characterPositioning}.`,
+        `Action: ${shot.actionDescription}`,
+        shot.editInstruction ? `Director Revision Notes: ${shot.editInstruction}.` : '',
+        shot.emotion ? `Expression: ${shot.emotion}.` : '',
+        translated.promptDirective ? `[CINEMATOGRAPHY: ${translated.promptDirective}]` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
 
-    const res = await submitGeneration({
-      surface: 'image',
-      modelId: imageModel.id,
-      mode: imageModel.modes[0] || 'Create',
-      prompt: fullFramePrompt,
-      settings: {
-        aspect_ratio: prodState.aspectRatio === '21:9' ? '16:9' : prodState.aspectRatio,
-        resolution: '2K',
-      },
-      media: continuityMedia,
+      const res = await submitGeneration({
+        surface: 'image',
+        modelId: imageModel.id,
+        mode: imageModel.modes[0] || 'Create',
+        prompt: fullFramePrompt,
+        settings: {
+          ...translated.nativeSettingsPatch,
+          aspect_ratio: targetAspect,
+          resolution: '2K',
+        },
+        media: continuityMedia,
+        creativeControlsOverride: shot.creativeControlsOverride,
+      });
+
+      if (!res.ok || !res.generation) {
+        throw new Error(res.error || 'Failed to generate storyboard frame');
+      }
+      const done =
+        res.generation.status === 'completed'
+          ? res.generation
+          : await pollGenerationUntilDone(res.generation.id);
+      const outUrl = done?.outputs?.[0]?.url || '';
+      if (!outUrl) {
+        throw new Error(done?.error || 'Storyboard frame generation returned no image');
+      }
+
+      setProdState((prev) => ({
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shot.id
+            ? {
+                ...s,
+                imageModelId: imageModel.id,
+                frameImageUrl: outUrl,
+                frameStatus: 'ready',
+                frameError: undefined,
+              }
+            : s
+        ),
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      const msg = (err as Error).message || 'Frame generation failed';
+      setProdState((prev) => ({
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shot.id ? { ...s, frameStatus: 'error', frameError: msg } : s
+        ),
+      }));
+    }
+  };
+
+  const handleUploadStoryboardFrame = async (
+    shot: AutoProdStoryboardShot,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.readAsDataURL(file);
     });
-
-    const outUrl = res.generation?.outputs?.[0]?.url || '';
+    const uploaded = await uploadReferenceFile({
+      label: `Shot ${shot.shotNumber} Custom Frame`,
+      contentType: file.type || 'image/png',
+      bytes: file.size,
+      dataUrl,
+    });
+    const finalUrl = uploaded?.publicUrl || dataUrl;
     setProdState((prev) => ({
       ...prev,
       shots: prev.shots.map((s) =>
         s.id === shot.id
-          ? {
-              ...s,
-              imageModelId: imageModel.id,
-              frameImageUrl: outUrl || s.frameImageUrl,
-              frameStatus: outUrl ? 'approved' : 'idle',
-            }
+          ? { ...s, frameImageUrl: finalUrl, frameStatus: 'approved', frameError: undefined }
           : s
       ),
       updatedAt: new Date().toISOString(),
     }));
+    showToast(`Uploaded replacement frame for Shot ${shot.shotNumber}`);
+  };
+
+  const handleMoveStoryboardShot = (shotId: string, delta: -1 | 1) => {
+    setProdState((prev) => {
+      const idx = prev.shots.findIndex((s) => s.id === shotId);
+      const nextIdx = idx + delta;
+      if (idx === -1 || nextIdx < 0 || nextIdx >= prev.shots.length) return prev;
+      const copy = [...prev.shots];
+      const [moved] = copy.splice(idx, 1);
+      copy.splice(nextIdx, 0, moved);
+      return {
+        ...prev,
+        shots: copy.map((s, i) => ({ ...s, shotNumber: String(i + 1).padStart(2, '0') })),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const handleDeleteStoryboardShot = (shotId: string) => {
+    setProdState((prev) => {
+      if (prev.shots.length <= 1) return prev;
+      return {
+        ...prev,
+        shots: prev.shots
+          .filter((s) => s.id !== shotId)
+          .map((s, i) => ({ ...s, shotNumber: String(i + 1).padStart(2, '0') })),
+        updatedAt: new Date().toISOString(),
+      };
+    });
   };
 
   const handleGenerateAllStoryboardFrames = async () => {
@@ -1114,7 +1618,7 @@ export const AutomaticProductionWorkflow: React.FC<{
       for (const shot of pending) {
         await handleGenerateStoryboardFrame(shot);
       }
-      showToast('Generated all storyboard keyframes with Stage 2 continuity locks');
+      showToast('Generated storyboard keyframes with Stage 2 continuity locks');
     } finally {
       setBatchBusy(false);
     }
@@ -1131,8 +1635,10 @@ export const AutomaticProductionWorkflow: React.FC<{
       lens: '85mm Portrait',
       frameImageUrl: '',
       frameStatus: 'idle',
+      frameError: undefined,
       videoClipUrl: '',
       videoStatus: 'idle',
+      videoError: undefined,
     };
 
     setProdState((prev) => {
@@ -1151,21 +1657,20 @@ export const AutomaticProductionWorkflow: React.FC<{
       updatedAt: new Date().toISOString(),
     }));
     setActiveStage(4);
-    showToast('Stage 3 Storyboard approved — ready for Stage 4 Video Animation & Sequencing');
+    showToast('Stage 3 Storyboard approved — ready for Stage 4 Video Animation & Multitrack Cut');
   };
 
   // =========================================================================
-  // STAGE 4 HANDLERS — ANIMATION & VIDEO GENERATION + SEQUENCER
+  // STAGE 4 HANDLERS — ANIMATION & VIDEO GENERATION + FULL MULTITRACK EDITOR
   // =========================================================================
   const handleAnimateShotToVideo = async (shot: AutoProdStoryboardShot) => {
     setProdState((prev) => ({
       ...prev,
       shots: prev.shots.map((s) =>
-        s.id === shot.id ? { ...s, videoStatus: 'generating' } : s
+        s.id === shot.id ? { ...s, videoStatus: 'generating', videoError: undefined } : s
       ),
     }));
 
-    // Strict routing to Video model for Shot Animation
     const videoModel = resolveCompatibleModel(
       'video_creation',
       shot.videoModelId,
@@ -1173,69 +1678,103 @@ export const AutomaticProductionWorkflow: React.FC<{
       'video'
     );
 
-    const mediaInputs: MediaSlotInput[] = [];
-    if (shot.frameImageUrl) {
-      mediaInputs.push({
-        role: 'start',
-        kind: 'image',
-        url: shot.frameImageUrl,
-        label: `Storyboard Keyframe ${shot.shotNumber}`,
+    try {
+      const translated = translateCreativeControlsForModel(
+        shot.creativeControlsOverride || creativeControls,
+        videoModel,
+        'video'
+      );
+      const mediaInputs: MediaSlotInput[] = [];
+      if (shot.frameImageUrl) {
+        mediaInputs.push({
+          role: 'start',
+          kind: 'image',
+          url: shot.frameImageUrl,
+          label: `Storyboard Keyframe ${shot.shotNumber}`,
+        });
+      }
+      for (const ref of collectContinuityMediaForShot(shot)) {
+        mediaInputs.push(ref);
+      }
+
+      const animPrompt = [
+        `[Cinema Animation · Shot ${shot.shotNumber} · ${shot.cameraFraming} · Camera Move: ${shot.cameraMovement} · Lens: ${shot.lens} · Lighting: ${shot.lighting}${shot.timeOfDay ? ` · ${shot.timeOfDay}` : ''}]`,
+        shot.actionDescription,
+        shot.dialogueOrNarration
+          ? `@${shot.speaker} speaks with expressive lip sync: "${shot.dialogueOrNarration}"`
+          : '',
+        translated.promptDirective ? `[CINEMATOGRAPHY: ${translated.promptDirective}]` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const res = await submitGeneration({
+        surface: 'video',
+        modelId: videoModel.id,
+        mode: videoModel.modes[0] || 'Create Video',
+        prompt: animPrompt,
+        settings: {
+          ...translated.nativeSettingsPatch,
+          aspect_ratio: shot.aspectRatio || prodState.aspectRatio,
+          duration: shot.videoDurationSec || 5,
+          resolution: '1080p',
+          sound: true,
+        },
+        media: mediaInputs,
+        creativeControlsOverride: shot.creativeControlsOverride,
       });
+
+      if (!res.ok || !res.generation) {
+        throw new Error(res.error || 'Failed to submit video animation');
+      }
+
+      const done =
+        res.generation.status === 'completed'
+          ? res.generation
+          : await pollGenerationUntilDone(res.generation.id);
+      const outUrl = done?.outputs?.[0]?.url || '';
+      if (!outUrl) {
+        throw new Error(done?.error || 'Shot animation completed without video output.');
+      }
+
+      setProdState((prev) => ({
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shot.id
+            ? {
+                ...s,
+                videoModelId: videoModel.id,
+                videoClipUrl: outUrl,
+                videoStatus: 'ready',
+                videoError: undefined,
+              }
+            : s
+        ),
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      const msg = (err as Error).message || 'Shot animation failed';
+      setProdState((prev) => ({
+        ...prev,
+        shots: prev.shots.map((s) =>
+          s.id === shot.id ? { ...s, videoStatus: 'error', videoError: msg } : s
+        ),
+      }));
     }
-    for (const ref of collectContinuityMediaForShot(shot)) {
-      mediaInputs.push(ref);
-    }
-
-    const animPrompt = [
-      `[Cinema Animation · Shot ${shot.shotNumber} · ${shot.cameraFraming} · Camera Move: ${shot.cameraMovement} · Lens: ${shot.lens} · Lighting: ${shot.lighting}]`,
-      shot.actionDescription,
-      shot.dialogueOrNarration
-        ? `@${shot.speaker} speaks with expressive lip sync: "${shot.dialogueOrNarration}"`
-        : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    const res = await submitGeneration({
-      surface: 'video',
-      modelId: videoModel.id,
-      mode: videoModel.modes[0] || 'Create Video',
-      prompt: animPrompt,
-      settings: {
-        aspect_ratio: prodState.aspectRatio === '21:9' ? '16:9' : prodState.aspectRatio,
-        duration: shot.videoDurationSec || 5,
-        resolution: '1080p',
-        sound: true,
-      },
-      media: mediaInputs,
-    });
-
-    const outUrl = res.generation?.outputs?.[0]?.url || '';
-    setProdState((prev) => ({
-      ...prev,
-      shots: prev.shots.map((s) =>
-        s.id === shot.id
-          ? {
-              ...s,
-              videoModelId: videoModel.id,
-              videoClipUrl: outUrl || s.videoClipUrl,
-              videoStatus: outUrl ? 'ready' : 'idle',
-            }
-          : s
-      ),
-      updatedAt: new Date().toISOString(),
-    }));
   };
 
-  const handleAnimateAllStage4Shots = async () => {
+  const handleAnimateAllStage4Shots = async (approvedOnly = false) => {
     setBatchBusy(true);
     try {
-      for (const shot of prodState.shots) {
-        if (!shot.videoClipUrl) {
-          await handleAnimateShotToVideo(shot);
-        }
+      const targets = prodState.shots.filter((shot) => {
+        if (shot.videoClipUrl) return false;
+        if (approvedOnly) return shot.frameStatus === 'approved' || Boolean(shot.frameImageUrl);
+        return true;
+      });
+      for (const shot of targets) {
+        await handleAnimateShotToVideo(shot);
       }
-      showToast('All storyboard shots animated into video clips');
+      showToast('Finished Stage 4 shot animations');
     } finally {
       setBatchBusy(false);
     }
@@ -1256,15 +1795,98 @@ export const AutomaticProductionWorkflow: React.FC<{
       settings: { duration: '30', instrumental_only: true },
       media: [],
     });
-    const outUrl = res.generation?.outputs?.[0]?.url || '';
-    if (outUrl) {
-      setProdState((prev) => ({
-        ...prev,
-        soundtrackUrl: outUrl,
-        updatedAt: new Date().toISOString(),
-      }));
-      showToast(`Generated master score via ${musicModel.label}`);
+    if (res.ok && res.generation) {
+      const done =
+        res.generation.status === 'completed'
+          ? res.generation
+          : await pollGenerationUntilDone(res.generation.id);
+      const outUrl = done?.outputs?.[0]?.url || '';
+      if (outUrl) {
+        setProdState((prev) => ({
+          ...prev,
+          soundtrackUrl: outUrl,
+          updatedAt: new Date().toISOString(),
+        }));
+        showToast(`Generated master score via ${musicModel.label}`);
+      }
     }
+  };
+
+  const defaultMultitrackTracks = useMemo<TimelineTrackConfig[]>(
+    () =>
+      prodState.timelineTracks && prodState.timelineTracks.length > 0
+        ? prodState.timelineTracks
+        : [
+            { id: 'v2', label: 'V2 · Overlays & B-Roll', kind: 'overlay', volume: 0.8 },
+            { id: 'v1', label: 'V1 · Primary Video Cuts', kind: 'video', volume: 1 },
+            { id: 't1', label: 'T1 · Titles & Captions', kind: 'text' },
+            { id: 'a1', label: 'A1 · Dialogue', kind: 'audio', audioRole: 'dialogue', volume: 1 },
+            { id: 'a2', label: 'A2 · Narration', kind: 'audio', audioRole: 'narration', volume: 1 },
+            { id: 'a3', label: 'A3 · Music Score', kind: 'audio', audioRole: 'music', volume: 0.6 },
+            { id: 'a4', label: 'A4 · SFX & Ambience', kind: 'audio', audioRole: 'sfx', volume: 0.75 },
+          ],
+    [prodState.timelineTracks]
+  );
+
+  const computedMultitrackClips = useMemo<TimelineClipItem[]>(() => {
+    if (prodState.timelineClips && prodState.timelineClips.length > 0) {
+      return prodState.timelineClips;
+    }
+    const items: TimelineClipItem[] = [];
+    let cursor = 0;
+    prodState.shots.forEach((s) => {
+      const dur = s.videoDurationSec || 5;
+      items.push({
+        id: `tl_vid_${s.id}`,
+        trackId: 'v1',
+        title: `Shot ${s.shotNumber} · ${s.cameraFraming}`,
+        mediaUrl: s.videoClipUrl || s.frameImageUrl || '',
+        mediaKind: s.videoClipUrl ? 'video' : 'image',
+        startSec: cursor,
+        durationSec: dur,
+        aspectRatio: s.aspectRatio || prodState.aspectRatio,
+        sourceShotId: s.id,
+      });
+      if (s.dialogueOrNarration) {
+        const matchingVoice = prodState.assets.find(
+          (a) =>
+            a.category === 'Voice' &&
+            a.generationPrompt.trim() === s.dialogueOrNarration.trim()
+        );
+        items.push({
+          id: `tl_dlg_${s.id}`,
+          trackId: matchingVoice?.audioKind === 'narration' ? 'a2' : 'a1',
+          title: `@${s.speaker}: ${s.dialogueOrNarration.slice(0, 24)}...`,
+          mediaUrl: matchingVoice?.outputUrl || '',
+          mediaKind: 'audio',
+          startSec: Number((cursor + 0.3).toFixed(1)),
+          durationSec: Math.max(2, dur - 0.5),
+        });
+      }
+      cursor += dur;
+    });
+    if (prodState.soundtrackUrl) {
+      items.push({
+        id: 'tl_score_master',
+        trackId: 'a3',
+        title: 'Master Film Score',
+        mediaUrl: prodState.soundtrackUrl,
+        mediaKind: 'audio',
+        startSec: 0,
+        durationSec: Math.max(10, cursor),
+        volume: 0.6,
+      });
+    }
+    return items;
+  }, [prodState.timelineClips, prodState.shots, prodState.assets, prodState.soundtrackUrl, prodState.aspectRatio]);
+
+  const handleRebuildTimelineFromStage4 = () => {
+    setProdState((prev) => ({
+      ...prev,
+      timelineClips: undefined,
+      updatedAt: new Date().toISOString(),
+    }));
+    showToast('Synced latest Stage 4 videos & Stage 2 audio stems onto timeline');
   };
 
   const filteredAssets = useMemo(
@@ -1488,6 +2110,8 @@ export const AutomaticProductionWorkflow: React.FC<{
                     <option value="21:9">21:9 Anamorphic Scope</option>
                     <option value="9:16">9:16 Vertical</option>
                     <option value="1:1">1:1 Square</option>
+                    <option value="4:3">4:3 Classic Academy</option>
+                    <option value="3:4">3:4 Editorial Portrait</option>
                   </select>
                 </div>
               </div>
@@ -1784,6 +2408,12 @@ export const AutomaticProductionWorkflow: React.FC<{
             </div>
           </div>
 
+          <UniversalCreativeControlsBar
+            surface="image"
+            compact
+            contextLabel="STAGE 2 · ASSET LOOK & OPTICS"
+          />
+
           {/* Category Filter Tabs */}
           <div className="flex flex-wrap items-center gap-1.5">
             {(
@@ -1840,8 +2470,14 @@ export const AutomaticProductionWorkflow: React.FC<{
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredAssets.map((asset) => {
               const isVoice = asset.category === 'Voice' || asset.outputKind === 'audio';
+              const isSfxOrAmb =
+                asset.audioKind === 'sfx' ||
+                asset.audioKind === 'ambience' ||
+                asset.audioKind === 'music';
               const compatibleList = isVoice
-                ? voiceAudioModels
+                ? isSfxOrAmb
+                  ? musicAudioModels
+                  : voiceAudioModels
                 : asset.category === 'Character' || asset.category === 'Wardrobe'
                 ? characterImageModels
                 : asset.category === 'Location'
@@ -1861,16 +2497,30 @@ export const AutomaticProductionWorkflow: React.FC<{
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="px-2 py-0.5 rounded bg-[#46ecd5]/15 text-[#46ecd5] font-mono text-[10px] font-bold uppercase">
-                        {asset.category} · {isVoice ? 'AUDIO TTS MODEL' : 'IMAGE MODEL'}
+                        {isVoice
+                          ? `${(asset.audioKind || 'dialogue').toUpperCase()} · AUDIO`
+                          : asset.category === 'Character'
+                          ? 'CHARACTER · 1:1 4-PANEL SHEET'
+                          : `${asset.category} · IMAGE`}
                       </span>
                       <span
                         className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                          asset.outputUrl
+                          asset.reusedElementId
+                            ? 'bg-sky-500/20 text-sky-300'
+                            : asset.status === 'error'
+                            ? 'bg-rose-500/20 text-rose-300'
+                            : asset.outputUrl
                             ? 'bg-emerald-500/20 text-emerald-300'
                             : 'bg-zinc-800 text-zinc-400'
                         }`}
                       >
-                        {asset.outputUrl ? 'Approved' : 'Ready to Generate'}
+                        {asset.reusedElementId
+                          ? 'Reused My Element ✓'
+                          : asset.status === 'error'
+                          ? 'Error'
+                          : asset.outputUrl
+                          ? 'Approved ✓'
+                          : 'Pending'}
                       </span>
                     </div>
 
@@ -1879,16 +2529,27 @@ export const AutomaticProductionWorkflow: React.FC<{
                       <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
                         Scenes: {asset.sceneRefs.join(' · ')}
                       </div>
+                      {asset.category === 'Character' && (
+                        <p className="text-[11px] text-zinc-300 mt-1 line-clamp-2">
+                          {asset.description}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Preview Box (Image or Audio Player) */}
-                    <div className="rounded-xl overflow-hidden bg-[#0E1015] border border-white/10 aspect-video flex items-center justify-center relative">
+                    {/* Preview Box (True Aspect Image + Lightbox OR Audio Player) */}
+                    <div className="rounded-xl overflow-hidden bg-black border border-white/10 min-h-[160px] flex items-center justify-center relative group">
                       {asset.outputUrl ? (
                         isVoice ? (
-                          <div className="w-full p-4 space-y-2 text-center">
+                          <div className="w-full p-4 space-y-2 text-center bg-[#0E1015]">
                             <div className="flex items-center justify-center gap-2 text-[#46ecd5] text-xs font-bold">
                               <Volume2 className="w-4 h-4" />
-                              <span>Voice Audio Ready (@{asset.characterRef})</span>
+                              <span>
+                                {asset.audioKind === 'sfx'
+                                  ? 'SFX Ready'
+                                  : asset.audioKind === 'ambience'
+                                  ? 'Ambience Ready'
+                                  : `Voice Audio Ready (@${asset.characterRef})`}
+                              </span>
                             </div>
                             <audio
                               src={asset.outputUrl}
@@ -1897,11 +2558,28 @@ export const AutomaticProductionWorkflow: React.FC<{
                             />
                           </div>
                         ) : (
-                          <img
-                            src={asset.outputUrl}
-                            alt={asset.name}
-                            className="w-full h-full object-cover"
-                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLightboxItem({
+                                kind: 'image',
+                                url: asset.outputUrl,
+                                title: asset.name,
+                                subtitle: `${asset.category}${asset.category === 'Character' ? ' · 1:1 4-Panel Turnaround' : ''}`,
+                                aspectRatio: asset.category === 'Character' ? '1:1' : prodState.aspectRatio,
+                              })
+                            }
+                            className="relative w-full h-full flex items-center justify-center"
+                          >
+                            <img
+                              src={asset.outputUrl}
+                              alt={asset.name}
+                              className="w-full max-h-[240px] object-contain"
+                            />
+                            <span className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15">
+                              <Maximize2 className="w-3 h-3" />
+                            </span>
+                          </button>
                         )
                       ) : (
                         <div className="text-center p-4 space-y-1 text-zinc-500">
@@ -1912,17 +2590,99 @@ export const AutomaticProductionWorkflow: React.FC<{
                           )}
                           <div className="text-[11px]">
                             {isVoice
-                              ? 'Synthesize character dialogue via Voice TTS model'
+                              ? 'Synthesize audio stem'
+                              : asset.category === 'Character'
+                              ? 'Generate 1:1 4-Panel Turnaround Sheet or upload photo'
                               : `Generate ${asset.category.toLowerCase()} continuity plate`}
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Prompt / Dialogue Line Editor */}
+                    {/* Reusable My Elements Picker + Voice Options */}
+                    {isVoice && !isSfxOrAmb && (
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <select
+                          value={asset.language || 'English'}
+                          onChange={(e) => {
+                            const val = e.target.value as SupportedCharacterLanguage;
+                            setProdState((prev) => ({
+                              ...prev,
+                              assets: prev.assets.map((a) =>
+                                a.id === asset.id ? { ...a, language: val } : a
+                              ),
+                            }));
+                          }}
+                          className="px-2 py-1 rounded-lg bg-[#101218] border border-white/10 text-zinc-200"
+                        >
+                          {(['English', 'Nigerian Pidgin', 'Yoruba', 'Igbo', 'Hausa', 'French', 'Spanish', 'Arabic', 'Swahili', 'Japanese'] as SupportedCharacterLanguage[]).map((l) => (
+                            <option key={l} value={l}>{l}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={asset.accentDialect || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProdState((prev) => ({
+                              ...prev,
+                              assets: prev.assets.map((a) =>
+                                a.id === asset.id ? { ...a, accentDialect: val } : a
+                              ),
+                            }));
+                          }}
+                          placeholder="Accent / Dialect"
+                          className="px-2 py-1 rounded-lg bg-[#101218] border border-white/10 text-zinc-200"
+                        />
+                        {voices.length > 0 && (
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const picked = voices.find((v) => v.id === e.target.value);
+                              if (picked) {
+                                setProdState((prev) => ({
+                                  ...prev,
+                                  assets: prev.assets.map((a) =>
+                                    a.id === asset.id
+                                      ? {
+                                          ...a,
+                                          outputUrl: picked.sampleAudioUrl,
+                                          language: (
+                                            typeof picked.language === 'string' && picked.language
+                                              ? picked.language
+                                              : a.language || 'English'
+                                          ) as SupportedCharacterLanguage,
+                                          accentDialect:
+                                            [picked.accent, picked.dialect]
+                                              .filter(Boolean)
+                                              .join(' · ') || a.accentDialect,
+                                          reusedElementId: picked.id,
+                                          status: 'approved',
+                                        }
+                                      : a
+                                  ),
+                                }));
+                              }
+                            }}
+                            className="col-span-2 px-2 py-1 rounded-lg bg-[#101218] border border-white/10 text-[#46ecd5]"
+                          >
+                            <option value="">Attach Saved My Elements Voice ({voices.length})...</option>
+                            {voices.map((v) => (
+                              <option key={v.id} value={v.id}>{v.name} ({v.language})</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Prompt / Verbatim Dialogue Editor */}
                     <div>
                       <label className="block text-[10px] font-mono uppercase text-zinc-400 mb-1">
-                        {isVoice ? 'Spoken Dialogue / Narration Text' : 'Visual Generation Prompt'}
+                        {isVoice
+                          ? isSfxOrAmb
+                            ? 'SFX / Ambience Prompt'
+                            : 'Exact Verbatim Dialogue / Narration'
+                          : 'Visual Generation Prompt'}
                       </label>
                       <textarea
                         rows={2}
@@ -1939,11 +2699,24 @@ export const AutomaticProductionWorkflow: React.FC<{
                         className="w-full px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-xs text-zinc-200"
                       />
                     </div>
+
+                    {asset.error && (
+                      <div className="px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between gap-2">
+                        <span className="truncate">{asset.error}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateSingleAsset(asset)}
+                          className="text-white underline shrink-0 font-bold"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Compatible Model Selector & Generate Button */}
+                  {/* Compatible Model Selector, Device Import & Generate Button */}
                   <div className="pt-2 border-t border-white/10 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-1.5">
                       <select
                         value={asset.modelId}
                         onChange={(e) => {
@@ -1955,7 +2728,7 @@ export const AutomaticProductionWorkflow: React.FC<{
                             ),
                           }));
                         }}
-                        className="flex-1 px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-[11px] text-zinc-200"
+                        className="flex-1 min-w-0 px-2 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-[11px] text-zinc-200"
                       >
                         {compatibleList.map((m) => (
                           <option key={m.id} value={m.id}>
@@ -1963,6 +2736,20 @@ export const AutomaticProductionWorkflow: React.FC<{
                           </option>
                         ))}
                       </select>
+
+                      <label
+                        title="Import file from device"
+                        className="px-2.5 py-1.5 rounded-xl bg-[#101218] hover:bg-[#191D26] border border-white/10 text-[11px] text-zinc-300 cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <Upload className="w-3 h-3 text-[#46ecd5]" />
+                        <span className="hidden sm:inline">Upload</span>
+                        <input
+                          type="file"
+                          accept={isVoice ? 'audio/*' : 'image/*'}
+                          onChange={(e) => handleUploadStage2AssetFile(asset, e)}
+                          className="hidden"
+                        />
+                      </label>
 
                       <button
                         type="button"
@@ -1976,7 +2763,7 @@ export const AutomaticProductionWorkflow: React.FC<{
                           <RefreshCw className="w-3 h-3" />
                         )}
                         <span>
-                          {asset.outputUrl ? 'Regenerate' : 'Generate'} · {cost}TK
+                          {asset.outputUrl ? 'Regen' : 'Generate'} · {cost}TK
                         </span>
                       </button>
                     </div>
@@ -2059,6 +2846,13 @@ export const AutomaticProductionWorkflow: React.FC<{
             </div>
           </div>
 
+          <UniversalCreativeControlsBar
+            surface="image"
+            activeModel={models.find((m) => m.id === prodState.shots[0]?.imageModelId)}
+            compact
+            contextLabel="STAGE 3 · GLOBAL STORYBOARD CINEMATOGRAPHY"
+          />
+
           {/* Storyboard Organised by Scenes */}
           <div className="space-y-6">
             {prodState.scenes.map((sc) => {
@@ -2088,34 +2882,107 @@ export const AutomaticProductionWorkflow: React.FC<{
                         resolution: '2K',
                       });
                       const continuityRefs = collectContinuityMediaForShot(shot);
+                      const isApproved = shot.frameStatus === 'approved';
 
                       return (
                         <div
                           key={shot.id}
-                          className="rounded-2xl bg-[#11131A] border border-white/10 p-3.5 flex flex-col justify-between gap-3"
+                          className={`rounded-2xl bg-[#11131A] border p-3.5 flex flex-col justify-between gap-3 ${
+                            isApproved ? 'border-emerald-500/40' : 'border-white/10'
+                          }`}
                         >
                           <div className="space-y-2.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="px-2 py-0.5 rounded bg-[#46ecd5] text-zinc-950 font-mono text-[10px] font-extrabold">
-                                SHOT {shot.shotNumber}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleAddAlternativeAngleShot(shot)}
-                                className="text-[10px] font-semibold text-[#46ecd5] hover:underline"
-                              >
-                                + Alt Angle Coverage
-                              </button>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded bg-[#46ecd5] text-zinc-950 font-mono text-[10px] font-extrabold">
+                                  SHOT {shot.shotNumber}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setProdState((prev) => ({
+                                      ...prev,
+                                      shots: prev.shots.map((s) =>
+                                        s.id === shot.id
+                                          ? {
+                                              ...s,
+                                              frameStatus:
+                                                s.frameStatus === 'approved' ? 'ready' : 'approved',
+                                            }
+                                          : s
+                                      ),
+                                    }))
+                                  }
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                    isApproved
+                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                                      : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  {isApproved ? 'Approved ✓' : 'Approve'}
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStoryboardShot(shot.id, -1)}
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300"
+                                  title="Move shot up"
+                                >
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStoryboardShot(shot.id, 1)}
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300"
+                                  title="Move shot down"
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddAlternativeAngleShot(shot)}
+                                  className="px-1.5 py-0.5 rounded bg-[#46ecd5]/15 text-[10px] font-semibold text-[#46ecd5]"
+                                  title="Add another shot / alternate angle"
+                                >
+                                  + Shot
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteStoryboardShot(shot.id)}
+                                  className="p-1 rounded bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300"
+                                  title="Delete shot"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             </div>
 
-                            {/* Storyboard Frame Preview */}
-                            <div className="aspect-video rounded-xl overflow-hidden bg-black border border-white/10 relative flex items-center justify-center">
+                            {/* Storyboard Frame Preview (True Aspect Ratio + Lightbox) */}
+                            <div className="min-h-[160px] rounded-xl overflow-hidden bg-black border border-white/10 relative flex items-center justify-center group">
                               {shot.frameImageUrl ? (
-                                <img
-                                  src={shot.frameImageUrl}
-                                  alt={`Shot ${shot.shotNumber}`}
-                                  className="w-full h-full object-cover"
-                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setLightboxItem({
+                                      kind: 'image',
+                                      url: shot.frameImageUrl,
+                                      title: `Shot ${shot.shotNumber} · ${shot.cameraFraming}`,
+                                      subtitle: `${shot.sceneHeading} · ${shot.aspectRatio || prodState.aspectRatio}`,
+                                      aspectRatio: shot.aspectRatio || prodState.aspectRatio,
+                                    })
+                                  }
+                                  className="relative w-full h-full flex items-center justify-center"
+                                >
+                                  <img
+                                    src={shot.frameImageUrl}
+                                    alt={`Shot ${shot.shotNumber}`}
+                                    className="w-full max-h-[240px] object-contain"
+                                  />
+                                  <span className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15">
+                                    <Maximize2 className="w-3 h-3" />
+                                  </span>
+                                </button>
                               ) : (
                                 <div className="text-center p-3 space-y-1 text-zinc-500">
                                   <Camera className="w-6 h-6 mx-auto text-[#46ecd5]/60" />
@@ -2128,18 +2995,18 @@ export const AutomaticProductionWorkflow: React.FC<{
                                 </div>
                               )}
                               {continuityRefs.length > 0 && (
-                                <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/75 border border-[#46ecd5]/40 text-[9px] font-mono text-[#46ecd5]">
+                                <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/75 border border-[#46ecd5]/40 text-[9px] font-mono text-[#46ecd5] pointer-events-none">
                                   {continuityRefs.length} Continuity Ref(s) Locked
                                 </span>
                               )}
                             </div>
 
-                            {/* Camera Framing & Movement Controls with Real Transparent Gear Graphics */}
+                            {/* Camera Framing, Movement, Lighting & Orientation */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                               <div className="p-2 rounded-lg bg-[#13161E] border border-white/5 space-y-1.5">
                                 <div className="flex items-center justify-between gap-1.5">
                                   <label className="block text-[9px] font-mono uppercase text-zinc-400">
-                                    Camera Angle / Framing
+                                    Camera Framing
                                   </label>
                                   <div className="flex items-center gap-1">
                                     <GearVisual spec={getCameraAngleVisual(shot.cameraFraming)} size="sm" />
@@ -2195,12 +3062,48 @@ export const AutomaticProductionWorkflow: React.FC<{
                                   ))}
                                 </select>
                               </div>
+
+                              <select
+                                value={shot.lighting}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setProdState((prev) => ({
+                                    ...prev,
+                                    shots: prev.shots.map((s) =>
+                                      s.id === shot.id ? { ...s, lighting: val } : s
+                                    ),
+                                  }));
+                                }}
+                                className="px-2 py-1 rounded-lg bg-[#191C25] border border-white/10 text-zinc-200"
+                              >
+                                {['Practicals', 'Window', 'Soft Cross', 'Silhouette', 'Golden Hour', 'Neon Rim', 'Studio Softbox'].map((l) => (
+                                  <option key={l} value={l}>Lighting: {l}</option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={shot.aspectRatio || prodState.aspectRatio}
+                                onChange={(e) => {
+                                  const val = e.target.value as AutoProdStoryboardShot['aspectRatio'];
+                                  setProdState((prev) => ({
+                                    ...prev,
+                                    shots: prev.shots.map((s) =>
+                                      s.id === shot.id ? { ...s, aspectRatio: val } : s
+                                    ),
+                                  }));
+                                }}
+                                className="px-2 py-1 rounded-lg bg-[#191C25] border border-white/10 text-zinc-200 font-mono"
+                              >
+                                {(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const).map((ar) => (
+                                  <option key={ar} value={ar}>Ratio: {ar}</option>
+                                ))}
+                              </select>
                             </div>
 
-                            {/* Shot Description & Blocking Editor */}
+                            {/* Shot Description & Edit Instructions */}
                             <div>
                               <label className="block text-[9px] font-mono uppercase text-zinc-400 mb-0.5">
-                                Action, Positioning & Expression
+                                Action, Blocking & Visual Prompt
                               </label>
                               <textarea
                                 rows={2}
@@ -2218,6 +3121,24 @@ export const AutomaticProductionWorkflow: React.FC<{
                               />
                             </div>
 
+                            <div>
+                              <input
+                                type="text"
+                                value={shot.editInstruction || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setProdState((prev) => ({
+                                    ...prev,
+                                    shots: prev.shots.map((s) =>
+                                      s.id === shot.id ? { ...s, editInstruction: val } : s
+                                    ),
+                                  }));
+                                }}
+                                placeholder="Edit instruction (e.g. warmer lantern glow, wider headroom)..."
+                                className="w-full px-2.5 py-1 rounded-lg bg-[#191C25] border border-white/10 text-[11px] text-zinc-200 placeholder:text-zinc-500"
+                              />
+                            </div>
+
                             {shot.dialogueOrNarration && (
                               <div className="p-2 rounded-lg bg-[#191C25] border-l-2 border-[#46ecd5] text-[11px] text-zinc-300">
                                 <span className="font-mono font-bold text-[#46ecd5]">
@@ -2226,9 +3147,66 @@ export const AutomaticProductionWorkflow: React.FC<{
                                 “{shot.dialogueOrNarration}”
                               </div>
                             )}
+
+                            {shot.frameError && (
+                              <div className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between">
+                                <span className="truncate">{shot.frameError}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateStoryboardFrame(shot)}
+                                  className="text-white underline font-bold ml-2"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Per-Shot Cinematography Override */}
+                            <div className="pt-1 space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-mono uppercase text-zinc-400">
+                                  {shot.creativeControlsOverride ? 'Per-Shot Override Active' : 'Using Project Look'}
+                                </span>
+                                {shot.creativeControlsOverride && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setProdState((prev) => ({
+                                        ...prev,
+                                        shots: prev.shots.map((s) =>
+                                          s.id === shot.id
+                                            ? { ...s, creativeControlsOverride: undefined }
+                                            : s
+                                        ),
+                                      }))
+                                    }
+                                    className="text-zinc-400 hover:text-white underline"
+                                  >
+                                    Use Global
+                                  </button>
+                                )}
+                              </div>
+                              <UniversalCreativeControlsBar
+                                surface="image"
+                                activeModel={models.find((m) => m.id === shot.imageModelId)}
+                                value={shot.creativeControlsOverride || creativeControls}
+                                onChange={(next: UniversalCreativeControlsState) =>
+                                  setProdState((prev) => ({
+                                    ...prev,
+                                    shots: prev.shots.map((s) =>
+                                      s.id === shot.id
+                                        ? { ...s, creativeControlsOverride: next }
+                                        : s
+                                    ),
+                                  }))
+                                }
+                                compact
+                                contextLabel={`SHOT ${shot.shotNumber} LOOK`}
+                              />
+                            </div>
                           </div>
 
-                          <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+                          <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-1.5">
                             <select
                               value={shot.imageModelId}
                               onChange={(e) => {
@@ -2240,7 +3218,7 @@ export const AutomaticProductionWorkflow: React.FC<{
                                   ),
                                 }));
                               }}
-                              className="flex-1 px-2 py-1.5 rounded-lg bg-[#191C25] border border-white/10 text-[11px] text-zinc-300"
+                              className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-[#191C25] border border-white/10 text-[11px] text-zinc-300"
                             >
                               {storyboardImageModels.map((m) => (
                                 <option key={m.id} value={m.id}>
@@ -2248,6 +3226,19 @@ export const AutomaticProductionWorkflow: React.FC<{
                                 </option>
                               ))}
                             </select>
+
+                            <label
+                              title="Upload replacement frame"
+                              className="px-2 py-1.5 rounded-xl bg-[#191C25] hover:bg-[#222631] border border-white/10 text-[11px] text-zinc-300 cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Upload className="w-3 h-3 text-[#46ecd5]" />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleUploadStoryboardFrame(shot, e)}
+                                className="hidden"
+                              />
+                            </label>
 
                             <button
                               type="button"
@@ -2261,7 +3252,7 @@ export const AutomaticProductionWorkflow: React.FC<{
                                 <Camera className="w-3 h-3" />
                               )}
                               <span>
-                                {shot.frameImageUrl ? 'Regen Frame' : 'Render Frame'} · {frameCost}TK
+                                {shot.frameImageUrl ? 'Regen' : 'Render'} · {frameCost}TK
                               </span>
                             </button>
                           </div>
@@ -2318,13 +3309,22 @@ export const AutomaticProductionWorkflow: React.FC<{
                 <button
                   type="button"
                   disabled={batchBusy}
-                  onClick={handleAnimateAllStage4Shots}
+                  onClick={() => handleAnimateAllStage4Shots(true)}
+                  className="px-3.5 py-2 rounded-xl bg-[#1F232D] hover:bg-[#282D3A] border border-[#46ecd5]/40 text-xs font-bold text-[#46ecd5] flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Animate Approved Shots</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={batchBusy}
+                  onClick={() => handleAnimateAllStage4Shots(false)}
                   className="px-4 py-2 rounded-xl bg-[#46ecd5] hover:brightness-110 text-zinc-950 text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {batchBusy ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Animating All Shots...</span>
+                      <span>Animating Shots...</span>
                     </>
                   ) : (
                     <>
@@ -2336,201 +3336,122 @@ export const AutomaticProductionWorkflow: React.FC<{
               </div>
             </div>
 
-            {/* Master Sequence Player + Score & Audio Track Controls */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-              <div className="lg:col-span-7 rounded-2xl bg-black border border-white/10 overflow-hidden">
-                <div className="aspect-video relative flex items-center justify-center bg-[#090B10]">
-                  {activeSequenceShot?.videoClipUrl ? (
-                    <video
-                      key={activeSequenceShot.videoClipUrl}
-                      src={activeSequenceShot.videoClipUrl}
-                      controls
-                      autoPlay={isPlayingSequence}
-                      onEnded={() => {
-                        if (activeSequenceShotIdx < prodState.shots.length - 1) {
-                          setActiveSequenceShotIdx((prev) => prev + 1);
-                        } else {
-                          setIsPlayingSequence(false);
-                        }
-                      }}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : activeSequenceShot?.frameImageUrl ? (
-                    <img
-                      src={activeSequenceShot.frameImageUrl}
-                      alt={`Shot ${activeSequenceShot.shotNumber}`}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-center p-6 space-y-2 text-zinc-400">
-                      <Film className="w-8 h-8 mx-auto text-[#46ecd5]" />
-                      <div className="text-sm font-bold text-white">
-                        Shot {activeSequenceShot?.shotNumber || '01'} ·{' '}
-                        {activeSequenceShot?.cameraFraming}
-                      </div>
-                      <div className="text-xs">
-                        Click “Animate Shot” on any card below to render video footage using your compatible Video Model.
-                      </div>
-                    </div>
-                  )}
+            <UniversalCreativeControlsBar
+              surface="video"
+              activeModel={models.find((m) => m.id === activeSequenceShot?.videoModelId)}
+              compact
+              contextLabel="STAGE 4 · SHOT ANIMATION & COLOR GRADE"
+            />
 
-                  {activeSequenceShot && (
-                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/75 border border-white/15 text-[11px] font-mono text-white">
-                      SHOT {activeSequenceShot.shotNumber} · {activeSequenceShot.cameraFraming} ·{' '}
-                      {activeSequenceShot.cameraMovement}
-                    </div>
-                  )}
+            {/* Full Interactive Multitrack & Multilayer Editing Workspace */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-mono uppercase text-[#46ecd5]">
+                  FULL MULTITRACK & MULTILAYER NLE TIMELINE (V1/V2 + DIALOGUE/NARRATION/MUSIC/SFX + TEXT)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRebuildTimelineFromStage4}
+                  className="px-3 py-1.5 rounded-xl bg-[#1F232D] hover:bg-[#282D3A] border border-white/10 text-xs font-bold text-white flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-[#46ecd5]" />
+                  <span>Sync Latest Shots & Audio</span>
+                </button>
+              </div>
+              <MultiTrackTimelineEditor
+                title={`${prodState.title} — Master Multitrack Edit`}
+                aspectRatio={prodState.aspectRatio}
+                tracks={defaultMultitrackTracks}
+                clips={computedMultitrackClips}
+                onChangeTracks={(nextTracks) =>
+                  setProdState((prev) => ({
+                    ...prev,
+                    timelineTracks: nextTracks,
+                    updatedAt: new Date().toISOString(),
+                  }))
+                }
+                onChangeClips={(nextClips) =>
+                  setProdState((prev) => ({
+                    ...prev,
+                    timelineClips: nextClips,
+                    updatedAt: new Date().toISOString(),
+                  }))
+                }
+                onOpenLightbox={(item) => setLightboxItem(item)}
+              />
+            </div>
+
+            {/* Score & Dialogue Track Quick Generator */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2 border-t border-white/10">
+              <div className="rounded-2xl bg-[#161922] border border-white/10 p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase text-zinc-400">
+                  Stage 2 Audio Stems ({prodState.assets.filter((a) => a.category === 'Voice').length})
                 </div>
-
-                <div className="p-3 bg-[#151821] border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPlayingSequence((v) => !v)}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#46ecd5] text-zinc-950 text-xs font-extrabold flex items-center gap-1.5"
-                    >
-                      {isPlayingSequence ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5" />
-                          <span>Pause Sequence</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Play Full Sequence</span>
-                        </>
-                      )}
-                    </button>
-                    <span className="text-xs font-mono-tabular text-zinc-300">
-                      Shot {activeSequenceShotIdx + 1} of {prodState.shots.length}
-                    </span>
-                  </div>
-
-                  {activeSequenceShot?.videoClipUrl && (
-                    <a
-                      href={activeSequenceShot.videoClipUrl}
-                      download={`spacix-${prodState.title}-shot-${activeSequenceShot.shotNumber}.mp4`}
-                      className="px-3 py-1.5 rounded-xl bg-[#1E222D] hover:bg-[#272C3A] border border-white/10 text-xs font-bold text-white flex items-center gap-1.5"
-                    >
-                      <Download className="w-3.5 h-3.5 text-[#46ecd5]" />
-                      <span>Download Shot MP4</span>
-                    </a>
-                  )}
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {prodState.assets
+                    .filter((a) => a.category === 'Voice')
+                    .map((voc) => (
+                      <div
+                        key={voc.id}
+                        className="p-2 rounded-xl bg-[#101218] border border-white/10 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="truncate text-zinc-200">{voc.name}</span>
+                        {voc.outputUrl ? (
+                          <audio src={voc.outputUrl} controls className="h-7 w-40 shrink-0" />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateSingleAsset(voc)}
+                            className="px-2 py-1 rounded bg-[#46ecd5]/15 text-[#46ecd5] text-[10px] font-bold shrink-0"
+                          >
+                            Synthesize
+                          </button>
+                        )}
+                      </div>
+                    ))}
                 </div>
               </div>
 
-              {/* Right Column: Multi-Track Audio & Timeline Strip */}
-              <div className="lg:col-span-5 rounded-2xl bg-[#161922] border border-white/10 p-4 space-y-4">
-                <div>
-                  <div className="text-xs font-mono uppercase text-[#46ecd5]">
-                    MULTI-TRACK TIMELINE & SOUNDTRACK
-                  </div>
-                  <h4 className="text-sm font-bold text-white mt-0.5">
-                    Video Track + Voice Dialogue + Music Score
-                  </h4>
+              <div className="rounded-2xl bg-[#161922] border border-white/10 p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase text-zinc-400">
+                  Master Score Composer (Audio Music Model)
                 </div>
-
-                {/* Track V1: Video Shot Strip */}
-                <div className="space-y-1.5">
-                  <div className="text-[10px] font-mono uppercase text-zinc-400">
-                    Track V1 · Video Sequence ({prodState.shots.length} Cuts)
-                  </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                    {prodState.shots.map((s, idx) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setActiveSequenceShotIdx(idx)}
-                        className={`px-2.5 py-2 rounded-xl border text-left shrink-0 min-w-[96px] transition-all ${
-                          idx === activeSequenceShotIdx
-                            ? 'bg-[#46ecd5]/20 border-[#46ecd5] text-white'
-                            : s.videoClipUrl
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200'
-                            : 'bg-[#101218] border-white/10 text-zinc-400'
-                        }`}
-                      >
-                        <div className="text-[10px] font-mono font-bold">
-                          SHOT {s.shotNumber}
-                        </div>
-                        <div className="text-[9px] truncate">{s.cameraFraming}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Track A1: Dialogue Voice Assets from Stage 2 */}
-                <div className="space-y-1.5">
-                  <div className="text-[10px] font-mono uppercase text-zinc-400">
-                    Track A1 · Dialogue & Voice Tracks (
-                    {prodState.assets.filter((a) => a.category === 'Voice').length})
-                  </div>
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {prodState.assets
-                      .filter((a) => a.category === 'Voice')
-                      .map((voc) => (
-                        <div
-                          key={voc.id}
-                          className="p-2 rounded-xl bg-[#101218] border border-white/10 flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="truncate text-zinc-200">{voc.name}</span>
-                          {voc.outputUrl ? (
-                            <audio src={voc.outputUrl} controls className="h-7 w-36 shrink-0" />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateSingleAsset(voc)}
-                              className="px-2 py-1 rounded bg-[#46ecd5]/15 text-[#46ecd5] text-[10px] font-bold shrink-0"
-                            >
-                              Synthesize Voice
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-
-                {/* Track A2: Music & Score Generator (routed strictly to Audio Music models) */}
-                <div className="space-y-2 pt-2 border-t border-white/10">
-                  <div className="text-[10px] font-mono uppercase text-zinc-400">
-                    Track A2 · Film Score & Soundscape (Audio Music Model)
-                  </div>
-                  <input
-                    type="text"
-                    value={prodState.soundtrackPrompt}
+                <input
+                  type="text"
+                  value={prodState.soundtrackPrompt}
+                  onChange={(e) =>
+                    setProdState((prev) => ({ ...prev, soundtrackPrompt: e.target.value }))
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-xs text-white"
+                />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={prodState.soundtrackModelId}
                     onChange={(e) =>
-                      setProdState((prev) => ({ ...prev, soundtrackPrompt: e.target.value }))
+                      setProdState((prev) => ({
+                        ...prev,
+                        soundtrackModelId: e.target.value,
+                      }))
                     }
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-xs text-white"
-                  />
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={prodState.soundtrackModelId}
-                      onChange={(e) =>
-                        setProdState((prev) => ({
-                          ...prev,
-                          soundtrackModelId: e.target.value,
-                        }))
-                      }
-                      className="flex-1 px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-[11px] text-zinc-200"
-                    >
-                      {musicAudioModels.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label} (AUDIO)
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleGenerateSoundtrack}
-                      className="px-3 py-1.5 rounded-xl bg-[#46ecd5] text-zinc-950 text-[11px] font-extrabold uppercase shrink-0"
-                    >
-                      Compose Score
-                    </button>
-                  </div>
-                  {prodState.soundtrackUrl && (
-                    <audio src={prodState.soundtrackUrl} controls className="w-full h-8 mt-1" />
-                  )}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl bg-[#101218] border border-white/10 text-[11px] text-zinc-200"
+                  >
+                    {musicAudioModels.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label} (AUDIO)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSoundtrack}
+                    className="px-3 py-1.5 rounded-xl bg-[#46ecd5] text-zinc-950 text-[11px] font-extrabold uppercase shrink-0"
+                  >
+                    Compose Score
+                  </button>
                 </div>
+                {prodState.soundtrackUrl && (
+                  <audio src={prodState.soundtrackUrl} controls className="w-full h-8 mt-1" />
+                )}
               </div>
             </div>
           </div>
@@ -2558,22 +3479,54 @@ export const AutomaticProductionWorkflow: React.FC<{
                       </span>
                     </div>
 
-                    <div className="aspect-video rounded-xl overflow-hidden bg-black border border-white/10 relative flex items-center justify-center">
+                    <div className="min-h-[160px] rounded-xl overflow-hidden bg-black border border-white/10 relative flex items-center justify-center group">
                       {shot.videoClipUrl ? (
-                        <video
-                          src={shot.videoClipUrl}
-                          controls
-                          loop
-                          muted
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
+                        <>
+                          <video
+                            src={shot.videoClipUrl}
+                            controls
+                            loop
+                            muted
+                            playsInline
+                            className="w-full max-h-[240px] object-contain"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLightboxItem({
+                                kind: 'video',
+                                url: shot.videoClipUrl,
+                                title: `Shot ${shot.shotNumber} · ${shot.cameraFraming}`,
+                                aspectRatio: shot.aspectRatio || prodState.aspectRatio,
+                              })
+                            }
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                          </button>
+                        </>
                       ) : shot.frameImageUrl ? (
-                        <img
-                          src={shot.frameImageUrl}
-                          alt={`Shot ${shot.shotNumber}`}
-                          className="w-full h-full object-cover opacity-85"
-                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLightboxItem({
+                              kind: 'image',
+                              url: shot.frameImageUrl,
+                              title: `Shot ${shot.shotNumber} Reference Frame`,
+                              aspectRatio: shot.aspectRatio || prodState.aspectRatio,
+                            })
+                          }
+                          className="relative w-full h-full flex items-center justify-center"
+                        >
+                          <img
+                            src={shot.frameImageUrl}
+                            alt={`Shot ${shot.shotNumber}`}
+                            className="w-full max-h-[240px] object-contain opacity-85"
+                          />
+                          <span className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 group-hover:bg-[#46ecd5] group-hover:text-black text-white border border-white/15">
+                            <Maximize2 className="w-3 h-3" />
+                          </span>
+                        </button>
                       ) : (
                         <div className="text-xs text-zinc-500 p-4 text-center">
                           Ready to animate shot
@@ -2582,6 +3535,18 @@ export const AutomaticProductionWorkflow: React.FC<{
                     </div>
 
                     <p className="text-xs text-zinc-300 line-clamp-2">{shot.actionDescription}</p>
+                    {shot.videoError && (
+                      <div className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between">
+                        <span className="truncate">{shot.videoError}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAnimateShotToVideo(shot)}
+                          className="text-white underline font-bold ml-2"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2 border-t border-white/10 space-y-2">
@@ -2597,7 +3562,7 @@ export const AutomaticProductionWorkflow: React.FC<{
                             ),
                           }));
                         }}
-                        className="flex-1 px-2 py-1.5 rounded-lg bg-[#191C25] border border-white/10 text-[11px] text-zinc-200"
+                        className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-[#191C25] border border-white/10 text-[11px] text-zinc-200"
                       >
                         {animationVideoModels.map((m) => (
                           <option key={m.id} value={m.id}>

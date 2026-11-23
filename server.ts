@@ -10,6 +10,7 @@ import { env } from './src/server/env';
 import { db } from './src/server/store';
 import {
   cancelOnHiggsfieldPlatform,
+  computeRunwareDimensions,
   createSignedUploadUrl,
   getRunwareTaskDetails,
   isRealExternalSecret,
@@ -145,14 +146,15 @@ async function finalizeGenerationRun(generationId: string): Promise<GenerationRe
 
       if (mediaUrl) {
         const ext = gen.surface === 'video' ? 'mp4' : gen.surface === 'audio' ? 'mp3' : 'jpg';
+        const dims = computeRunwareDimensions(gen.surface, gen.settings || {});
         gen.outputs = [
           {
             kind: gen.surface,
             url: mediaUrl,
             r2Key: `u/${gen.userId}/${gen.id}/0.${ext}`,
-            width: 1280,
-            height: 720,
-            durationSec: gen.surface === 'image' ? undefined : 8,
+            width: gen.surface === 'audio' ? undefined : dims.width,
+            height: gen.surface === 'audio' ? undefined : dims.height,
+            durationSec: gen.surface === 'image' ? undefined : Number(gen.settings?.duration || 8),
           },
         ];
         gen.status = 'completed';
@@ -881,14 +883,15 @@ async function startServer() {
       }
       if (providerRes.immediateOutputUrl) {
         const ext = model.surface === 'video' ? 'mp4' : model.surface === 'audio' ? 'wav' : 'jpg';
+        const dims = computeRunwareDimensions(model.surface, validation.sanitizedSettings || {});
         record.outputs = [
           {
             kind: model.surface,
             url: providerRes.immediateOutputUrl,
             r2Key: `u/${user.id}/${generationId}/0.${ext}`,
-            width: 1280,
-            height: 720,
-            durationSec: model.surface === 'image' ? undefined : 8,
+            width: model.surface === 'audio' ? undefined : dims.width,
+            height: model.surface === 'audio' ? undefined : dims.height,
+            durationSec: model.surface === 'image' ? undefined : Number(validation.sanitizedSettings?.duration || 8),
           },
         ];
         record.status = 'completed';
@@ -1587,8 +1590,36 @@ async function startServer() {
     }
     const name = String(req.body?.name || '').trim();
     if (name) project.name = name;
+    if (typeof req.body?.isFavorite === 'boolean') {
+      project.isFavorite = req.body.isFavorite;
+    }
     project.updatedAt = new Date().toISOString();
     res.json({ project });
+  });
+
+  app.post('/api/projects/:id/duplicate', (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const source = db.projects.get(req.params.id);
+    if (!source || source.userId !== user.id) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+    const now = new Date().toISOString();
+    const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const copy = {
+      ...JSON.parse(JSON.stringify(source)),
+      id,
+      name: `${source.name} (Copy)`,
+      generationCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.projects.set(id, copy);
+    res.json({ project: copy });
   });
 
   app.delete('/api/projects/:id', (req: Request, res: Response) => {
@@ -1624,6 +1655,7 @@ async function startServer() {
         locations: [],
         motionTemplates: [],
         cinemaProjects: [],
+        voices: [],
       });
       return;
     }
@@ -1639,6 +1671,7 @@ async function startServer() {
       locations: filterByUser(db.locations.values()),
       motionTemplates: filterByUser(db.motionTemplates.values()),
       cinemaProjects: filterByUser(db.cinemaProjects.values()),
+      voices: filterByUser(db.voices.values()),
     });
   });
 
@@ -1980,6 +2013,65 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  app.post('/api/continuity/voices', (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Sign in to save voice profiles.' });
+      return;
+    }
+    const body = req.body || {};
+    if (body._method === 'DELETE' && body.id) {
+      db.voices.delete(String(body.id));
+      res.json({ ok: true });
+      return;
+    }
+    const now = new Date().toISOString();
+    const id = body.id ? String(body.id) : `vox_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const existing = db.voices.get(id);
+    const voiceCode =
+      existing?.voiceCode ||
+      body.voiceCode ||
+      `VOX-ID-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+    const record = {
+      id,
+      voiceCode,
+      userId: existing?.userId || user.id,
+      name: String(body.name || existing?.name || 'Custom Voice').trim(),
+      description: String(body.description ?? existing?.description ?? ''),
+      genderPresentation: String(body.genderPresentation ?? existing?.genderPresentation ?? 'Neutral'),
+      vocalAge: String(body.vocalAge ?? existing?.vocalAge ?? 'Adult (25-40)'),
+      voiceCharacteristics: String(body.voiceCharacteristics ?? existing?.voiceCharacteristics ?? 'Warm resonant studio clarity'),
+      language: String(body.language ?? existing?.language ?? 'English'),
+      accent: String(body.accent ?? existing?.accent ?? 'Standard Neutral'),
+      dialect: String(body.dialect ?? existing?.dialect ?? ''),
+      mood: String(body.mood ?? existing?.mood ?? 'Confident'),
+      speakingStyle: String(body.speakingStyle ?? existing?.speakingStyle ?? 'Narrative Cinema'),
+      effects: String(body.effects ?? existing?.effects ?? 'Clean Close-Mic'),
+      sampleAudioUrl: String(body.sampleAudioUrl ?? existing?.sampleAudioUrl ?? ''),
+      modelId: String(body.modelId ?? existing?.modelId ?? 'fishaudio-s2-1'),
+      assignedCharacterIds: Array.isArray(body.assignedCharacterIds)
+        ? body.assignedCharacterIds
+        : existing?.assignedCharacterIds || [],
+      sourceType: (body.sourceType || existing?.sourceType || 'ai') as 'ai' | 'upload',
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    db.voices.set(id, record);
+    res.json({ ok: true, voice: record });
+  });
+
+  app.delete('/api/continuity/voices/:id', (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    db.voices.delete(req.params.id);
+    res.json({ ok: true });
+  });
+
   app.post('/api/continuity/cinema-projects', (req: Request, res: Response) => {
     const user = getSessionUser(req);
     if (!user) {
@@ -2027,12 +2119,41 @@ async function startServer() {
         body.musicVideo && typeof body.musicVideo === 'object'
           ? body.musicVideo
           : existing?.musicVideo,
+      isFavorite:
+        typeof body.isFavorite === 'boolean'
+          ? body.isFavorite
+          : existing?.isFavorite ?? false,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
 
     db.cinemaProjects.set(id, record);
     res.json({ ok: true, cinemaProject: record });
+  });
+
+  app.post('/api/continuity/cinema-projects/:id/duplicate', (req: Request, res: Response) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const source = db.cinemaProjects.get(req.params.id);
+    if (!source || (source.userId !== user.id && user.role !== 'admin')) {
+      res.status(404).json({ error: 'Cinema project not found' });
+      return;
+    }
+    const now = new Date().toISOString();
+    const id = `cin_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const copy = {
+      ...JSON.parse(JSON.stringify(source)),
+      id,
+      userId: user.id,
+      title: `${source.title} (Copy)`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.cinemaProjects.set(id, copy);
+    res.json({ ok: true, cinemaProject: copy });
   });
 
   app.delete('/api/continuity/cinema-projects/:id', (req: Request, res: Response) => {
@@ -3228,7 +3349,7 @@ async function startServer() {
           },
         });
         const response = await ai.models.generateContent({
-          model: 'gemini-4-hydrogen',
+          model: 'gemini-2.5-flash',
           contents: userPrompt,
           config: {
             systemInstruction: systemPrompt,
@@ -3238,7 +3359,7 @@ async function startServer() {
         if (generatedText) {
           res.json({
             ok: true,
-            provider: 'gemini-4-hydrogen',
+            provider: 'gemini-2.5-flash',
             markdown: generatedText,
           });
           return;
@@ -3372,29 +3493,30 @@ async function startServer() {
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
           });
           const promptText = [
-            `Generate a complete, structured professional screenplay for a ${productionFormat} titled "${title}".`,
+            `Generate a complete, structured professional screenplay and production bible for a ${productionFormat} titled "${title}".`,
             `Core Idea: ${cleanIdea}`,
             `Creative Instructions: ${cleanInstructions}`,
             referenceNotes ? `Reference Notes: ${referenceNotes}` : '',
-            'Write 3 complete scenes in Story Studio Screenplay Markdown format:',
+            'Write 3 complete, vivid scenes in Story Studio Screenplay Markdown format:',
             '- `# TITLE`',
+            '- Character Bible section right under the title listing each character with: Name, Role, Ethnicity/Cultural Background, Skin Tone, Gender, Age/Range, Facial Structure, Body Type, Hairstyle, Clothing/Costume, Personality/Mood, Voice Characteristics, Language, Accent/Dialect (using `> CHARACTER: ...`).',
             '- `### INT. LOCATION - NIGHT <!-- scene-id: scene-01 -->` or `### EXT. LOCATION - DAY <!-- scene-id: scene-02 -->`',
-            '- Action paragraphs with `[PROP: Item Name]` and `[B-ROLL: Visual description]`',
-            '- Character dialogue cues using `@CHARACTER_NAME` on its own line, `(parenthetical)` on next line, and spoken dialogue below.',
-            '- Include `> Production Note: ...` for lighting, wardrobe, and camera direction.',
+            '- Detailed action paragraphs with environment atmosphere, lighting, time of day, `[WARDROBE: Item]`, `[PROP: Item Name]`, `[SFX: Sound effect]`, `[AMBIENCE: Background audio]`, `[MUSIC: Music mood cue]`, and `[B-ROLL: Visual description]`',
+            '- Character dialogue cues using `@CHARACTER_NAME` on its own line, `(parenthetical emotion / speaking style)` on next line, and exact spoken dialogue verbatim below.',
+            '- Include `> Production Note: ...` for lighting, wardrobe, camera framing/movement, and voice direction.',
           ]
             .filter(Boolean)
             .join('\n\n');
 
           const response = await ai.models.generateContent({
-            model: 'gemini-4-hydrogen',
+            model: 'gemini-2.5-flash',
             contents: promptText,
           });
           const text = (response.text ?? '').trim();
           if (text) {
             res.json({
               ok: true,
-              provider: 'gemini-4-hydrogen',
+              provider: 'gemini-2.5-flash',
               markdown: text,
             });
             return;
@@ -3404,17 +3526,19 @@ async function startServer() {
         }
       }
 
-      // Deterministic multi-scene screenplay synthesis tailored to the user's idea
+      // Deterministic multi-scene screenplay synthesis tailored cleanly to the user's idea
       const upperTitle = String(title || 'UNTITLED PRODUCTION').toUpperCase();
       const generatedMarkdown = [
         `# ${upperTitle}`,
         '',
         `> Production Format: ${productionFormat} | Visual Direction: ${cleanInstructions}`,
         `> Premise: ${cleanIdea}`,
+        `> CHARACTER: @AMARA | Role: Lead Investigator | Ethnicity: West African Nigerian | Skin Tone: Rich Mahogany | Gender: Female | Age: 29 (27-32) | Facial Structure: High cheekbones, defined jawline, expressive dark eyes | Body Type: Athletic, 5'9" | Hairstyle: Braided crown locs | Clothing: Tailored Charcoal Trench Coat with Brass Collar | Personality: Calm, razor-sharp, resolute | Voice: Warm mezzo-soprano, articulate | Language: English | Accent/Dialect: Lagos Nigerian`,
+        `> CHARACTER: @KEMI | Role: Quantum Systems Partner | Ethnicity: West African Yoruba | Skin Tone: Warm Bronze | Gender: Female | Age: 31 (28-35) | Facial Structure: Oval face, arched brows, focused gaze | Body Type: Lean, 5'7" | Hairstyle: Low tapered fade | Clothing: Charcoal Tactical Utility Jacket over slate knitwear | Personality: Observant, dry-witted, loyal | Voice: Crisp alto, grounded | Language: English | Accent/Dialect: British-Nigerian`,
         '',
         `### EXT. METROPOLIS SKYLINE CAUSEWAY - NIGHT <!-- scene-id: scene-01 -->`,
         '',
-        `Rain lashes the glass barricades of the elevated causeway. ${cleanIdea} @AMARA stands beside a [PROP: Matte-Black Tactical Coupe], adjusting her [WARDROBE: Trench Coat with Brass Collar]. [B-ROLL: Wide anamorphic establishing shot of neon reflections shimmering across wet asphalt]`,
+        `Rain lashes the glass barricades of the elevated causeway under cold sodium streetlights and amber reflections. ${cleanIdea} @AMARA stands beside a [PROP: Matte-Black Tactical Coupe], adjusting her [WARDROBE: Trench Coat with Brass Collar]. [SFX: Distant thunder rumble and tires slicing wet asphalt] [AMBIENCE: Steady midnight rain and elevated highway wind] [MUSIC: Low sub-bass tension pulse] [B-ROLL: Wide anamorphic establishing shot of neon reflections shimmering across wet asphalt]`,
         '',
         `@AMARA`,
         `(into encrypted comms, steady and urgent)`,
@@ -3428,11 +3552,11 @@ async function startServer() {
         '',
         `### INT. SUBTERRANEAN ARCHIVE VAULT - NIGHT <!-- scene-id: scene-02 -->`,
         '',
-        `Shafts of cool overhead light pierce the mist inside the cavernous concrete vault. @AMARA and @KEMI approach the central plinth where the [PROP: Quantum Chronometer Core] hums with amber light. @KEMI wears a [WARDROBE: Charcoal Utility Jacket]. [B-ROLL: Extreme close-up of rotating brass rings inside the Quantum Chronometer Core]`,
+        `Shafts of cool overhead light pierce rising mist inside the cavernous concrete vault. @AMARA and @KEMI approach the central basalt plinth where the [PROP: Quantum Chronometer Core] hums with warm amber filaments. @KEMI wears a [WARDROBE: Charcoal Utility Jacket]. [SFX: Deep mechanical vault hatch unsealing and metallic clockwork chime] [AMBIENCE: Subterranean electrical hum and distant water drips] [B-ROLL: Extreme close-up of rotating brass rings inside the Quantum Chronometer Core]`,
         '',
         `@KEMI`,
         `(whispering in awe)`,
-        `Look at the timestamp ledger. These recordings weren't made in the past—they are indexing tomorrow.`,
+        `Look at the timestamp ledger. These recordings were not made in the past. They are indexing tomorrow.`,
         '',
         `@AMARA`,
         `(reaching for the console, resolute)`,
@@ -3442,10 +3566,10 @@ async function startServer() {
         '',
         `### EXT. ROOFTOP HELIPAD OVERLOOK - DAWN <!-- scene-id: scene-03 -->`,
         '',
-        `Golden dawn breaks through low clouds above the city skyline. @AMARA holds the [PROP: Quantum Chronometer Core] as rotor wash ripples across the helipad. [B-ROLL: Sweeping 360-degree crane shot around Amara and Kemi against the rising sun]`,
+        `Golden dawn breaks through low clouds above the city skyline. @AMARA holds the [PROP: Quantum Chronometer Core] as rotor wash sweeps across the wet concrete pad. [SFX: Helicopter turbine spooling up in the distance] [AMBIENCE: Dawn city breeze and open skyline air] [MUSIC: Swelling orchestral sunrise motif] [B-ROLL: Sweeping 360-degree crane shot around Amara and Kemi against the rising sun]`,
         '',
         `@AMARA`,
-        `(looking out over the waking city)`,
+        `(looking out over the waking city, relieved and triumphant)`,
         `Every frame is preserved. Now the whole world sees the truth.`,
       ].join('\n');
 
@@ -3455,6 +3579,31 @@ async function startServer() {
         markdown: generatedMarkdown,
       });
       return;
+    }
+
+    if (stage === 'analyze' && geminiKey && geminiKey.trim().length > 10 && screenplayMarkdown) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: geminiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+        });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            'Analyze this screenplay into structured JSON with keys: characters (array of {name, role, ethnicity, skinTone, gender, ageRange, facialStructure, bodyType, hairstyle, clothing, personality, voiceDescription, language, accentDialect}), locations (array of {name, settingType, timeOfDay, lighting, atmosphere, prompt}), props (array of {name, description, material}), wardrobes (array of {name, garments, characterName}), audioItems (array of {type: "dialogue"|"narration"|"sfx"|"ambience"|"music", sceneNumber, speaker, exactText, language, accentDialect, emotion, speakingStyle, sfxDescription}), and shots (array of {sceneNumber, shotNumber, shotType, cameraAngle, cameraMovement, visualAction, lighting, durationSec, dialogueVerbatim}).',
+            'CRITICAL RULE: For every dialogue and narration item, copy exactText VERBATIM from the screenplay. Never alter, paraphrase, or invent dialogue words.',
+            'Output ONLY valid JSON.',
+            screenplayMarkdown,
+          ].join('\n\n'),
+          config: { responseMimeType: 'application/json' },
+        });
+        const raw = (response.text ?? '').trim();
+        const parsed = JSON.parse(raw);
+        res.json({ ok: true, provider: 'gemini-2.5-flash', analysis: parsed });
+        return;
+      } catch (err) {
+        console.warn('[Auto Production Analyze] Gemini fallback:', err);
+      }
     }
 
     res.json({ ok: true });

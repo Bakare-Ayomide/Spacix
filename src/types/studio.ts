@@ -209,6 +209,7 @@ export interface ProjectRecord {
   name: string;
   coverGenerationId?: string;
   generationCount: number;
+  isFavorite?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -433,6 +434,10 @@ export interface CharacterProfile {
   hairstyle: string;
   eyeColor: string;
   distinctiveFeatures: string;
+  ethnicity?: string;
+  facialStructure?: string;
+  personalityMood?: string;
+  dialect?: string;
   // Voice
   voiceId: string;
   voiceName: string;
@@ -831,10 +836,12 @@ export interface CinemaProductionProject {
   locationIds: string[];
   musicTrackUrl?: string;
   musicBpm?: number;
+  // Continuity & Production Assets
   scenes: ProductionScene[];
   canvasNodes: CanvasWorkflowNode[];
   timelineTracks: TimelineAssemblyTrackSet;
   musicVideo?: MusicVideoProductionState;
+  isFavorite?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -846,5 +853,70 @@ export interface ActiveContinuityContext {
   propIds: string[];
   locationId: string | null;
   motionTemplateId: string | null;
+}
+
+export interface VoiceProfile {
+  id: string;
+  voiceCode: string; // e.g. VOX-ID-402A
+  userId: string;
+  name: string;
+  description: string;
+  genderPresentation: string;
+  vocalAge: string;
+  voiceCharacteristics: string;
+  language: SupportedCharacterLanguage | string;
+  accent: string;
+  dialect: string;
+  mood: string;
+  speakingStyle: string;
+  effects: string;
+  sampleAudioUrl: string;
+  modelId: string;
+  assignedCharacterIds: string[];
+  sourceType: 'ai' | 'upload';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UniversalCreativeControlsState {
+  cameraSetup: {
+    cameraBody: string;
+    lens: string;
+    aperture: string;
+  };
+  cameraMovement: {
+    movements: string[];
+    intensity: number;
+    speed: 'Slow' | 'Medium' | 'Fast';
+    shotAngle: string;
+  };
+  lighting: {
+    scheme: string;
+    intensity: number;
+    warmth: number;
+  };
+  colorGrading: {
+    presetId: string;
+    temperature: number;
+    tint: number;
+    saturation: number;
+    contrast: number;
+    highlights: number;
+    shadows: number;
+    grain: number;
+    lutIntensity: number;
+  };
+  filmLook: {
+    genre: string;
+    era: string;
+    tempo: string;
+    aspectRatio: string;
+  };
+  audioDirection: {
+    voiceTone: string;
+    pacing: string;
+    musicMood: string;
+    acousticSpace: string;
+  };
 }
 
